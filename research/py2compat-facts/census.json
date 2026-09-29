@@ -1,0 +1,419 @@
+{
+ "AHouseInTheRift-0.8.02r3-pc": {
+  "compile_stage": {
+   "as-is": 33793
+  },
+  "counts": {
+   "div.float-safe": 1,
+   "div.possibly-int": 13,
+   "div.possibly-int@code": 13,
+   "isinstance-string-type": 16,
+   "minmax.no-key": 39,
+   "old-style-class": 51,
+   "open.text-default-encoding": 1,
+   "py2name.provided-by-store-ref:basestring": 15
+  },
+  "counts_in_rpy_python_3_files": {},
+  "fail_reasons": {},
+  "loose_py_counts": {},
+  "loose_py_files": 0,
+  "loose_py_syntax_errors": 0,
+  "py3file_count": 0,
+  "rpyc_files": 4640,
+  "unique_snippets": 33793,
+  "unpickle_failures": 0
+ },
+ "A_World_Between_Us-0.2.8-pc": {
+  "compile_stage": {
+   "as-is": 1708
+  },
+  "counts": {},
+  "counts_in_rpy_python_3_files": {},
+  "fail_reasons": {},
+  "loose_py_counts": {
+   "div.float-safe": 19,
+   "div.possibly-int": 4,
+   "div.possibly-int@pymodule": 4,
+   "isinstance-string-type": 2,
+   "minmax.no-key": 4,
+   "old-style-class": 2,
+   "open.binary": 1,
+   "open.text-default-encoding": 1,
+   "py2name.NameError:reduce": 2,
+   "sort.no-key:sorted": 1,
+   "str.decode": 9,
+   "str.encode": 1,
+   "type-call": 2
+  },
+  "loose_py_files": 2,
+  "loose_py_syntax_errors": 0,
+  "py3file_count": 0,
+  "rpyc_files": 31,
+  "unique_snippets": 1708,
+  "unpickle_failures": 0
+ },
+ "AlexsVantasticAdventure-1.0-pc": {
+  "compile_stage": {
+   "as-is": 1539
+  },
+  "counts": {
+   "div.possibly-int": 4,
+   "div.possibly-int@code": 4,
+   "minmax.no-key": 9
+  },
+  "counts_in_rpy_python_3_files": {},
+  "fail_reasons": {},
+  "loose_py_counts": {},
+  "loose_py_files": 0,
+  "loose_py_syntax_errors": 0,
+  "py3file_count": 0,
+  "rpyc_files": 7,
+  "unique_snippets": 1539,
+  "unpickle_failures": 0
+ },
+ "AstralLust-0.3.1c.4K-pc": {
+  "compile_stage": {
+   "as-is": 9407,
+   "as-is+fix_ast": 1
+  },
+  "counts": {
+   "__metaclass__(silent: ignored)": 4,
+   "div.float-safe": 18,
+   "div.int-certain": 2,
+   "div.int-certain@expr": 2,
+   "div.possibly-int": 381,
+   "div.possibly-int@code": 36,
+   "div.possibly-int@expr": 345,
+   "exec-call-in-function": 11,
+   "isinstance-string-type": 67,
+   "minmax.no-key": 39,
+   "old-style-class": 113,
+   "open.binary": 2,
+   "open.text-default-encoding": 5,
+   "py2name.NameError-ref:long": 1,
+   "round.2arg": 9,
+   "sort.cmp-positional": 1,
+   "sort.no-key:sort": 8,
+   "sort.no-key:sorted": 2,
+   "type-call": 2,
+   "view.flow-indexed:items": 1,
+   "view.flow-list-method:items.sort": 1,
+   "view.flow-list-method:keys.remove": 2,
+   "view.flow-list-method:keys.sort": 2,
+   "view.random-choice-arg:keys": 2,
+   "view.stored:filter": 1,
+   "view.stored:items": 1,
+   "view.stored:keys": 7
+  },
+  "counts_in_rpy_python_3_files": {},
+  "fail_reasons": {},
+  "loose_py_counts": {},
+  "loose_py_files": 0,
+  "loose_py_syntax_errors": 0,
+  "py3file_count": 0,
+  "rpyc_files": 5358,
+  "unique_snippets": 9408,
+  "unpickle_failures": 0
+ },
+ "BlackRose-Public-0.4.1-win": {
+  "compile_stage": {
+   "as-is": 5578
+  },
+  "counts": {
+   "div.float-safe": 58,
+   "div.possibly-int": 120,
+   "div.possibly-int@code": 120,
+   "eq-without-hash(loud when hashed)": 9,
+   "isinstance-string-type": 13,
+   "minmax.no-key": 11,
+   "old-style-class": 6,
+   "py2name.provided-by-store:xrange": 1,
+   "round.1arg": 4,
+   "round.2arg": 27,
+   "sort.no-key:sort": 1,
+   "sort.no-key:sorted": 10,
+   "str.encode": 6,
+   "type-call": 3
+  },
+  "counts_in_rpy_python_3_files": {},
+  "fail_reasons": {},
+  "loose_py_counts": {},
+  "loose_py_files": 0,
+  "loose_py_syntax_errors": 0,
+  "py3file_count": 0,
+  "rpyc_files": 49,
+  "unique_snippets": 5578,
+  "unpickle_failures": 0
+ },
+ "BloomWar-0.19-pc": {
+  "compile_stage": {
+   "as-is": 911
+  },
+  "counts": {},
+  "counts_in_rpy_python_3_files": {},
+  "fail_reasons": {},
+  "loose_py_counts": {},
+  "loose_py_files": 0,
+  "loose_py_syntax_errors": 0,
+  "py3file_count": 0,
+  "rpyc_files": 9,
+  "unique_snippets": 911,
+  "unpickle_failures": 0
+ },
+ "BraveheartAcademy-2.1-pc": {
+  "compile_stage": {
+   "as-is": 6097,
+   "fail-parse": 1
+  },
+  "counts": {},
+  "counts_in_rpy_python_3_files": {},
+  "fail_reasons": {
+   "SyntaxError: invalid syntax": 1
+  },
+  "loose_py_counts": {},
+  "loose_py_files": 0,
+  "loose_py_syntax_errors": 0,
+  "py3file_count": 0,
+  "rpyc_files": 29,
+  "unique_snippets": 6098,
+  "unpickle_failures": 0
+ },
+ "Bumpkin_Boy's_Bizarre_Adventures-0.14-pc": {
+  "compile_stage": {
+   "as-is": 5914
+  },
+  "counts": {
+   "div.float-safe": 1,
+   "div.int-certain": 1,
+   "div.int-certain@expr": 1,
+   "div.possibly-int": 1,
+   "div.possibly-int@expr": 1
+  },
+  "counts_in_rpy_python_3_files": {},
+  "fail_reasons": {},
+  "loose_py_counts": {},
+  "loose_py_files": 0,
+  "loose_py_syntax_errors": 0,
+  "py3file_count": 0,
+  "rpyc_files": 257,
+  "unique_snippets": 5914,
+  "unpickle_failures": 0
+ },
+ "CabinByTheLake_FantasticFacts-1.0-pc": {
+  "compile_stage": {
+   "as-is": 2030
+  },
+  "counts": {},
+  "counts_in_rpy_python_3_files": {},
+  "fail_reasons": {},
+  "loose_py_counts": {},
+  "loose_py_files": 0,
+  "loose_py_syntax_errors": 0,
+  "py3file_count": 0,
+  "rpyc_files": 9,
+  "unique_snippets": 2030,
+  "unpickle_failures": 0
+ },
+ "DFraction-0.01-pc": {
+  "compile_stage": {
+   "as-is": 601
+  },
+  "counts": {},
+  "counts_in_rpy_python_3_files": {},
+  "fail_reasons": {},
+  "loose_py_counts": {},
+  "loose_py_files": 0,
+  "loose_py_syntax_errors": 0,
+  "py3file_count": 0,
+  "rpyc_files": 5,
+  "unique_snippets": 601,
+  "unpickle_failures": 0
+ },
+ "DTRemake-0.4-0.4-pc": {
+  "compile_stage": {
+   "as-is": 2413
+  },
+  "counts": {
+   "div.float-safe": 1,
+   "div.possibly-int": 2,
+   "div.possibly-int@code": 2,
+   "minmax.no-key": 4
+  },
+  "counts_in_rpy_python_3_files": {},
+  "fail_reasons": {},
+  "loose_py_counts": {},
+  "loose_py_files": 0,
+  "loose_py_syntax_errors": 0,
+  "py3file_count": 0,
+  "rpyc_files": 26,
+  "unique_snippets": 2413,
+  "unpickle_failures": 0
+ },
+ "Dreamscape-v0.2R1-pc": {
+  "compile_stage": {
+   "as-is": 801
+  },
+  "counts": {
+   "div.float-safe": 2,
+   "div.possibly-int": 8,
+   "div.possibly-int@code": 8,
+   "minmax.no-key": 1,
+   "old-style-class": 1
+  },
+  "counts_in_rpy_python_3_files": {},
+  "fail_reasons": {},
+  "loose_py_counts": {},
+  "loose_py_files": 0,
+  "loose_py_syntax_errors": 0,
+  "py3file_count": 0,
+  "rpyc_files": 7,
+  "unique_snippets": 801,
+  "unpickle_failures": 0
+ },
+ "Harem_Hotel-v0.19-pc": {
+  "compile_stage": {
+   "as-is": 30108,
+   "fail-parse": 2,
+   "fix_tokens": 2
+  },
+  "counts": {
+   "div.float-safe": 5,
+   "div.int-certain": 3,
+   "div.int-certain@expr": 3,
+   "div.possibly-int": 12,
+   "div.possibly-int@code": 11,
+   "div.possibly-int@expr": 1,
+   "isinstance-string-type": 4,
+   "minmax.no-key": 18,
+   "old-style-class": 3,
+   "py2name.provided-by-store-ref:basestring": 4,
+   "py2name.provided-by-store-ref:unicode": 1,
+   "round.1arg": 4,
+   "sort.no-key:sort": 1,
+   "str.encode": 1,
+   "type-call": 1
+  },
+  "counts_in_rpy_python_3_files": {},
+  "fail_reasons": {
+   "SyntaxError: Missing parentheses in call to 'print'. Did you mean print(...)?": 1,
+   "SyntaxError: invalid syntax": 1
+  },
+  "loose_py_counts": {},
+  "loose_py_files": 0,
+  "loose_py_syntax_errors": 0,
+  "py3file_count": 0,
+  "rpyc_files": 155,
+  "unique_snippets": 30112,
+  "unpickle_failures": 0
+ },
+ "InterimDomain-0.99.0-pc": {
+  "compile_stage": {
+   "as-is": 5453
+  },
+  "counts": {},
+  "counts_in_rpy_python_3_files": {},
+  "fail_reasons": {},
+  "loose_py_counts": {},
+  "loose_py_files": 0,
+  "loose_py_syntax_errors": 0,
+  "py3file_count": 0,
+  "rpyc_files": 41,
+  "unique_snippets": 5453,
+  "unpickle_failures": 0
+ },
+ "Lucky_Paradox-v0.10.4-pc": {
+  "compile_stage": {
+   "as-is": 12422
+  },
+  "counts": {
+   "div.float-safe": 1,
+   "div.int-certain": 5,
+   "div.int-certain@code": 1,
+   "div.int-certain@expr": 4,
+   "div.possibly-int": 1,
+   "div.possibly-int@code": 1,
+   "old-style-class": 11,
+   "round.1arg": 35,
+   "round.2arg": 1
+  },
+  "counts_in_rpy_python_3_files": {},
+  "fail_reasons": {},
+  "loose_py_counts": {
+   "bytes-call": 22,
+   "div.float-safe": 4,
+   "div.possibly-int": 6,
+   "div.possibly-int@pymodule": 6,
+   "dunder.__cmp__(silent)": 1,
+   "dunder.__div__(loud)": 1,
+   "dunder.__long__(loud)": 1,
+   "dunder.__nonzero__(silent)": 2,
+   "dunder.next(loud)": 1,
+   "eq-without-hash(loud when hashed)": 5,
+   "exec-call-in-function": 1,
+   "isinstance-string-type": 62,
+   "iter-methods:iteritems": 7,
+   "iter-methods:iterkeys": 4,
+   "iter-methods:itervalues": 3,
+   "minmax.no-key": 12,
+   "old-style-class": 1,
+   "open.binary": 3,
+   "open.text-default-encoding": 5,
+   "py2name.NameError-ref:buffer": 14,
+   "py2name.NameError-ref:long": 4,
+   "py2name.NameError-ref:unichr": 1,
+   "py2name.NameError:long": 1,
+   "py2name.NameError:unichr": 2,
+   "py2name.provided-by-store-ref:basestring": 13,
+   "py2name.provided-by-store-ref:unicode": 12,
+   "py2name.provided-by-store-ref:xrange": 1,
+   "py2name.provided-by-store:unicode": 7,
+   "py2name.provided-by-store:xrange": 1,
+   "round.2arg": 1,
+   "sort.no-key:sorted": 2,
+   "str.decode": 34,
+   "str.encode": 52,
+   "type-call": 31,
+   "view.flow-indexed:items": 7,
+   "view.returned:items": 1,
+   "view.returned:keys": 1,
+   "view.returned:values": 1,
+   "view.stored:items": 3
+  },
+  "loose_py_files": 120,
+  "loose_py_syntax_errors": 0,
+  "py3file_count": 0,
+  "rpyc_files": 161,
+  "unique_snippets": 12422,
+  "unpickle_failures": 0
+ },
+ "MaidandMaidens.app": {
+  "compile_stage": {
+   "as-is": 11309
+  },
+  "counts": {},
+  "counts_in_rpy_python_3_files": {},
+  "fail_reasons": {},
+  "loose_py_counts": {},
+  "loose_py_files": 0,
+  "loose_py_syntax_errors": 0,
+  "py3file_count": 0,
+  "rpyc_files": 35,
+  "unique_snippets": 11309,
+  "unpickle_failures": 0
+ },
+ "WhiteRussian.app": {
+  "compile_stage": {
+   "as-is": 738
+  },
+  "counts": {},
+  "counts_in_rpy_python_3_files": {},
+  "fail_reasons": {},
+  "loose_py_counts": {},
+  "loose_py_files": 0,
+  "loose_py_syntax_errors": 0,
+  "py3file_count": 0,
+  "rpyc_files": 17,
+  "unique_snippets": 738,
+  "unpickle_failures": 0
+ }
+}
