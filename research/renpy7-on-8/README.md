@@ -125,6 +125,8 @@ Reading the rows: interim, maid, white, lucky (orig and port) and the ported rif
 
 ## Visual confirmation
 
+> **Note (coordinator):** the screenshots and raw `out/` logs were deleted when the worktree was force-removed after merge. The descriptions below are the only record of them. Re-run `./run_probes.sh start` to regenerate them.
+
 Screenshots are of windows I launched, taken with `screencapture -l <window id>` (window found by pid via `winid.swift`), saved only to gitignored `corpus/shots/` (they contain game art; not committed). Descriptions:
 
 * `lucky-orig` 8.5.3 (unmodified `.rpyc`-only 7.4.11 game): the game's own language-selection screen (Spanish and UK/US flags on a dark background). **This is the same screen the user reported seeing.** The 8.0.1 twin and the unrpyc port (8.5.3) show the same screen (screenshots `lucky-orig.8.0.1`, `lucky-port.8.5.3`). The user's window cannot be attributed to one run: the leftover-window bug came from SIGTERM'd runs (`port_rpyc_only.sh`, 8.5.3 port; about 13:48 to 14:20) but the matrix runs of the original (8.5.3 at ~13:45:50, 8.0.1 at ~13:47) are equally candidates. Both variants render it identically.

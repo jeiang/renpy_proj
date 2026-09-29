@@ -7,6 +7,7 @@ Rules for any agent (or subagent) resolving a ticket on the wayfinder map, [Map:
 - One ticket, one branch, one worktree: `git worktree add ../renpy_proj-<slug> -b research/<slug>`. Work and commit only there. Parallel agents never share an index.
 - Output goes in `research/<slug>/`: a fact sheet `README.md` ending with "Implications for the route decision", plus kept scripts and small outputs.
 - The coordinator merges `research/<slug>` into `main` (`git merge --no-ff`), pushes, and removes the worktree. Subagents do not push or merge.
+- Before removing a worktree, move its gitignored artefacts you want to keep (screenshots, SDKs, `out/`) into the main checkout with `rsync -a <worktree>/research/<slug>/ research/<slug>/` and `rsync -a <worktree>/corpus/ corpus/`. Never use `git worktree remove --force`, because it deletes ignored files. That is how the Ren'Py 7 on 8 screenshots were lost.
 
 ## What to commit
 
