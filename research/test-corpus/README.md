@@ -32,6 +32,18 @@ Other checks:
 - **Lint writes:** lint wrote `game/cache` and `game/saves` in the copies only.
 - **Engine `.rpy` files:** each copy still has the engine's own `renpy/common/*.rpy` (55-57 files). That is normal: every released game ships the engine's script library.
 
+## Visual confirmation (ticket #17)
+
+Screenshots plus `traceback.txt` gates, done by an agent through screen capture; full table and method in [visual-confirm](../visual-confirm/README.md).
+
+| Run | Result |
+|---|---|
+| SecretIsland original on 8.0.1 SDK | PASS: menu, new game, dialogue, video scene |
+| SecretIsland CRLF-to-LF copy on 8.5.3 | PASS: same |
+| `corpus/SecretIsland-...-released` on 8.0.1 | PASS |
+| `corpus/Ripples-released.app` on its bundled 8.2.1 | PASS (video seen by script tag; frame vs still not separable) |
+| `corpus/WaifuAcademy-...-released` on 8.2.3 | PASS (`play movie` seen on the movie channel) |
+
 ## Not in the corpus
 
 All seven other games in `~/Games` are **Ren'Py 7** (Python 2.7), so they are skipped: AHouseInTheRift 7.6.1, AstralLust 7.8.2, Harem_Hotel 7.4.11, InterimDomain 7.4.5, Lucky_Paradox 7.4.11, MaidandMaidens 7.5.3, and WhiteRussian 7.4.11. The full survey is in `survey.tsv`.

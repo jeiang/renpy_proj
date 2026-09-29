@@ -1,0 +1,19 @@
+tag	shots	shots_missing	main_menu	say_lines	traceback	exception
+astral-port-853-fix1	1	3	yes	50	absent	
+astral-port-853-nofix	0	4	yes	51	PRESENT	NameError: name 'point' is not defined
+astral-port-853	4	0	yes	49	absent	
+harem-port-853-firstwarp	2	2	yes	22	absent	
+harem-port-853-start	3	1	yes	22	absent	
+harem-port-853	4	0	yes	22	absent	
+interim-853	4	0	yes	53	absent	
+lucky-801	4	0	yes	45	absent	
+lucky-853-prefix	2	2	yes	96	absent	
+lucky-853	4	0	yes	97	absent	
+maid-853	4	0	yes	37	absent	
+rift-port-853	5	0	yes	48	absent	
+ripples-released	4	0	yes	120	absent	
+si-lf-853	5	0	yes	154	absent	
+si-orig-801	5	0	yes	154	absent	
+si-released-801	5	0	yes	91	absent	
+waifu-released-823	4	0	yes	21	absent	
+white-853	4	0	yes	50	absent	
