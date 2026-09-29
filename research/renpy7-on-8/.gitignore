@@ -1,0 +1,7 @@
+sdk/
+# raw engine output quotes game scripts/strings (third-party text) and is large: regenerate with the scripts.
+out/*
+!out/results.tsv
+!out/probes.txt
+!out/summary.txt
+!out/ports-summary.txt
