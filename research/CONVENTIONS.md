@@ -23,7 +23,8 @@ Rules for any agent (or subagent) resolving a ticket on the wayfinder map, [Map:
 ## Running Ren'Py
 
 - Never run a game against the user's real save directory. Pass `--savedir <scratch>` (`renpy/arguments.py`) or set `RENPY_PATH_TO_SAVES=<scratch>` (`renpy.py` L173, parent of the per-game dir), and check `~/Library/RenPy/<game>` is unchanged afterwards. Ren'Py also writes to `game/saves/` inside the game directory, so run a scratch copy, never the original. A newer engine (8.4+) rewrites `persistent` in a format older engines can't read.
-- Never modify games under `~/Games`. Work on APFS clones (`cp -Rc`) or copies in `/corpus/` (see `research/test-corpus/`).
+- Never modify games under `~/Games`. Work on APFS clones in the repo's gitignored `corpus/`: `research/test-corpus/make_released.py` builds a released (`.rpyc`-only) copy. For a plain copy, use `/bin/cp -Rc` (the Nix shell's GNU `cp` has no `-c`). Always run `xattr -dr com.apple.quarantine <copy>` on copied `.app` bundles so Gatekeeper doesn't block them.
+- Headless compatibility gate: `<engine> <game> lint` with `RENPY_PATH_TO_SAVES` pointing at scratch (see `research/test-corpus/lint_released.sh`). It loads every script without opening a window.
 - No computer use or screen capture: the permission needs a terminal restart. Verify through `log.txt`, `traceback.txt`, exit codes, and process state. Record visual checks as HITL follow-ups.
 - Kill every game process you start.
 
