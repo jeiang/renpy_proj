@@ -1,0 +1,6 @@
+renpy/
+renpy-build/
+rustpython/
+pyo3-probe/target/
+__pycache__/
+*.tar*

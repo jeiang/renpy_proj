@@ -1,0 +1,13 @@
+impl: CPython 3.12.14
+  exec real revertable.py                                                                    ok
+  RevertableList mutate/rollback                                                             ok
+  RevertableDict mutate/rollback                                                             ok
+  RevertableSet mutate                                                                       ok
+  RevertableObject __setattr__ mutator + weakref                                             ok
+  pickle roundtrip of Revertable* (copyreg._reconstructor patch)                             ok
+  exec real WrapNode/LoadedVariables                                                         ok
+  WrapNode rewrite -> compile(AST) -> exec (3.12 syntax: PEP 695, match, nested f-string)    ok
+  marshal.dumps/loads of code object (Ren'Py bytecode cache)                                 ok
+  sys._getframe(1).f_globals                                                                 ok
+  dict insertion ordering                                                                    ok
+  pickle of ast nodes (rpyc-style)                                                           ok

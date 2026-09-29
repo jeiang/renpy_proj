@@ -1,0 +1,7 @@
+impl: RustPython 3.14.0.alpha
+BENCH RevertableList.append x200k                       308.9 ms
+BENCH RevertableDict.__setitem__ x200k                  318.8 ms
+BENCH plain list/dict x200k each                         24.4 ms
+BENCH pickle proto2 dump+load 50k records                60.2 ms
+BENCH WrapNode+compile 3000 stmts                      1530.4 ms
+BENCH int loop 3M                                       266.4 ms

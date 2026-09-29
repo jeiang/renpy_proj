@@ -1,0 +1,7 @@
+impl: CPython 3.12.14
+BENCH RevertableList.append x200k                        37.5 ms
+BENCH RevertableDict.__setitem__ x200k                   46.5 ms
+BENCH plain list/dict x200k each                          9.0 ms
+BENCH pickle proto2 dump+load 50k records                35.4 ms
+BENCH WrapNode+compile 3000 stmts                       123.2 ms
+BENCH int loop 3M                                       103.3 ms
