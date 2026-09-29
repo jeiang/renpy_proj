@@ -26,7 +26,8 @@ Rules for any agent (or subagent) resolving a ticket on the wayfinder map, [Map:
 - Never modify games under `~/Games`. Work on APFS clones in the repo's gitignored `corpus/`: `research/test-corpus/make_released.py` builds a released (`.rpyc`-only) copy. For a plain copy, use `/bin/cp -Rc` (the Nix shell's GNU `cp` has no `-c`). Always run `xattr -dr com.apple.quarantine <copy>` on copied `.app` bundles so Gatekeeper doesn't block them.
 - Headless compatibility gate: `<engine> <game> lint` with `RENPY_PATH_TO_SAVES` pointing at scratch (see `research/test-corpus/lint_released.sh`). It loads every script without opening a window.
 - No computer use or screen capture: the permission needs a terminal restart. Verify through `log.txt`, `traceback.txt`, exit codes, and process state. Record visual checks as HITL follow-ups.
-- Kill every game process you start.
+- Kill every game process you start. A process-group `SIGKILL` has missed Ren'Py windows before, and the user had to close them by hand at the exit-confirmation screen. After each run, sweep by path: `pkill -9 -f "<your worktree>/corpus/"`. Then check with `pgrep -f` that nothing is left.
+- "Process alive after N seconds" is not a pass, because Ren'Py stays up while it shows an error screen. Check `traceback.txt` and `log.txt` as well, and mark the result as not visually confirmed until a person has looked at it.
 
 ## Tools
 
