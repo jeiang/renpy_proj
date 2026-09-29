@@ -4,10 +4,11 @@ Rules for any agent (or subagent) resolving a ticket on the wayfinder map, [Map:
 
 ## Git
 
-- One ticket, one branch, one worktree: `git worktree add ../renpy_proj-<slug> -b research/<slug>`. Work and commit only there. Parallel agents never share an index.
+- One ticket, one branch, one worktree, all kept inside the repo under the gitignored `.worktrees/`: `git worktree add .worktrees/<slug> -b research/<slug>`. Work and commit only there. Parallel agents never share an index.
 - Output goes in `research/<slug>/`: a fact sheet `README.md` ending with "Implications for the route decision", plus kept scripts and small outputs.
-- The coordinator merges `research/<slug>` into `main` (`git merge --no-ff`), pushes, and removes the worktree. Subagents do not push or merge.
-- Before removing a worktree, move its gitignored artefacts you want to keep (screenshots, SDKs, `out/`) into the main checkout with `rsync -a <worktree>/research/<slug>/ research/<slug>/` and `rsync -a <worktree>/corpus/ corpus/`. Never use `git worktree remove --force`, because it deletes ignored files. That is how the Ren'Py 7 on 8 screenshots were lost.
+- The coordinator merges `research/<slug>` into `main` (`git merge --no-ff`) and pushes. Subagents do not push or merge.
+- Finished worktrees stay under `.worktrees/` with their gitignored artefacts (screenshots, SDKs, `out/`, corpus clones) until the user cleans up at the end of the session. Never run `git worktree remove --force`: it deletes ignored files, which is how the Ren'Py 7 on 8 screenshots were lost. Move large APFS clones with `mv`, never copy them (`rsync` breaks clone sharing).
+- Games run by several agents at once distort timings and fight over the screen. Hold the machine lock while any game process runs: `until mkdir /tmp/renpy_proj.run.lock 2>/dev/null; do sleep 5; done`, then `rmdir /tmp/renpy_proj.run.lock` after the sweep. Keep each hold short (one run).
 
 ## What to commit
 

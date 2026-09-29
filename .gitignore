@@ -7,3 +7,5 @@ __pycache__/
 research/*/upstream/
 # Game assets are copyrighted; test corpora live here (gitignored), see research/test-corpus/.
 /corpus/
+# Per-ticket git worktrees; leftovers cleaned up by the user at session end.
+/.worktrees/
