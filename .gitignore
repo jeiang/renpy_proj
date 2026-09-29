@@ -1,0 +1,5 @@
+/target
+/result
+.direnv/
+# Game assets are copyrighted; keep test corpora outside the repo.
+/corpus/
