@@ -19,6 +19,7 @@
               rustfmt
               rust-analyzer
               python3
+              python312 # Ren'Py 8.4-8.5.3 pin CPython 3.12
               unrpa
               ffmpeg
               git
