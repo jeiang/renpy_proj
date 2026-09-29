@@ -1,0 +1,11 @@
+game	format	renpy	python	script_version	rpy	rpyc	non_rpc2_rpyc	rpa	rpa_headers	images	videos	largest_video	shader_rpy	game_size	engine_size
+AHouseInTheRift-0.8.02r3-pc	pc	7.6.1.23060707	python2.7	(7, 6, 1)	0+4630	0+4639	0	26	RPA-3.0×26	2+27331	0+409	vp8,1920,1080,30/1	0	11G	130M
+AstralLust-0.3.1c.4K-pc	pc	7.8.2.24090902	python2.7	(7, 8, 2)	5358+0	5357+0	0	0		9213+0	1168+0	vp9,3840,2160,60/1	0	13G	143M
+Harem_Hotel-v0.19-pc	pc	7.4.11	python2.7	(7, 4, 11)	17+84	23+131	0	17	RPA-3.0×17	377+35178	7+17	vp9,1920,1080,60/1	0	14G	130M
+InterimDomain-0.99.0-pc	pc	7.4.5	python2.7	(7, 4, 5)	17+23	17+23	0	2	RPA-3.0×2	0+29304	0+1079	theora,1920,1080,60/1	0	3.9G	131M
+Lucky_Paradox-v0.10.4-pc	pc	7.4.11	python2.7	(7, 4, 11)	0+0	0+160	0	12	RPA-3.0×12	128+39439	0+381	vp9,1920,1080,60/1	0	12G	130M
+MaidandMaidens.app	mac	7.5.3	python2.7	(7, 5, 3)	36+0	34+0	0	0		10194+0	987+0	vp8,1920,1080,60/1	0	5.2G	17M
+Ripples.app	mac	8.2.1.24030407	python3.9	(8, 2, 1)	40+121	40+121	0	3	RPA-3.0×3	1+14855	0+1197	vp9,1920,1080,60/1	0	13G	22M
+SecretIsland-0.18.8.0-pc	pc	8.0.1	python3.9	(8, 0, 1)	137+0	137+0	0	0		12341+0	746+0	vp9,1920,1080,60/1	0	10G	79M
+WaifuAcademy-0.13.5-pc	pc	8.2.3.24061702	python3.9	(7, 4, 5)	4+19	8+19	0	1	RPA-3.0×1	10+7953	0+537	theora,2560,1440,60/1	0	6.7G	93M
+WhiteRussian.app	mac	7.4.11	python2.7	(7, 4, 11)	16+0	16+0	0	0		9270+0	38+0	vp8,1280,689,60/1	0	1.1G	17M
