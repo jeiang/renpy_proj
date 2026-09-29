@@ -3,3 +3,4 @@ renpy/
 scratch/
 unrpa/
 sdk/
+__pycache__/
