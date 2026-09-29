@@ -27,7 +27,7 @@ One candidate way to reach the goal, such as a full Rust engine, a Rust host tha
 _Avoid_: approach, option
 
 **Ren'Py 7 game**:
-A game built for Ren'Py 7.x, whose game Python is Python 2. It runs on the same engine as Ren'Py 8 games, with a warning that it may need manual updates.
+A game built for Ren'Py 7.x, whose game Python is Python 2, identified by its bundled engine rather than `script_version.txt`. It runs on the same engine as Ren'Py 8 games, with Python 2 semantics and a warning that it may need manual updates.
 _Avoid_: legacy game, py2 game
 
 **Port patch**:
@@ -37,3 +37,14 @@ _Avoid_: mod, hotfix
 **Python 2 compatibility module**:
 The engine module that automatically handles basic Python 2 vs 3 differences in Ren'Py 7 games and detects the ones it cannot fix.
 _Avoid_: py2 shim, compat layer
+
+**Python 2 semantics**:
+The mode in which a Ren'Py 7 game's Python runs, so that operations that silently differ in Python 3 (such as integer division) give Python 2 results.
+
+**Patch library**:
+The player-side store of port patches, kept outside game directories.
+_Avoid_: patch folder, mods
+
+**Build fingerprint**:
+A hash of a game's script set that identifies one build of a game, so port patches apply only to the build they were written for.
+_Avoid_: game id, version
