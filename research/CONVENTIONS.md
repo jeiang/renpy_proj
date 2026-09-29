@@ -1,0 +1,33 @@
+# Research conventions
+
+Rules for any agent (or subagent) resolving a ticket on the wayfinder map, [Map: Ren'Py 8 player feasibility and architecture](https://github.com/jeiang/renpy_proj/issues/1). Learned from the first research round.
+
+## Git
+
+- One ticket, one branch, one worktree: `git worktree add ../renpy_proj-<slug> -b research/<slug>`. Work and commit only there. Parallel agents never share an index.
+- Output goes in `research/<slug>/`: a fact sheet `README.md` ending with "Implications for the route decision", plus kept scripts and small outputs.
+- The coordinator merges `research/<slug>` into `main` (`git merge --no-ff`), pushes, and removes the worktree. Subagents do not push or merge.
+
+## What to commit
+
+- Commit your own notes, scripts, and small measured outputs.
+- Never commit third-party text (READMEs, docs, source). Link it, and add a `fetch.sh` that re-downloads it into a gitignored directory (`upstream/`, `src/`, `sdk/`).
+- Never commit clones, SDKs, media, `__pycache__`, or game assets. The root `.gitignore` covers `__pycache__/`, `*.pyc`, `research/*/upstream/`, and `/corpus/`. Add a per-directory `.gitignore` for anything else over 1 MB.
+- Before the coordinator merges, check `git show --stat` on each commit for vendored or binary files.
+
+## GitHub tickets
+
+- Claim the ticket first (`gh issue edit <n> --add-assignee @me`), then resolve: comment with the answer and a fact-sheet link, then close. Confirm the close with `gh issue view <n> --json state`. One agent reported a close it never made.
+- Scripted ticket creation: create in one step and wire (sub-issues, `blocked_by`) in a second step. Check what already exists (`gh issue list --state all`) before creating, so a timeout and rerun make no duplicates. Give long `gh` loops a timeout of a few minutes.
+
+## Running Ren'Py
+
+- Never run a game against the user's real save directory. Pass `--savedir <scratch>` (`renpy/arguments.py`) or set `RENPY_PATH_TO_SAVES=<scratch>` (`renpy.py` L173, parent of the per-game dir), and check `~/Library/RenPy/<game>` is unchanged afterwards. Ren'Py also writes to `game/saves/` inside the game directory, so run a scratch copy, never the original. A newer engine (8.4+) rewrites `persistent` in a format older engines can't read.
+- Never modify games under `~/Games`. Work on APFS clones (`cp -Rc`) or copies in `/corpus/` (see `research/test-corpus/`).
+- No computer use or screen capture: the permission needs a terminal restart. Verify through `log.txt`, `traceback.txt`, exit codes, and process state. Record visual checks as HITL follow-ups.
+- Kill every game process you start.
+
+## Tools
+
+- Run commands in `nix develop -c <cmd>`. Use `nix shell nixpkgs#<pkg> -c <cmd>` for a one-off tool and name it in the fact sheet. Don't install anything globally.
+- The shell is zsh with unmatched globs as errors: quote globs.
