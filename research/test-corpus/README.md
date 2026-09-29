@@ -52,9 +52,9 @@ Ren'Py 7 is now in scope ([Bring Ren'Py 7 games into scope?](https://github.com/
 |---|---|---|---|---|
 | TheStormWithinUs-0.1-win | **8.5.3.26051504** | 3.12 | (8, 5, 3) | **First 8.4+ game.** Small: 4 `.rpyc`, 873 images, 5 videos (VP8 1080p30), 632 MB |
 | DOF-Ep3_V_1.5-pc | 8.3.2 | 3.9 | (7, 4, 9) | Started on 7.4.9, now on 8.3.2; 172 videos (VP9 1080p60) in an RPA |
-| Bumpkin_Boy's_Bizarre_Adventures 0.14 and 0.15 (under `Bumpkin Boy's Bizzare Adventure/`) | 7.5.3 then **8.1.3** | 2.7 then 3.9 | (7, 5, 3) then (8, 1, 3) | **The developer's own 7-to-8 port** of the same game, useful as a reference for the Python 2 compatibility module. 0.15 is 108 MB, so it may be a partial or update build [INFERENCE] |
+| Bumpkin_Boy's_Bizarre_Adventures 0.14 and 0.15 (under `Bumpkin Boy's Bizzare Adventure/`) | 7.5.3 and 8.1.3 | 2.7 and 3.9 | (7, 5, 3) and (8, 1, 3) | **Two separate games** (user): 0.14 is the first part, and 0.15 is a continuation on Ren'Py 8. This is not a port of the same code |
 | A_World_Between_Us-0.2.8-pc | 7.4.8 | 2.7 | (7, 4, 8) | **H.264 video** (192 files, 1080p15). The FFmpeg bundled with 8.5.3 has no H.264 decoder ([gpu-media](../gpu-media/README.md)); check whether these play on 8.x |
-| CabinByTheLake_FantasticFacts-1.0-pc | 7.4.8 | 2.7 | (7, 4, 8) | One `.rpyc` without the `RENPY RPC2` header: `game/un.rpyc` is a bare zlib stream. The name matches the in-game decompiler that unrpyc can inject into a game [INFERENCE], not obfuscation |
+| CabinByTheLake_FantasticFacts-1.0-pc | 7.4.8 | 2.7 | (7, 4, 8) | `game/un.rpyc` is unrpyc's in-game decompiler (user-confirmed; `unrpyc.log.txt` sits beside it), not obfuscation. The shipped `.rpy` files may be decompiled output rather than the developer's source. It is a bare zlib stream with no `RENPY RPC2` header, the legacy form Ren'Py still loads |
 | BraveheartAcademy-2.1-pc | 7.4.8 | 2.7 | (7, 4, 8) | 2048 videos (VP9 1080p60), 6.7 GB |
 | DTRemake-0.4-0.4-pc | 7.4.11 | 2.7 | (7, 4, 11) | 112 videos (VP8 1080p 29.97) |
 | BlackRose-Public-0.4.1-win | 7.7.3 | 2.7 | (7, 7, 3) | 166 videos in an RPA |
@@ -65,7 +65,7 @@ Earlier Ren'Py 7 games: AHouseInTheRift 7.6.1, AstralLust 7.8.2, Harem_Hotel 7.4
 
 ## Gaps
 
-- **8.4/8.5:** only TheStormWithinUs (8.5.3), and it is small with few scripts. There is still no large 8.4+ game.
+- **8.4/8.5: a known gap, deferred.** Few games exist on the newest engines yet. The only one is TheStormWithinUs (8.5.3), which is small with few scripts. Large 8.4+ games will be added later, as they appear.
 - **No 4K video in a Ren'Py 8 game.** AstralLust (Ren'Py 7, VP9 3840×2160 60 fps) is the only official 4K game. The user will find another for later checks.
 - **No obfuscated game.** The user owns none; they must be found online. This is low priority.
 - **Only one macOS-native Ren'Py 8 build** (Ripples). The PC builds run on macOS only through a matching SDK.
