@@ -1,0 +1,404 @@
+{
+ "AHouseInTheRift-0.8.02r3-pc": {
+  "compile_stage": {
+   "as-is": 33793
+  },
+  "failure_reasons": {},
+  "hazard_names": {
+   "import-suspect-module": {
+    "__builtin__": 1
+   },
+   "py2-name-provided-by-store": {
+    "basestring": 15
+   }
+  },
+  "hazards": {
+   "division-float-literal": 1,
+   "division-int-candidate": 13,
+   "import-suspect-module": 1,
+   "old-style-class": 51,
+   "open-call": 1,
+   "py2-name-provided-by-store": 15
+  },
+  "hazards_in_rpy_python_3_files": {},
+  "pickle_protocols": {
+   "2": 4640
+  },
+  "renpy_attrs_used": [
+   "block_rollback",
+   "call",
+   "call_replay",
+   "call_screen",
+   "checkpoint",
+   "config",
+   "config.gamedir",
+   "curry",
+   "display",
+   "display.layout",
+   "display_menu",
+   "dynamic",
+   "end_replay",
+   "error",
+   "filter_text_tags",
+   "game",
+   "get_return_stack",
+   "get_screen",
+   "get_widget",
+   "has_label",
+   "hide",
+   "hide_screen",
+   "image",
+   "in_rollback",
+   "input",
+   "invoke_in_thread",
+   "jump",
+   "list_files",
+   "loadable",
+   "log",
+   "music",
+   "pause",
+   "random",
+   "register_persistent",
+   "register_statement",
+   "restart_interaction",
+   "roll_forward_info",
+   "save_persistent",
+   "say",
+   "scene",
+   "seen_label",
+   "set_return_stack",
+   "show",
+   "show_screen",
+   "stop_predict_screen",
+   "store",
+   "suspend_rollback",
+   "transition",
+   "translate_string",
+   "variant",
+   "with_statement"
+  ],
+  "rpyc_files": 4640,
+  "rpyc_files_with_rpy_python_3": 0,
+  "snippet_kinds": {
+   "code": 29137,
+   "expr": 4656
+  },
+  "unique_snippets": 33793,
+  "unpickle_failures": 0
+ },
+ "AstralLust-0.3.1c.4K-pc": {
+  "compile_stage": {
+   "as-is": 9407,
+   "as-is+fix_ast": 1
+  },
+  "failure_reasons": {},
+  "hazard_names": {
+   "dict-view-assigned(unpicklable if stored)": {
+    "items": 1,
+    "keys": 7
+   },
+   "iterator-assigned(unpicklable if stored)": {
+    "filter": 1
+   },
+   "py2-name-NameError": {
+    "long": 1
+   }
+  },
+  "hazards": {
+   "__metaclass__-attr": 4,
+   "dict-view-assigned(unpicklable if stored)": 8,
+   "division-float-literal": 7,
+   "division-int-candidate": 394,
+   "iterator-assigned(unpicklable if stored)": 1,
+   "old-style-class": 113,
+   "open-call": 7,
+   "py2-name-NameError": 1
+  },
+  "hazards_in_rpy_python_3_files": {},
+  "pickle_protocols": {
+   "2": 5358
+  },
+  "renpy_attrs_used": [
+   "Displayable",
+   "Render",
+   "TEXT_TAG",
+   "block_rollback",
+   "call",
+   "call_screen",
+   "can_load",
+   "change_language",
+   "checkpoint",
+   "display_menu",
+   "easy",
+   "end_replay",
+   "error",
+   "file",
+   "filter_text_tags",
+   "free_memory",
+   "full_restart",
+   "game",
+   "get_all_labels",
+   "get_return_stack",
+   "get_screen",
+   "has_image",
+   "has_label",
+   "hide_screen",
+   "image",
+   "input",
+   "invoke_in_new_context",
+   "jump",
+   "lint",
+   "list_files",
+   "list_images",
+   "loadable",
+   "mark_label_seen",
+   "mark_label_unseen",
+   "movie_cutscene",
+   "music",
+   "parser",
+   "pause",
+   "play",
+   "pure",
+   "quit",
+   "random",
+   "redraw",
+   "register_statement",
+   "render",
+   "save",
+   "say",
+   "scene",
+   "seen_label",
+   "set_return_stack",
+   "show",
+   "show_screen",
+   "start_predict",
+   "stop_predict",
+   "suspend_rollback",
+   "take_screenshot",
+   "unlink_save",
+   "variant",
+   "with_statement"
+  ],
+  "rpyc_files": 5358,
+  "rpyc_files_with_rpy_python_3": 0,
+  "snippet_kinds": {
+   "code": 4467,
+   "expr": 4941
+  },
+  "unique_snippets": 9408,
+  "unpickle_failures": 0
+ },
+ "Harem_Hotel-v0.19-pc": {
+  "compile_stage": {
+   "as-is": 30108,
+   "fail-parse": 2,
+   "fix_tokens": 2
+  },
+  "failure_reasons": {
+   "SyntaxError: Missing parentheses in call to 'print'. Did you mean print(...)?": 1,
+   "SyntaxError: invalid syntax": 1
+  },
+  "hazard_names": {
+   "import-suspect-module": {
+    "itertools": 1
+   },
+   "py2-name-provided-by-store": {
+    "basestring": 4,
+    "unicode": 1
+   },
+   "subscript-of-iterator": {
+    "range": 1
+   }
+  },
+  "hazards": {
+   "division-float-literal": 2,
+   "division-int-candidate": 18,
+   "import-suspect-module": 1,
+   "old-style-class": 3,
+   "py2-name-provided-by-store": 5,
+   "str-encode-call": 1,
+   "subscript-of-iterator": 1
+  },
+  "hazards_in_rpy_python_3_files": {},
+  "pickle_protocols": {
+   "2": 155
+  },
+  "renpy_attrs_used": [
+   "Keymap",
+   "call",
+   "curry",
+   "display",
+   "display.layout",
+   "display_menu",
+   "end_replay",
+   "filter_text_tags",
+   "game",
+   "get_game_runtime",
+   "hide_screen",
+   "imagemap",
+   "input",
+   "jump",
+   "load",
+   "loadable",
+   "mobile",
+   "music",
+   "newest_slot",
+   "pause",
+   "random",
+   "restart_interaction",
+   "seen_label",
+   "show_screen",
+   "store",
+   "store.first_jin_tools_ask",
+   "store.first_talk_food_drive",
+   "store.food_drive_complete18",
+   "store.garden_tip",
+   "store.should_jin_farm",
+   "store.should_jin_meddle",
+   "style",
+   "variant"
+  ],
+  "rpyc_files": 155,
+  "rpyc_files_with_rpy_python_3": 0,
+  "snippet_kinds": {
+   "code": 3447,
+   "expr": 26665
+  },
+  "unique_snippets": 30112,
+  "unpickle_failures": 0
+ },
+ "InterimDomain-0.99.0-pc": {
+  "compile_stage": {
+   "as-is": 5453
+  },
+  "failure_reasons": {},
+  "hazard_names": {},
+  "hazards": {},
+  "hazards_in_rpy_python_3_files": {},
+  "pickle_protocols": {
+   "2": 41
+  },
+  "renpy_attrs_used": [
+   "Keymap",
+   "end_replay",
+   "filter_text_tags",
+   "full_restart",
+   "has_screen",
+   "hide_screen",
+   "music",
+   "pause",
+   "show_screen",
+   "sound",
+   "variant"
+  ],
+  "rpyc_files": 41,
+  "rpyc_files_with_rpy_python_3": 0,
+  "snippet_kinds": {
+   "code": 2240,
+   "expr": 3213
+  },
+  "unique_snippets": 5453,
+  "unpickle_failures": 0
+ },
+ "Lucky_Paradox-v0.10.4-pc": {
+  "compile_stage": {
+   "as-is": 12422
+  },
+  "failure_reasons": {},
+  "hazard_names": {},
+  "hazards": {
+   "division-int-candidate": 7,
+   "old-style-class": 11
+  },
+  "hazards_in_rpy_python_3_files": {},
+  "pickle_protocols": {
+   "2": 161
+  },
+  "renpy_attrs_used": [
+   "android",
+   "block_rollback",
+   "change_language",
+   "curry",
+   "filter_text_tags",
+   "free_memory",
+   "input",
+   "load",
+   "newest_slot",
+   "pause",
+   "quit",
+   "random",
+   "register_style_preference",
+   "variant"
+  ],
+  "rpyc_files": 161,
+  "rpyc_files_with_rpy_python_3": 0,
+  "snippet_kinds": {
+   "code": 2579,
+   "expr": 9843
+  },
+  "unique_snippets": 12422,
+  "unpickle_failures": 0
+ },
+ "MaidandMaidens.app": {
+  "compile_stage": {
+   "as-is": 11309
+  },
+  "failure_reasons": {},
+  "hazard_names": {},
+  "hazards": {},
+  "hazards_in_rpy_python_3_files": {},
+  "pickle_protocols": {
+   "2": 35
+  },
+  "renpy_attrs_used": [
+   "TEXT_TAG",
+   "end_replay",
+   "exists",
+   "filter_text_tags",
+   "get_screen",
+   "input",
+   "mobile",
+   "movie_cutscene",
+   "pause",
+   "register_style_preference",
+   "seen_image",
+   "seen_label",
+   "variant"
+  ],
+  "rpyc_files": 35,
+  "rpyc_files_with_rpy_python_3": 0,
+  "snippet_kinds": {
+   "code": 8813,
+   "expr": 2496
+  },
+  "unique_snippets": 11309,
+  "unpickle_failures": 0
+ },
+ "WhiteRussian.app": {
+  "compile_stage": {
+   "as-is": 738
+  },
+  "failure_reasons": {},
+  "hazard_names": {},
+  "hazards": {},
+  "hazards_in_rpy_python_3_files": {},
+  "pickle_protocols": {
+   "2": 17
+  },
+  "renpy_attrs_used": [
+   "filter_text_tags",
+   "full_restart",
+   "input",
+   "pause",
+   "variant"
+  ],
+  "rpyc_files": 17,
+  "rpyc_files_with_rpy_python_3": 0,
+  "snippet_kinds": {
+   "code": 252,
+   "expr": 486
+  },
+  "unique_snippets": 738,
+  "unpickle_failures": 0
+ }
+}
