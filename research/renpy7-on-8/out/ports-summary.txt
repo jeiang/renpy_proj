@@ -1,0 +1,20 @@
+## astral-8.5.3.log
+lint rc=0
+launch: alive after 20s
+~/Library/RenPy unchanged
+## harem-8.0.1.log
+lint rc=0
+launch: alive after 20s
+~/Library/RenPy unchanged
+## harem-8.5.3.log
+lint rc=0
+launch: alive after 20s
+~/Library/RenPy unchanged
+## lucky-8.5.3.log
+lint rc=0
+launch: alive after 20s
+~/Library/RenPy unchanged (file listing incl. mtimes)
+## rift-8.5.3.log
+lint rc=0
+launch: alive after 20s
+~/Library/RenPy unchanged

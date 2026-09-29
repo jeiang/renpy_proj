@@ -1,0 +1,28 @@
+AHouseInTheRift-0.8.02r3-pc__8.1.1                      launch TRACEBACK ModuleNotFoundError: No module named '__builtin__' @ File "game/utils/debug/logger.rpy", line 69, in <module>
+AHouseInTheRift-0.8.02r3-pc__8.1.1                      lint   TRACEBACK ModuleNotFoundError: No module named '__builtin__' @ File "game/utils/debug/logger.rpy", line 69, in <module>
+AHouseInTheRift-0.8.02r3-pc__8.5.3                      launch TRACEBACK ModuleNotFoundError: No module named '__builtin__' @ File "game/utils/debug/logger.rpy", line 1, in script
+AHouseInTheRift-0.8.02r3-pc__8.5.3                      lint   TRACEBACK ModuleNotFoundError: No module named '__builtin__' @ File "game/utils/debug/logger.rpy", line 1, in script
+AstralLust-0.3.1c.4K-pc__8.3.2                          launch no traceback; out tail: (Vanilla) Loaded cards: 126
+AstralLust-0.3.1c.4K-pc__8.3.2                          lint   TRACEBACK TypeError: 'type' object is not iterable @ File "game/00Lint/arenas.rpy", line 6, in lint_arenas
+AstralLust-0.3.1c.4K-pc__8.5.3                          launch no traceback; out tail: (Vanilla) Loaded cards: 126
+AstralLust-0.3.1c.4K-pc__8.5.3                          lint   TRACEBACK TypeError: 'type' object is not iterable @ File "game/00Lint/arenas.rpy", line 6, in lint_arenas
+Harem_Hotel-v0.19-pc__8.0.1                             launch TRACEBACK TypeError: '<' not supported between instances of 'NoneType' and 'bool' @ File "game/mod/Lain_Encyclopedia.rpy", line 1, in script
+Harem_Hotel-v0.19-pc__8.0.1                             lint   TRACEBACK TypeError: '<' not supported between instances of 'NoneType' and 'bool' @ File "game/mod/Lain_Encyclopedia.rpy", line 1, in script
+Harem_Hotel-v0.19-pc__8.5.3                             launch no traceback; out tail:                                                           ^
+Harem_Hotel-v0.19-pc__8.5.3                             lint   no traceback; out tail:                                                           ^
+InterimDomain-0.99.0-pc__8.0.1                          launch no traceback; out tail: 
+InterimDomain-0.99.0-pc__8.0.1                          lint   lint-ok (1 game/ msgs)
+InterimDomain-0.99.0-pc__8.5.3                          launch no traceback; out tail: 
+InterimDomain-0.99.0-pc__8.5.3                          lint   lint-ok (8 game/ msgs)
+Lucky_Paradox-v0.10.4-pc__8.0.1                         launch no traceback; out tail: 
+Lucky_Paradox-v0.10.4-pc__8.0.1                         lint   lint-ok (0 game/ msgs)
+Lucky_Paradox-v0.10.4-pc__8.5.3                         launch no traceback; out tail: 
+Lucky_Paradox-v0.10.4-pc__8.5.3                         lint   lint-ok (891 game/ msgs)
+MaidandMaidens.app__8.0.1                               launch no traceback; out tail: 
+MaidandMaidens.app__8.0.1                               lint   lint-ok (139 game/ msgs)
+MaidandMaidens.app__8.5.3                               launch no traceback; out tail: 
+MaidandMaidens.app__8.5.3                               lint   lint-ok (138 game/ msgs)
+WhiteRussian.app__8.0.1                                 launch no traceback; out tail: 
+WhiteRussian.app__8.0.1                                 lint   lint-ok (522 game/ msgs)
+WhiteRussian.app__8.5.3                                 launch no traceback; out tail: 
+WhiteRussian.app__8.5.3                                 lint   lint-ok (511 game/ msgs)
