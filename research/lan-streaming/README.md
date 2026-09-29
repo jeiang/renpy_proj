@@ -2,7 +2,7 @@
 
 Question: which stack streams a running desktop game (stock Ren'Py or a new engine) from a LAN host to a browser with low latency and returns input? Compare WebRTC options, headless/offscreen rendering per OS, hardware encode, audio, input mapping; which work with the stock engine unchanged, and what does a custom engine gain by encoding its own frames?
 
-Research date 2026-09-29. Repo metadata (licence, last push, latest release) taken from the GitHub API on that date. Statements not backed by a cited source are tagged **[INFERENCE]**. No latency was measured; latency classes are qualitative and **[INFERENCE]** unless a source is given. Saved raw READMEs/docs in this directory (`*.README.*`, `sunshine_*.md`) are the exact texts quoted below; refetch with the `gh api repos/<r>/readme` / `contents/docs/...` calls (all small, no `.gitignore` needed).
+Research date 2026-09-29. Repo metadata (licence, last push, latest release) taken from the GitHub API on that date. Statements not backed by a cited source are tagged **[INFERENCE]**. No latency was measured; latency classes are qualitative and **[INFERENCE]** unless a source is given. The upstream READMEs/docs quoted below are linked, not vendored; `./fetch.sh` re-downloads them into the gitignored `upstream/` directory.
 
 ## 1. Comparison table
 

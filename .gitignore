@@ -1,5 +1,9 @@
 /target
 /result
 .direnv/
-# Game assets are copyrighted; keep test corpora outside the repo.
+__pycache__/
+*.pyc
+# Third-party docs re-fetched by research fetch scripts; link, don't vendor.
+research/*/upstream/
+# Game assets are copyrighted; test corpora live here (gitignored), see research/test-corpus/.
 /corpus/
