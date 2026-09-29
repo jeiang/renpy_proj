@@ -44,16 +44,31 @@ Screenshots plus `traceback.txt` gates, done by an agent through screen capture;
 | `corpus/Ripples-released.app` on its bundled 8.2.1 | PASS (video seen by script tag; frame vs still not separable) |
 | `corpus/WaifuAcademy-...-released` on 8.2.3 | PASS (`play movie` seen on the movie channel) |
 
-## Not in the corpus
+## Games added 2026-09-29 (surveyed, not yet run)
 
-All seven other games in `~/Games` are **Ren'Py 7** (Python 2.7), so they are skipped: AHouseInTheRift 7.6.1, AstralLust 7.8.2, Harem_Hotel 7.4.11, InterimDomain 7.4.5, Lucky_Paradox 7.4.11, MaidandMaidens 7.5.3, and WhiteRussian 7.4.11. The full survey is in `survey.tsv`.
+Ren'Py 7 is now in scope ([Bring Ren'Py 7 games into scope?](https://github.com/jeiang/renpy_proj/issues/16)), so every game below counts. The full survey is in `survey.tsv` (Bumpkin is one directory deeper and not in the file).
+
+| Game | Engine | Python | `script_version.txt` | Notes |
+|---|---|---|---|---|
+| TheStormWithinUs-0.1-win | **8.5.3.26051504** | 3.12 | (8, 5, 3) | **First 8.4+ game.** Small: 4 `.rpyc`, 873 images, 5 videos (VP8 1080p30), 632 MB |
+| DOF-Ep3_V_1.5-pc | 8.3.2 | 3.9 | (7, 4, 9) | Started on 7.4.9, now on 8.3.2; 172 videos (VP9 1080p60) in an RPA |
+| Bumpkin_Boy's_Bizarre_Adventures 0.14 and 0.15 (under `Bumpkin Boy's Bizzare Adventure/`) | 7.5.3 then **8.1.3** | 2.7 then 3.9 | (7, 5, 3) then (8, 1, 3) | **The developer's own 7-to-8 port** of the same game, useful as a reference for the Python 2 compatibility module. 0.15 is 108 MB, so it may be a partial or update build [INFERENCE] |
+| A_World_Between_Us-0.2.8-pc | 7.4.8 | 2.7 | (7, 4, 8) | **H.264 video** (192 files, 1080p15). The FFmpeg bundled with 8.5.3 has no H.264 decoder ([gpu-media](../gpu-media/README.md)); check whether these play on 8.x |
+| CabinByTheLake_FantasticFacts-1.0-pc | 7.4.8 | 2.7 | (7, 4, 8) | One `.rpyc` without the `RENPY RPC2` header: `game/un.rpyc` is a bare zlib stream. The name matches the in-game decompiler that unrpyc can inject into a game [INFERENCE], not obfuscation |
+| BraveheartAcademy-2.1-pc | 7.4.8 | 2.7 | (7, 4, 8) | 2048 videos (VP9 1080p60), 6.7 GB |
+| DTRemake-0.4-0.4-pc | 7.4.11 | 2.7 | (7, 4, 11) | 112 videos (VP8 1080p 29.97) |
+| BlackRose-Public-0.4.1-win | 7.7.3 | 2.7 | (7, 7, 3) | 166 videos in an RPA |
+| Dreamscape-v0.2R1-pc | 7.4.11 | 2.7 | (7, 4, 11) | `.rpyc` only, inside 3 RPAs |
+| AlexsVantasticAdventure, BloomWar, DFraction | 7.4.8 / 7.4.11 / 7.4.11 | 2.7 | as engine | Small (70 to 113 MB) |
+
+Earlier Ren'Py 7 games: AHouseInTheRift 7.6.1, AstralLust 7.8.2, Harem_Hotel 7.4.11, InterimDomain 7.4.5, Lucky_Paradox 7.4.11, MaidandMaidens 7.5.3, and WhiteRussian 7.4.11.
 
 ## Gaps
 
-- **No 8.4 or 8.5 game.** This matters for the 8.4 AST pickle-layout change and for Python 3.12 (see [version-drift](../version-drift/README.md)). A stopgap is the SDK sample games (`the_question`, `tutorial`) compiled by 8.5.3 in `research/rpyc-loading/`.
-- **No 4K video in a Ren'Py 8 game.** The only 4K game (AstralLust, VP9 3840×2160 60 fps) is Ren'Py 7. Its video files can still serve as decode benchmarks outside the engine.
-- **No obfuscated game.** The obfuscation share is still unmeasured.
-- **Only one macOS-native Ren'Py 8 build** (Ripples). The two PC builds run on macOS only through a matching SDK.
+- **8.4/8.5:** only TheStormWithinUs (8.5.3), and it is small with few scripts. There is still no large 8.4+ game.
+- **No 4K video in a Ren'Py 8 game.** AstralLust (Ren'Py 7, VP9 3840×2160 60 fps) is the only official 4K game. The user will find another for later checks.
+- **No obfuscated game.** The user owns none; they must be found online. This is low priority.
+- **Only one macOS-native Ren'Py 8 build** (Ripples). The PC builds run on macOS only through a matching SDK.
 
 ## Reproduce
 
