@@ -1,0 +1,6 @@
+[package]
+name = "naga-probe"
+version = "0.0.0"
+edition = "2021"
+[dependencies]
+naga = { version = "30", features = ["wgsl-in", "glsl-in", "wgsl-out", "msl-out", "hlsl-out", "spv-out"] }

@@ -1,0 +1,19 @@
+error (ignored): SQLite database '/Users/aidanp/.cache/nix/eval-cache-v6/27e718b5a14d98eca9529371f7af69f147ede7fa10f31a5294c6bac3a6b63585.sqlite' is busy
+== vp9_4k.webm
+sw decode only                                bench: utime=7.750s stime=0.108s rtime=2.487s 
+sw decode + rgba (SWS_POINT, Ren'Py-like)     bench: utime=9.153s stime=0.173s rtime=2.732s 
+VideoToolbox decode, frames stay on GPU       bench: utime=0.062s stime=0.081s rtime=2.766s 
+VideoToolbox decode + download nv12           bench: utime=0.114s stime=0.061s rtime=2.631s 
+VideoToolbox decode + download + rgba         bench: utime=0.832s stime=0.121s rtime=2.745s 
+== av1_4k.mkv
+sw decode only                                bench: utime=5.334s stime=0.283s rtime=2.580s 
+sw decode + rgba (SWS_POINT, Ren'Py-like)     bench: utime=5.937s stime=0.317s rtime=2.586s 
+VideoToolbox decode, frames stay on GPU       bench: utime=0.034s stime=0.040s rtime=1.585s 
+VideoToolbox decode + download nv12           bench: utime=0.092s stime=0.046s rtime=1.643s 
+VideoToolbox decode + download + rgba         bench: utime=0.837s stime=0.098s rtime=1.745s 
+== h264_4k.mp4
+sw decode only                                bench: utime=2.576s stime=0.421s rtime=1.002s 
+sw decode + rgba (SWS_POINT, Ren'Py-like)     bench: utime=3.109s stime=0.189s rtime=0.598s 
+VideoToolbox decode, frames stay on GPU       bench: utime=0.065s stime=0.077s rtime=1.504s 
+VideoToolbox decode + download nv12           bench: utime=0.120s stime=0.080s rtime=1.550s 
+VideoToolbox decode + download + rgba         bench: utime=0.791s stime=0.124s rtime=1.579s 

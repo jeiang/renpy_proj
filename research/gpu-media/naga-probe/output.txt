@@ -1,0 +1,78 @@
+[ERR] renpy.default frag (GLSL 120): error: Invalid version: 120 |   ┌─ glsl:1:10 |   │ | 1 │ #version 120 |   │          ^^^ | 
+[ERR] renpy.default vert (GLSL 120): error: Invalid version: 120 |   ┌─ glsl:1:10 |   │ | 1 │ #version 120 |   │          ^^^ | 
+[ERR] renpy.default frag (ESSL 100): error: Invalid version: 100 |   ┌─ glsl:1:10 |   │ | 1 │ #version 100 |   │          ^^^ | 
+[OK ] blur frag hand-ported #version 450 -> parsed+validated; WGSL out 2602 bytes
+struct Params {
+    u_renpy_blur_log2_: f32,
+}
+
+struct FragmentOutput {
+    @location(0) gl_FragColor: vec4<f32>,
+}
+
+@group(0) @binding(0) 
+var<uniform> global: Params;
+@group(0) @binding(1) 
+var tex0_t: texture_2d<f32>;
+@group(0) @binding(2) 
+var tex0_s: sampler;
+var<private> v_tex_coord_1: vec2<f32>;
+var<private> gl_FragColor: vec4<f32>;
+
+fn main_1() {
+    var c: vec4<f32> = vec4(0f);
+    var renpy_blur_norm: f32 = 0f;
+    var i: f32 = -5f;
+    var w: f32;
+    var i_1: f32 = 1f;
+    var w_1: f32;
+
+    loop {
+        let _e14 = i;
+        if !((_e14 < 1f)) {
+            break;
+        }
+        {
+            let _e23 = global.u_renpy_blur_log2_;
+            let _e24 = i;
+            w = exp((-0.5f * pow((_e23 - _e24), 2f)));
+            let _e31 = renpy_blur_norm;
+            let _e32 = w;
+            renpy_blur_norm = (_e31 + _e32);
+        }
+        continuing {
+            let _e18 = i;
+[ERR] mechanical port w/ combined sampler2D: error: Not implemented: variable qualifier |   ┌─ glsl:3:27 |   │ | 3 │ layout(binding=1) uniform sampler2D tex0; |   │                           ^^^^^^^^^ | 
+[OK ] Ren'Py texture frag ported #version 450 (bias) -> parsed+validated; WGSL out 691 bytes
+struct Params {
+    u_lod_bias: f32,
+}
+
+struct FragmentOutput {
+    @location(0) frag_color: vec4<f32>,
+}
+
+@group(0) @binding(0) 
+var<uniform> global: Params;
+@group(0) @binding(1) 
+var tex0_t: texture_2d<f32>;
+@group(0) @binding(2) 
+var tex0_s: sampler;
+var<private> v_tex_coord_1: vec2<f32>;
+var<private> frag_color: vec4<f32>;
+
+fn main_1() {
+    let _e6 = v_tex_coord_1;
+    let _e8 = global.u_lod_bias;
+    let _e9 = textureSampleBias(tex0_t, tex0_s, _e6.xy, _e8);
+    frag_color = _e9;
+    return;
+}
+
+@fragment 
+fn main(@location(0) v_tex_coord: vec2<f32>) -> FragmentOutput {
+    v_tex_coord_1 = v_tex_coord;
+    main_1();
+    let _e13 = frag_color;
+    return FragmentOutput(_e13);
+}

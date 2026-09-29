@@ -1,0 +1,6 @@
+AV1 libaom (Ren'Py's decoder) sw                    bench: utime=7.729s stime=0.122s rtime=4.644s 
+AV1 libdav1d sw                                     bench: utime=4.589s stime=0.189s rtime=2.365s 
+AV1 libaom + 1-thread sws rgba                      bench: utime=8.283s stime=0.130s rtime=4.812s 
+VP9 sw decode, 1 thread                             bench: utime=6.888s stime=0.046s rtime=7.027s 
+VP9 sw decode 1 thread + 1-thread sws rgba          bench: utime=7.077s stime=0.032s rtime=6.822s 
+sws-only cost: VT nv12 download + 1-thread sws      bench: utime=0.820s stime=0.121s rtime=2.844s 
