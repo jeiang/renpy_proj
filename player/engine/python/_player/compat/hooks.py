@@ -220,6 +220,12 @@ def install(settings, detection):
 
     setattr(renpy.python, MARKER, True)
 
+    # The imports above went through RenpyImporter before the search path existed (install runs from
+    # `path_to_common`): its module list would stay empty, and the game's own python-packages/ could not be found.
+    for finder in sys.meta_path:
+        if isinstance(finder, renpy.importer.RenpyImporter):
+            finder.invalidate_caches()
+
 
 def loaded(settings):
     """Script loaded, init not run: scan the game's Python and report what the rewriter will do."""
