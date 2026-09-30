@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/pyhost", "crates/engine", "crates/surface", "crates/platform", "crates/gfx", "crates/media", "crates/player"]
+members = ["crates/*"]
 
 [workspace.package]
 version = "0.1.0"
