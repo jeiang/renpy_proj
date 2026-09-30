@@ -1,0 +1,5 @@
+# Every Cargo command in the workspace links the static CPython that crates/pyhost/build.rs builds into
+# build-out/cpython. The config file is committed (not generated) because pyo3-ffi's build script reads it
+# before any other build script can write it. It has no link lines; crates/pyhost/build.rs emits them.
+[env]
+PYO3_CONFIG_FILE = { value = "crates/pyhost/pyo3-config.txt", relative = true }
