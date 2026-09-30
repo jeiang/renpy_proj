@@ -230,6 +230,8 @@ label hz_movie:
 init 999 python:
     def _hz_run_movie(path, fps, secs, warm):
         t_start = time.time()
+        # Ren'Py trims frame_times to config.performance_window (5 s); keep the whole run.
+        config.performance_window = warm + secs + 5.0
         _hz_write("movie-begin %s" % path)
         renpy.scene()
         renpy.show("hz_black", what=Solid("#000"))
