@@ -2095,6 +2095,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "patches"
+version = "0.1.0"
+dependencies = [
+ "pyo3",
+ "pyo3-ffi",
+ "serde_json",
+ "toml",
+]
+
+[[package]]
 name = "peniko"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2174,9 +2184,11 @@ dependencies = [
  "gfx",
  "library",
  "media",
+ "patches",
  "platform",
  "pyhost",
  "saves",
+ "serde_json",
  "surface",
  "text",
  "vfs",

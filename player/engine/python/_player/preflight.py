@@ -357,6 +357,11 @@ def build_report(settings, savedir, record, files, features, errors):
     engine, source, pymajor = detect_engine(settings["basedir"])
     renpy7 = None if engine is None else int(engine.split(".")[0]) < 8
     mods, patches = _mods_and_patches(settings["data"], settings["key"])
+    # patches slice (begin): applied and unmatched patches of this run.
+    import _player.patches
+
+    patches["library"] = _player.patches.results
+    # patches slice (end)
     summary = _summary(files)
 
     unsupported = []
@@ -380,6 +385,7 @@ def build_report(settings, savedir, record, files, features, errors):
         summary["resumes_earlier"] or summary["load_fails"] or summary["class_missing"] or summary["unreadable"] or summary["warnings"] or blocked_files or errors or renpy7 or mods["missing"] or any(u["severity"] == "warning" for u in unsupported)
     )
     blocking = any(u["severity"] == "blocking" for u in unsupported)
+    warn = warn or bool(patches["library"]["unmatched"] or patches["library"]["errors"])  # patches slice
     status = "blocked" if blocking else "warning" if warn else "ok"
 
     if renpy7 is None:
@@ -470,6 +476,13 @@ def _markdown(rep):
     if rep["mods"]["missing"]:
         out.append("- Listed in order.txt but missing: %s" % ", ".join(rep["mods"]["missing"]))
     out.append("- Patch files: %d" % len(rep["patches"]["files"]))
+    # patches slice (begin)
+    lib = rep["patches"].get("library") or {}
+    out.append("- Port patches applied: %d" % len(lib.get("applied", [])))
+    out += ["  - applied: %s (%s:%d, node %s)" % (x["patch"], x["file"], x["line"], x["node"]) for x in lib.get("applied", [])]
+    out += ["  - **not applied**: %s (%s:%d): %s" % (x["patch"], x["file"], x["line"], x["reason"]) for x in lib.get("unmatched", [])]
+    out += ["  - **patch file problem**: %s" % x for x in lib.get("errors", [])]
+    # patches slice (end)
 
     out += ["", "## Unsupported features", ""]
     out += ["- **%s** (%s): %s" % (u["feature"], u["severity"], u["detail"]) for u in rep["unsupported"]] or ["- none found"]

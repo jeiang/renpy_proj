@@ -2,6 +2,7 @@
 //! library subcommands `scan`, `list`, `report`, `mods`, `serve`, and the library window (no arguments).
 //! Contract: player/CONTRACTS.md.
 
+mod patches_cli;
 mod report_cli;
 mod vfs_cli;
 
@@ -60,6 +61,7 @@ const SUBCOMMANDS: &str = "\
        player scan [<folder>...] [--data <dir>]   add folders to the library and rescan
        player list [--data <dir>]            list the games in the library
        player report <game> [--data <dir>]   pre-flight report of a game
+       player patches <game> list|validate|apply-test   port patches of a game
        player mods <game> list|enable|disable|order ... [--data <dir>]
        player serve <game>                   reserved (M5)";
 
@@ -138,6 +140,7 @@ fn run_game(args: Vec<String>) -> Result<i32> {
     inittab.extend(saves::inittab());
     inittab.extend(vfs::inittab());
     inittab.extend(text::inittab());
+    inittab.extend(patches::inittab());
 
     let cfg = pyhost::Config {
         inittab,
@@ -167,6 +170,11 @@ fn main() -> Result<()> {
         match args[0].as_str() {
             "scan" => cmd_scan(args.split_off(1))?,
             "list" => cmd_list(args.split_off(1))?,
+            "patches" => {
+                args.remove(0);
+                let (rest, data) = take_data(args)?;
+                patches_cli::run(&rest, &data, &std::env::current_exe()?)?
+            }
             "mods" | "report" => {
                 let cmd = args.remove(0);
                 let (rest, data) = take_data(args)?;
