@@ -269,6 +269,18 @@ impl Media {
         self.sh.clone()
     }
 
+    /// True when nothing is left to show or play: the video ran out and its queue is empty, and
+    /// the audio either does not exist (video-only file, silence from the mixer clock) or is fully
+    /// read. The channel can then move to the queued file without waiting for an audio callback.
+    pub fn drained(&self) -> bool {
+        let st = self.sh.st.lock();
+        st.ready
+            && st.has_video
+            && st.video_finished
+            && st.vq.is_empty()
+            && (st.video_only || (st.audio_finished && st.audio_q.is_empty()))
+    }
+
     pub fn is_ready(&self) -> bool {
         self.sh.st.lock().ready
     }
