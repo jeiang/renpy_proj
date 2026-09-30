@@ -3,6 +3,7 @@
 //! Contract: player/CONTRACTS.md.
 
 mod report_cli;
+mod vfs_cli;
 
 use std::path::{Path, PathBuf};
 
@@ -110,9 +111,8 @@ fn cmd_list(args: Vec<String>) -> Result<i32> {
     Ok(0)
 }
 
-// `mods` belongs to the vfs slice (`vfs_cli.rs`); it fails with a clear error until that slice merges.
-fn cmd_mods(_args: &[String], _data: &Path) -> Result<i32> {
-    bail!("player mods is not available in this build: vfs_cli.rs (the vfs slice) is not merged yet")
+fn cmd_mods(args: &[String], data: &Path) -> Result<i32> {
+    vfs_cli::run(args, data)
 }
 
 fn cmd_report(args: &[String], data: &Path) -> Result<i32> {
@@ -129,6 +129,7 @@ fn run_game(args: Vec<String>) -> Result<i32> {
     inittab.extend(media::inittab());
     inittab.extend(gfx::inittab());
     inittab.extend(saves::inittab());
+    inittab.extend(vfs::inittab());
 
     let cfg = pyhost::Config {
         inittab,
