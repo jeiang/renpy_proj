@@ -1,0 +1,4 @@
+upstream/
+battery/generated/
+*/target/
+out/*.spv
