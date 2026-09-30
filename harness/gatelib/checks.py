@@ -13,7 +13,7 @@ from . import savescan
 
 def _launch_summary(r):
     keys = ("name", "engine", "argv", "rc", "exited", "forced_kill", "clean_exit", "timed_out", "aborted", "wall_s",
-            "loadavg", "stripped_game_cache", "sweep_ok", "library_unchanged", "traceback_files", "stdout_traceback")
+            "loadavg", "stripped_game_cache", "stdout_tracebacks_ignored", "sweep_ok", "library_unchanged", "traceback_files", "stdout_traceback")
     return {k: r.get(k) for k in keys}
 
 

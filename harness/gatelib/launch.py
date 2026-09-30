@@ -244,8 +244,6 @@ class Run:
             if not wid:
                 time.sleep(1)
                 continue
-            subprocess.run([str(ensure_wintool()), "park"] + pids, capture_output=True)
-            time.sleep(0.3)
             f.unlink(missing_ok=True)
             subprocess.run(["/usr/sbin/screencapture", "-x", "-o", "-l" + wid, str(f)])
             if not (f.exists() and f.stat().st_size > 0):
@@ -411,7 +409,13 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
         for i, p in enumerate(tbs):
             shutil.copy(p, out / ("%s.%d.txt" % (p.name, i)))
     so = (out / "stdout.log").read_text(errors="replace")
-    res["stdout_traceback"] = "Traceback (most recent call last)" in so
+    # A traceback on stdout is fatal unless it is a game-side network thread failing (SecretIsland's gameanalytics thread
+    # cannot resolve its host on any machine; stock Ren'Py prints the same).
+    parts = re.split(r"(?m)^Exception in thread", so)   # parts[0]: main thread output; the rest: one background thread each
+    net = re.compile(r"gaierror|NameResolutionError|Name or service not known|nodename nor servname|ConnectionError|MaxRetryError")
+    fatal = ["Traceback (most recent call last)" in parts[0]] + [not net.search(t) for t in parts[1:]]
+    res["stdout_traceback"] = any(fatal)
+    res["stdout_tracebacks_ignored"] = sum(1 for t in parts[1:] if net.search(t))
     logs = [base / "log.txt"] if engine == "stock" else sorted((data / "logs").rglob("log.txt"))   # player: <data>/logs/<key>/
     if logs and logs[0].exists():
         shutil.copy(logs[0], out / "log.txt")
