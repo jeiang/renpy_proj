@@ -232,6 +232,13 @@ def path_to_saves(gamedir, save_directory=None):
     rv = os.path.join(settings["data"], "saves", key)
     os.makedirs(rv, exist_ok=True)
 
+    # patches slice (begin): port patches replace node code after load and before the first init block.
+    if own_call:
+        import _player.patches
+
+        _player.patches.on_script_loaded(settings)
+    # patches slice (end)
+
     # saves slice (begin): the script is loaded and init has not run. Import stock saves on the first
     # open, then write the pre-flight report (_player/preflight.py).
     if own_call:
