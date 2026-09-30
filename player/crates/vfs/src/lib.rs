@@ -112,7 +112,8 @@ fn is_dir(p: &Path) -> bool {
 /// True when the file system of `dir` ignores case (the name of `dir` with swapped case is `dir`).
 fn probe_case_insensitive(dir: &Path) -> bool {
     let guess = cfg!(any(target_os = "macos", target_os = "windows"));
-    let (Some(parent), Some(name)) = (dir.parent(), dir.file_name().and_then(|n| n.to_str())) else {
+    let (Some(parent), Some(name)) = (dir.parent(), dir.file_name().and_then(|n| n.to_str()))
+    else {
         return guess;
     };
     let swapped: String = name
@@ -131,7 +132,10 @@ fn probe_case_insensitive(dir: &Path) -> bool {
     #[cfg(unix)]
     {
         use std::os::unix::fs::MetadataExt;
-        match (std::fs::metadata(dir), std::fs::metadata(parent.join(&swapped))) {
+        match (
+            std::fs::metadata(dir),
+            std::fs::metadata(parent.join(&swapped)),
+        ) {
             (Ok(a), Ok(b)) => a.dev() == b.dev() && a.ino() == b.ino(),
             (Ok(_), Err(_)) => false,
             _ => guess,
@@ -198,7 +202,11 @@ impl Vfs {
             overlay: cfg.overlay,
             mods: cfg.mods.into_iter().filter(|m| is_dir(m)).collect(),
             patches: cfg.patches.filter(|p| is_dir(p)),
-            hidden: cfg.hidden.iter().map(|h| h.trim_matches('/').to_string()).collect(),
+            hidden: cfg
+                .hidden
+                .iter()
+                .map(|h| h.trim_matches('/').to_string())
+                .collect(),
             whiteouts: RwLock::new(BTreeMap::new()),
             has_whiteouts: AtomicBool::new(false),
         };
@@ -217,7 +225,11 @@ impl Vfs {
             .filter(|p| p.is_dir())
             .collect();
         mods.reverse();
-        let excluded = if data.starts_with(base) { vec![data.to_path_buf()] } else { Vec::new() };
+        let excluded = if data.starts_with(base) {
+            vec![data.to_path_buf()]
+        } else {
+            Vec::new()
+        };
         Vfs::new(Config {
             base: base.to_path_buf(),
             overlay: data.join("overlay").join(key),
@@ -255,17 +267,25 @@ impl Vfs {
     // ---- path classification -------------------------------------------------------------
 
     fn classify<'a>(&self, path: &'a Path) -> Where<'a> {
-        let Some(s) = path.to_str() else { return Where::Outside };
+        let Some(s) = path.to_str() else {
+            return Where::Outside;
+        };
         let mut owned: Option<String> = None;
         if !s.starts_with('/') {
-            let Ok(cwd) = std::env::current_dir() else { return Where::Outside };
-            let Some(cwd) = cwd.to_str() else { return Where::Outside };
+            let Ok(cwd) = std::env::current_dir() else {
+                return Where::Outside;
+            };
+            let Some(cwd) = cwd.to_str() else {
+                return Where::Outside;
+            };
             owned = Some(normalize(&format!("{cwd}/{s}")));
         } else if s.contains("/.") || s.contains("//") {
             owned = Some(normalize(s));
         }
         let st: &str = owned.as_deref().unwrap_or(s);
-        let Some(rel_range) = self.strip_prefix(st, &self.prefixes) else { return Where::Outside };
+        let Some(rel_range) = self.strip_prefix(st, &self.prefixes) else {
+            return Where::Outside;
+        };
         if !self.excluded.is_empty() && self.strip_prefix(st, &self.excluded).is_some() {
             return Where::Outside;
         }
@@ -284,7 +304,11 @@ impl Vfs {
                 continue;
             }
             let head = &b[..n];
-            let same = if self.fold { head.eq_ignore_ascii_case(p.as_bytes()) } else { head == p.as_bytes() };
+            let same = if self.fold {
+                head.eq_ignore_ascii_case(p.as_bytes())
+            } else {
+                head == p.as_bytes()
+            };
             if same {
                 return Some(n);
             }
@@ -301,15 +325,24 @@ impl Vfs {
         if !self.fold {
             return a == b;
         }
-        a.eq_ignore_ascii_case(b) || ((!a.is_ascii() || !b.is_ascii()) && a.to_lowercase() == b.to_lowercase())
+        a.eq_ignore_ascii_case(b)
+            || ((!a.is_ascii() || !b.is_ascii()) && a.to_lowercase() == b.to_lowercase())
     }
 
     fn key(&self, rel: &str) -> String {
-        if self.fold { rel.to_lowercase() } else { rel.to_string() }
+        if self.fold {
+            rel.to_lowercase()
+        } else {
+            rel.to_string()
+        }
     }
 
     fn join(root: &Path, rel: &str) -> PathBuf {
-        if rel.is_empty() { root.to_path_buf() } else { root.join(rel) }
+        if rel.is_empty() {
+            root.to_path_buf()
+        } else {
+            root.join(rel)
+        }
     }
 
     fn is_hidden(&self, rel: &str) -> bool {
@@ -432,7 +465,11 @@ impl Vfs {
             Where::Inside(rel) => rel,
         };
         if self.simple() {
-            return if self.is_hidden(&rel) { Resolved::Absent } else { Resolved::Unchanged };
+            return if self.is_hidden(&rel) {
+                Resolved::Absent
+            } else {
+                Resolved::Unchanged
+            };
         }
         match self.lookup(&rel) {
             Some((_, p)) => Resolved::Path(p),
@@ -492,11 +529,17 @@ impl Vfs {
                 let name = ent.file_name();
                 let Some(nm) = name.to_str() else { continue };
                 if layer == Layer::Overlay {
-                    if rel.is_empty() && (nm == WHITEOUT_FILE || nm == format!("{WHITEOUT_FILE}.tmp")) {
+                    if rel.is_empty()
+                        && (nm == WHITEOUT_FILE || nm == format!("{WHITEOUT_FILE}.tmp"))
+                    {
                         continue;
                     }
                 } else {
-                    let child = if rel.is_empty() { nm.to_string() } else { format!("{rel}/{nm}") };
+                    let child = if rel.is_empty() {
+                        nm.to_string()
+                    } else {
+                        format!("{rel}/{nm}")
+                    };
                     if self.is_hidden(&child) || self.is_whited(&child) {
                         continue;
                     }
@@ -510,7 +553,11 @@ impl Vfs {
             }
         }
         if !seen_dir {
-            return Err(os(if top_is_file { libc::ENOTDIR } else { libc::ENOENT }));
+            return Err(os(if top_is_file {
+                libc::ENOTDIR
+            } else {
+                libc::ENOENT
+            }));
         }
         Ok(found.into_values().collect())
     }
@@ -548,7 +595,9 @@ impl Vfs {
     /// Every layer directory that holds the folder `path`, highest priority first, or `None` when
     /// the path is outside the base. Python's import system uses it to search all layers.
     pub fn layer_dirs(&self, path: &Path) -> Option<Vec<PathBuf>> {
-        let Where::Inside(rel) = self.classify(path) else { return None };
+        let Where::Inside(rel) = self.classify(path) else {
+            return None;
+        };
         let mut out = Vec::new();
         if self.overlay_active.load(Ordering::Acquire) {
             let p = Self::join(&self.overlay, &rel);
@@ -604,7 +653,11 @@ impl Vfs {
         let cur = self.lookup(&rel);
         if let Some((_, ref lp)) = cur {
             if is_dir(lp) {
-                return Err(os(if mode == WriteMode::Exclusive { libc::EEXIST } else { libc::EISDIR }));
+                return Err(os(if mode == WriteMode::Exclusive {
+                    libc::EEXIST
+                } else {
+                    libc::EISDIR
+                }));
             }
             if mode == WriteMode::Exclusive {
                 return Err(os(libc::EEXIST));
@@ -636,7 +689,9 @@ impl Vfs {
         if rel.is_empty() {
             return Err(os(if want_dir { libc::EBUSY } else { libc::EISDIR }));
         }
-        let Some((_, cur)) = self.lookup(rel) else { return Err(os(libc::ENOENT)) };
+        let Some((_, cur)) = self.lookup(rel) else {
+            return Err(os(libc::ENOENT));
+        };
         let cur_is_dir = is_dir(&cur);
         if want_dir && !cur_is_dir {
             return Err(os(libc::ENOTDIR));
@@ -649,7 +704,11 @@ impl Vfs {
         }
         let op = Self::join(&self.overlay, rel);
         if exists(&op) {
-            if want_dir { std::fs::remove_dir(&op)? } else { std::fs::remove_file(&op)? }
+            if want_dir {
+                std::fs::remove_dir(&op)?
+            } else {
+                std::fs::remove_file(&op)?
+            }
         }
         if self.lower_lookup(rel).is_some() {
             self.add_whiteout(rel)?;
@@ -674,12 +733,18 @@ impl Vfs {
     }
 
     fn copy_view(&self, rel: &str, dst: &Path) -> io::Result<()> {
-        let Some((_, src)) = self.lookup(rel) else { return Err(os(libc::ENOENT)) };
+        let Some((_, src)) = self.lookup(rel) else {
+            return Err(os(libc::ENOENT));
+        };
         if is_dir(&src) {
             std::fs::create_dir_all(dst)?;
             for e in self.list_rel(rel)? {
                 let name = e.name.to_string_lossy();
-                let child = if rel.is_empty() { name.to_string() } else { format!("{rel}/{name}") };
+                let child = if rel.is_empty() {
+                    name.to_string()
+                } else {
+                    format!("{rel}/{name}")
+                };
                 self.copy_view(&child, &dst.join(&e.name))?;
             }
         } else {
@@ -692,7 +757,11 @@ impl Vfs {
     fn remove_tree_rel(&self, rel: &str) -> io::Result<()> {
         let op = Self::join(&self.overlay, rel);
         if exists(&op) {
-            if is_dir(&op) { std::fs::remove_dir_all(&op)? } else { std::fs::remove_file(&op)? }
+            if is_dir(&op) {
+                std::fs::remove_dir_all(&op)?
+            } else {
+                std::fs::remove_file(&op)?
+            }
         }
         if self.lower_lookup(rel).is_some() {
             self.add_whiteout(rel)?;
@@ -714,7 +783,9 @@ impl Vfs {
                 std::fs::rename(src, Self::join(&self.overlay, &rd))
             }
             (Where::Inside(rs), Where::Outside) => {
-                let Some((_, cur)) = self.lookup(&rs) else { return Err(os(libc::ENOENT)) };
+                let Some((_, cur)) = self.lookup(&rs) else {
+                    return Err(os(libc::ENOENT));
+                };
                 if rs.is_empty() {
                     return Err(os(libc::EBUSY));
                 }
@@ -729,7 +800,9 @@ impl Vfs {
                 if rs.is_empty() || rd.is_empty() || rd == WHITEOUT_FILE {
                     return Err(os(libc::EBUSY));
                 }
-                let Some((layer, cur)) = self.lookup(&rs) else { return Err(os(libc::ENOENT)) };
+                let Some((layer, cur)) = self.lookup(&rs) else {
+                    return Err(os(libc::ENOENT));
+                };
                 if self.name_eq(&rs, &rd) {
                     return Ok(());
                 }
@@ -756,7 +829,11 @@ impl Vfs {
                     self.copy_view(&rs, &pd)?;
                     let op = Self::join(&self.overlay, &rs);
                     if exists(&op) {
-                        if is_dir(&op) { std::fs::remove_dir_all(&op)? } else { std::fs::remove_file(&op)? }
+                        if is_dir(&op) {
+                            std::fs::remove_dir_all(&op)?
+                        } else {
+                            std::fs::remove_file(&op)?
+                        }
                     }
                 }
                 if self.lower_lookup(&rs).is_some() {
@@ -803,14 +880,19 @@ pub fn resolve_game(path: &Path) -> (PathBuf, PathBuf) {
     if path.file_name().is_some_and(|n| n != "game") && path.join("game").is_dir() {
         return (path.to_path_buf(), path.join("game"));
     }
-    (path.parent().unwrap_or(path).to_path_buf(), path.to_path_buf())
+    (
+        path.parent().unwrap_or(path).to_path_buf(),
+        path.to_path_buf(),
+    )
 }
 
 /// The per-game key of `_player.boot.game_key`: sanitized base folder name plus the first eight
 /// hex digits of the SHA-1 of the game folder path.
 pub fn game_key(basedir: &Path, gamedir: &Path) -> String {
     use sha1::{Digest, Sha1};
-    let name = basedir.file_name().map_or_else(|| "game".to_string(), |n| n.to_string_lossy().into_owned());
+    let name = basedir
+        .file_name()
+        .map_or_else(|| "game".to_string(), |n| n.to_string_lossy().into_owned());
     let mut clean = String::new();
     let mut in_run = false;
     for c in name.chars() {

@@ -54,11 +54,12 @@ fn ensure_filter_ptr(py: Python<'_>) -> PyResult<()> {
 
 fn prepare_filter(py: Python<'_>, f: &Option<Bound<'_, PyAny>>) -> PyResult<()> {
     if let Some(f) = f
-        && !f.is_none() {
-            ensure_filter_ptr(py)?;
-            let rate = MIXER.lock().rate;
-            f.call_method1("prepare", (rate,))?;
-        }
+        && !f.is_none()
+    {
+        ensure_filter_ptr(py)?;
+        let rate = MIXER.lock().rate;
+        f.call_method1("prepare", (rate,))?;
+    }
     Ok(())
 }
 
@@ -349,13 +350,15 @@ fn replace_audio_filter(
         let c = m.channel(channel).map_err(err)?;
         if primary
             && let Some(t) = c.playing.as_mut()
-                && t.filter.is_some() {
-                    old.extend(t.filter.replace(make_filter(py, audio_filter.clone())));
-                }
+            && t.filter.is_some()
+        {
+            old.extend(t.filter.replace(make_filter(py, audio_filter.clone())));
+        }
         if let Some(q) = c.queued.as_mut()
-            && q.filter.is_some() {
-                old.extend(q.filter.replace(make_filter(py, audio_filter)));
-            }
+            && q.filter.is_some()
+        {
+            old.extend(q.filter.replace(make_filter(py, audio_filter)));
+        }
     }
     drop(old);
     Ok(())

@@ -108,15 +108,16 @@ fn validate(m: &naga::Module) -> Result<(), String> {
 fn uniform_block(m: &naga::Module) -> Result<(HashMap<String, u32>, u32), String> {
     for (_, ty) in m.types.iter() {
         if ty.name.as_deref() == Some("RenpyUniforms")
-            && let naga::TypeInner::Struct { members, span } = &ty.inner {
-                return Ok((
-                    members
-                        .iter()
-                        .filter_map(|x| Some((x.name.clone()?, x.offset)))
-                        .collect(),
-                    *span,
-                ));
-            }
+            && let naga::TypeInner::Struct { members, span } = &ty.inner
+        {
+            return Ok((
+                members
+                    .iter()
+                    .filter_map(|x| Some((x.name.clone()?, x.offset)))
+                    .collect(),
+                *span,
+            ));
+        }
     }
     Err("internal error: no RenpyUniforms block".into())
 }

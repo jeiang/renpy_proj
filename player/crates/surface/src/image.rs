@@ -262,7 +262,9 @@ pub fn encode_png(s: &Surface, compress: i32) -> Result<Vec<u8>, String> {
         rgba
     } else {
         enc.set_color(png::ColorType::Rgb);
-        rgba.as_chunks::<4>().0.iter()
+        rgba.as_chunks::<4>()
+            .0
+            .iter()
             .flat_map(|p| [p[0], p[1], p[2]])
             .collect()
     };
@@ -275,7 +277,9 @@ pub fn encode_png(s: &Surface, compress: i32) -> Result<Vec<u8>, String> {
 fn encode_jpeg(s: &Surface, quality: i32) -> Result<Vec<u8>, String> {
     let (w, h, rgba, _) = rgba_rows(s);
     let rgb: Vec<u8> = rgba
-        .as_chunks::<4>().0.iter()
+        .as_chunks::<4>()
+        .0
+        .iter()
         .flat_map(|p| [p[0], p[1], p[2]])
         .collect();
     let q = if quality < 1 { 90 } else { quality.min(100) } as u8;

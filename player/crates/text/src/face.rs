@@ -76,7 +76,8 @@ fn axis_name(tag: Tag, fallback: Option<String>) -> String {
 
 fn parse_kern(data: &[u8]) -> HashMap<u32, i16> {
     let mut pairs = HashMap::new();
-    let be16 = |o: usize| -> Option<u16> { Some(u16::from_be_bytes([*data.get(o)?, *data.get(o + 1)?])) };
+    let be16 =
+        |o: usize| -> Option<u16> { Some(u16::from_be_bytes([*data.get(o)?, *data.get(o + 1)?])) };
     let Some(count) = be16(2) else { return pairs };
     if be16(0) != Some(0) {
         return pairs;
@@ -87,16 +88,18 @@ fn parse_kern(data: &[u8]) -> HashMap<u32, i16> {
             break;
         };
         // Format 0, horizontal, not minimum or cross-stream ("override" is allowed).
-        if coverage & !8 == 1 {
-            if let Some(n) = be16(at + 6) {
-                let mut o = at + 14;
-                for _ in 0..n {
-                    let (Some(l), Some(r), Some(v)) = (be16(o), be16(o + 2), be16(o + 4)) else {
-                        break;
-                    };
-                    pairs.entry(((l as u32) << 16) | r as u32).or_insert(v as i16);
-                    o += 6;
-                }
+        if coverage & !8 == 1
+            && let Some(n) = be16(at + 6)
+        {
+            let mut o = at + 14;
+            for _ in 0..n {
+                let (Some(l), Some(r), Some(v)) = (be16(o), be16(o + 2), be16(o + 4)) else {
+                    break;
+                };
+                pairs
+                    .entry(((l as u32) << 16) | r as u32)
+                    .or_insert(v as i16);
+                o += 6;
             }
         }
         if length == 0 {
@@ -150,11 +153,15 @@ impl Face {
         let has_vertical = vhea.is_some() && font.table_data(Tag::new(b"vmtx")).is_some();
 
         let post_underline = match font.post() {
-            Ok(p) => (p.underline_position().to_i16() as i32, p.underline_thickness().to_i16() as i32),
+            Ok(p) => (
+                p.underline_position().to_i16() as i32,
+                p.underline_thickness().to_i16() as i32,
+            ),
             Err(_) => (-(upem as i32) / 10, upem as i32 / 20),
         };
         // sfnt: FreeType takes `post`'s position as the top of the line and moves it to the middle.
-        let (underline_position, underline_thickness) = (post_underline.0 - post_underline.1 / 2, post_underline.1);
+        let (underline_position, underline_thickness) =
+            (post_underline.0 - post_underline.1 / 2, post_underline.1);
 
         let mut axes = Vec::new();
         let mut instances = Vec::new();
@@ -247,7 +254,11 @@ impl Face {
         let mut user: Vec<f32> = self.axes.iter().map(|a| a.default).collect();
         if let Some(name) = instance {
             let name = name.to_lowercase();
-            if let Some(inst) = self.instances.iter().find(|i| i.index > 0 && i.name == name) {
+            if let Some(inst) = self
+                .instances
+                .iter()
+                .find(|i| i.index > 0 && i.name == name)
+            {
                 for (slot, v) in user.iter_mut().zip(inst.coords.iter()) {
                     *slot = *v;
                 }
@@ -268,6 +279,9 @@ impl Face {
 
     /// The FreeType kerning value for a pair, in font units.
     pub fn kerning(&self, left: u32, right: u32) -> i32 {
-        self.kern.get(&((left << 16) | (right & 0xffff))).copied().unwrap_or(0) as i32
+        self.kern
+            .get(&((left << 16) | (right & 0xffff)))
+            .copied()
+            .unwrap_or(0) as i32
     }
 }

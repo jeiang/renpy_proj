@@ -20,7 +20,7 @@ use std::time::Instant;
 use pyo3::prelude::*;
 use pyo3::pybacked::PyBackedBytes;
 
-use crate::image::{decode, Decoded};
+use crate::image::{Decoded, decode};
 
 /// Decoded pixels kept for callers that have not claimed them yet.
 const MAX_DONE_BYTES: usize = 512 << 20;
@@ -186,7 +186,10 @@ fn finish(p: &Pool, slot: &Arc<Slot>, result: Option<Decoded>) {
         return;
     }
     let mut g = lock(&p.inner);
-    if g.slots.get(&slot.name).is_some_and(|s| Arc::ptr_eq(s, slot)) {
+    if g.slots
+        .get(&slot.name)
+        .is_some_and(|s| Arc::ptr_eq(s, slot))
+    {
         g.done.push_back(slot.name.clone());
         g.done_bytes += pixel_bytes;
     }

@@ -52,7 +52,9 @@ fn check_exists(root: &Path, names: &[String]) -> Result<()> {
 }
 
 pub fn run(args: &[String], data: &Path) -> Result<i32> {
-    let [game, sub, names @ ..] = args else { bail!("{USAGE}") };
+    let [game, sub, names @ ..] = args else {
+        bail!("{USAGE}")
+    };
     let (key, _base) = game_key_of(game)?;
     let root = data.join("mods").join(&key);
     let mut order = vfs::read_order(&root)?;
@@ -64,7 +66,11 @@ pub fn run(args: &[String], data: &Path) -> Result<i32> {
             }
             let present = installed(&root)?;
             for (i, n) in order.iter().enumerate() {
-                let state = if present.contains(n) { "enabled" } else { "missing" };
+                let state = if present.contains(n) {
+                    "enabled"
+                } else {
+                    "missing"
+                };
                 println!("{n}\t{state}\t{}", i + 1);
             }
             for n in present.iter().filter(|n| !order.contains(n)) {

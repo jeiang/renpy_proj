@@ -291,9 +291,10 @@ impl Mixer {
             q.tight = false;
         }
         if c.queued.is_none()
-            && let Some(t) = c.playing.as_mut() {
-                t.tight = false;
-            }
+            && let Some(t) = c.playing.as_mut()
+        {
+            t.tight = false;
+        }
     }
 
     pub fn set_pan(&mut self, ch: usize, pan: f32, delay: f32) {
@@ -312,14 +313,15 @@ impl Mixer {
         let mut ready = true;
         for c in &mut self.channels {
             if let Some(p) = c.playing.as_mut()
-                && p.synchro_start {
-                    if let Some(q) = c.queued.as_mut() {
-                        q.synchro_start = false;
-                    }
-                    if !p.media.is_ready() {
-                        ready = false;
-                    }
+                && p.synchro_start
+            {
+                if let Some(q) = c.queued.as_mut() {
+                    q.synchro_start = false;
                 }
+                if !p.media.is_ready() {
+                    ready = false;
+                }
+            }
             match c.queued.as_mut() {
                 Some(q) if q.synchro_start => ready = false,
                 Some(q) => q.synchro_start = false,
@@ -411,17 +413,18 @@ impl Mixer {
                 let c = &mut self.channels[ch];
                 if let (Some(f), Some(apply)) =
                     (c.playing.as_ref().and_then(|t| t.filter.as_ref()), apply)
-                    && f.active {
-                        unsafe {
-                            apply(
-                                f.obj.as_ptr(),
-                                buf.as_mut_ptr(),
-                                2,
-                                read_length as c_int,
-                                rate as c_int,
-                            )
-                        };
-                    }
+                    && f.active
+                {
+                    unsafe {
+                        apply(
+                            f.obj.as_ptr(),
+                            buf.as_mut_ptr(),
+                            2,
+                            read_length as c_int,
+                            rate as c_int,
+                        )
+                    };
+                }
 
                 let rel = c.playing.as_ref().map_or(1.0, |t| t.relative_volume);
                 let mut i = 0;

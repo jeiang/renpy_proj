@@ -70,7 +70,9 @@ fn take_data(args: Vec<String>) -> Result<(Vec<String>, PathBuf)> {
     let mut it = args.into_iter();
     while let Some(a) = it.next() {
         if a == "--data" {
-            let v = it.next().with_context(|| format!("--data needs a value\n{USAGE}"))?;
+            let v = it
+                .next()
+                .with_context(|| format!("--data needs a value\n{USAGE}"))?;
             data = Some(PathBuf::from(absolute(&v)?));
         } else {
             rest.push(a);
@@ -98,7 +100,12 @@ fn cmd_scan(args: Vec<String>) -> Result<i32> {
     lib.add_folders(&folders)?;
     lib.save(&data)?;
     print_games(&lib);
-    eprintln!("{} games in {} folders ({})", lib.games.len(), lib.folders.len(), Library::path(&data).display());
+    eprintln!(
+        "{} games in {} folders ({})",
+        lib.games.len(),
+        lib.folders.len(),
+        Library::path(&data).display()
+    );
     Ok(0)
 }
 
@@ -163,7 +170,11 @@ fn main() -> Result<()> {
             "mods" | "report" => {
                 let cmd = args.remove(0);
                 let (rest, data) = take_data(args)?;
-                if cmd == "mods" { cmd_mods(&rest, &data)? } else { cmd_report(&rest, &data)? }
+                if cmd == "mods" {
+                    cmd_mods(&rest, &data)?
+                } else {
+                    cmd_report(&rest, &data)?
+                }
             }
             "serve" => bail!("player serve is reserved for M5 (streaming) and is not implemented"),
             "help" => bail!("{USAGE}\n{SUBCOMMANDS}"),

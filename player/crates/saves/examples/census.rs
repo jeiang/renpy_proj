@@ -37,7 +37,14 @@ fn main() {
     let mut by: BTreeMap<String, usize> = BTreeMap::new();
     let mut globals = BTreeSet::new();
     for r in &reports {
-        *by.entry(format!("{} verdict={} protocol={:?} py2={}", r.kind, r.verdict.as_str(), r.protocol, r.py2)).or_default() += 1;
+        *by.entry(format!(
+            "{} verdict={} protocol={:?} py2={}",
+            r.kind,
+            r.verdict.as_str(),
+            r.protocol,
+            r.py2
+        ))
+        .or_default() += 1;
         if let Some(e) = &r.error {
             println!("ERROR {}: {e}", r.file);
         }
@@ -46,5 +53,10 @@ fn main() {
     for (k, v) in &by {
         println!("{v:6} {k}");
     }
-    println!("{} files, {} distinct globals, {:?}", reports.len(), globals.len(), t0.elapsed());
+    println!(
+        "{} files, {} distinct globals, {:?}",
+        reports.len(),
+        globals.len(),
+        t0.elapsed()
+    );
 }

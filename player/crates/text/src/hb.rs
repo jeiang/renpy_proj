@@ -17,7 +17,7 @@ use crate::glue;
 use crate::metrics::{self, HbScale};
 use crate::raster::{Hinting, Rasterizer, Rotation, Settings};
 use crate::shape::Shaper;
-use crate::{load_face, freetype_error};
+use crate::{freetype_error, load_face};
 
 #[pyfunction]
 pub fn init() {}
@@ -91,7 +91,12 @@ impl Features {
         if let Some(f) = map.get(&key) {
             return Ok(f.clone_ref(py));
         }
-        let f = Py::new(py, Features { features: key.clone() })?;
+        let f = Py::new(
+            py,
+            Features {
+                features: key.clone(),
+            },
+        )?;
         map.insert(key, f.clone_ref(py));
         Ok(f)
     }
@@ -105,7 +110,9 @@ fn parse_features(features: &Bound<'_, PyAny>) -> PyResult<Vec<([u8; 4], u32)>> 
         let value: u32 = item.get_item(1)?.extract()?;
         let b = name.as_bytes();
         if b.len() < 4 {
-            return Err(pyo3::exceptions::PyIndexError::new_err("a font feature tag needs four characters"));
+            return Err(pyo3::exceptions::PyIndexError::new_err(
+                "a font feature tag needs four characters",
+            ));
         }
         rv.push(([b[0], b[1], b[2], b[3]], value));
     }
@@ -137,7 +144,8 @@ impl HBFace {
             let axis_class = module.getattr("Axis")?;
             let axes = v.getattr("axis")?;
             for a in face.axes.iter().filter(|a| a.index < 16) {
-                let obj = axis_class.call1((a.index, a.min as f64, a.default as f64, a.max as f64))?;
+                let obj =
+                    axis_class.call1((a.index, a.min as f64, a.default as f64, a.max as f64))?;
                 axes.set_item(&a.name, obj)?;
             }
             let instances = v.getattr("instance")?;
@@ -230,10 +238,15 @@ impl HBFont {
         } else {
             None
         };
-        size = size * glue::config_scale(py, "ftfont_scale", f.r#fn.bind(py))? * glue::pref_font_size(py)?;
+        size = size
+            * glue::config_scale(py, "ftfont_scale", f.r#fn.bind(py))?
+            * glue::pref_font_size(py)?;
 
         let hint_str = hinting.extract::<String>().ok();
-        let hinting = Hinting::parse(hint_str.as_deref(), hinting.is_none() || hint_str.as_deref() == Some("none"));
+        let hinting = Hinting::parse(
+            hint_str.as_deref(),
+            hinting.is_none() || hint_str.as_deref() == Some("none"),
+        );
         let arc = f.face.clone();
         let axis_values = glue::axis_pairs(axis)?;
         let settings_vec = arc.settings(instance.as_deref(), &axis_values);
@@ -244,7 +257,11 @@ impl HBFont {
             size,
             hinting,
             italic,
-            rotation: if vertical { Rotation::Hb } else { Rotation::None },
+            rotation: if vertical {
+                Rotation::Hb
+            } else {
+                Rotation::None
+            },
             outline,
             antialias,
             bold: bold != 0.0,
@@ -274,7 +291,12 @@ impl HBFont {
         self.expand
     }
 
-    fn glyphs<'py>(&mut self, py: Python<'py>, s: &Bound<'py, PyAny>, level: i32) -> PyResult<Bound<'py, PyList>> {
+    fn glyphs<'py>(
+        &mut self,
+        py: Python<'py>,
+        s: &Bound<'py, PyAny>,
+        level: i32,
+    ) -> PyResult<Bound<'py, PyList>> {
         self.setup(py)?;
         let chars = chars_of(s)?;
         let rv = PyList::empty(py);
@@ -306,13 +328,19 @@ impl HBFont {
         let out = rustybuzz::shape(&self.shaper.buzz, &features, buffer);
 
         let scale = HbScale::new(&self.face, self.raster.settings.size);
-        let hinted = matches!(self.raster.settings.hinting, Hinting::Auto | Hinting::Bytecode);
+        let hinted = matches!(
+            self.raster.settings.hinting,
+            Hinting::Auto | Hinting::Bytecode
+        );
         let upem_scale = |v: i32| scale.apply(v as i64) as f32 / 64.0;
 
         for (info, pos) in out.glyph_infos().iter().zip(out.glyph_positions().iter()) {
             let gl = glue::new_glyph(py)?;
             let cluster = info.cluster as usize;
-            gl.setattr("character", chars.get(cluster).map(|c| *c as u32).unwrap_or(0))?;
+            gl.setattr(
+                "character",
+                chars.get(cluster).map(|c| *c as u32).unwrap_or(0),
+            )?;
             gl.setattr("glyph", info.glyph_id)?;
             gl.setattr("ascent", self.ascent)?;
             gl.setattr("descent", -self.descent)?;

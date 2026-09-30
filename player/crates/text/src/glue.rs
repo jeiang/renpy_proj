@@ -17,7 +17,11 @@ static GLYPH_CLASS: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
 /// A new, empty `renpy.text.textsupport.Glyph`.
 pub fn new_glyph<'py>(py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
     let class = GLYPH_CLASS.get_or_try_init(py, || {
-        Ok::<_, PyErr>(py.import("renpy.text.textsupport")?.getattr("Glyph")?.unbind())
+        Ok::<_, PyErr>(
+            py.import("renpy.text.textsupport")?
+                .getattr("Glyph")?
+                .unbind(),
+        )
     })?;
     class.bind(py).call0()
 }
@@ -43,7 +47,9 @@ pub fn read_glyph(g: &Bound<'_, PyAny>) -> PyResult<GlyphIn> {
     Ok(GlyphIn {
         x: g.getattr(intern!(g.py(), "x"))?.extract()?,
         y: g.getattr(intern!(g.py(), "y"))?.extract()?,
-        delta_x_adjustment: g.getattr(intern!(g.py(), "delta_x_adjustment"))?.extract()?,
+        delta_x_adjustment: g
+            .getattr(intern!(g.py(), "delta_x_adjustment"))?
+            .extract()?,
         character: g.getattr(intern!(g.py(), "character"))?.extract()?,
         variation: g.getattr(intern!(g.py(), "variation"))?.extract()?,
         glyph: g.getattr(intern!(g.py(), "glyph"))?.extract()?,
@@ -97,7 +103,9 @@ pub struct Target {
 }
 
 impl Target {
-    pub fn of<'py>(surface: &Bound<'py, PyAny>) -> PyResult<(Target, Bound<'py, surface::Surface>)> {
+    pub fn of<'py>(
+        surface: &Bound<'py, PyAny>,
+    ) -> PyResult<(Target, Bound<'py, surface::Surface>)> {
         let s = surface.cast::<surface::Surface>()?.clone();
         let img = s.get().img();
         if !img.fmt.rgba || !s.get().has_alpha_channel() {
@@ -179,7 +187,9 @@ pub fn color4(color: &Bound<'_, PyAny>) -> PyResult<[u32; 4]> {
 }
 
 pub fn is_vs(c: u32) -> bool {
-    (0xfe00..=0xfe0f).contains(&c) || (0xe0100..=0xe01ef).contains(&c) || (0x180b..=0x180d).contains(&c)
+    (0xfe00..=0xfe0f).contains(&c)
+        || (0xe0100..=0xe01ef).contains(&c)
+        || (0x180b..=0x180d).contains(&c)
 }
 
 pub fn is_zerowidth(c: u32) -> bool {

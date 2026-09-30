@@ -10,7 +10,10 @@ use pyo3::types::PyString;
 use crate::{Resolved, Vfs, WriteMode};
 
 /// The Python modules of this crate, by dotted name.
-pub fn inittab() -> Vec<(&'static std::ffi::CStr, unsafe extern "C" fn() -> *mut pyo3_ffi::PyObject)> {
+pub fn inittab() -> Vec<(
+    &'static std::ffi::CStr,
+    unsafe extern "C" fn() -> *mut pyo3_ffi::PyObject,
+)> {
     vec![(c"_player_vfs", player_vfs::__pyo3_init)]
 }
 
@@ -34,7 +37,9 @@ fn oserr(e: std::io::Error) -> PyErr {
     match e.raw_os_error() {
         Some(code) => {
             // SAFETY: strerror returns a valid NUL-terminated string.
-            let msg = unsafe { std::ffi::CStr::from_ptr(libc::strerror(code)) }.to_string_lossy().into_owned();
+            let msg = unsafe { std::ffi::CStr::from_ptr(libc::strerror(code)) }
+                .to_string_lossy()
+                .into_owned();
             pyo3::exceptions::PyOSError::new_err((code, msg))
         }
         None => PyErr::from(e),
@@ -116,7 +121,11 @@ pub mod player_vfs {
     fn list_dir(path: &Bound<'_, PyAny>) -> PyResult<Option<Vec<(OsString, bool, OsString)>>> {
         let v = view()?;
         let r = with_path(path, |p| v.list_dir_opt(p))?.map_err(oserr)?;
-        Ok(r.map(|l| l.into_iter().map(|e| (e.name, e.is_dir, e.path.into_os_string())).collect()))
+        Ok(r.map(|l| {
+            l.into_iter()
+                .map(|e| (e.name, e.is_dir, e.path.into_os_string()))
+                .collect()
+        }))
     }
 
     /// layer_dirs(path): None when the path is outside the base, else the real folders (highest
@@ -124,7 +133,8 @@ pub mod player_vfs {
     #[pyfunction]
     fn layer_dirs(path: &Bound<'_, PyAny>) -> PyResult<Option<Vec<OsString>>> {
         let v = view()?;
-        Ok(with_path(path, |p| v.layer_dirs(p))?.map(|l| l.into_iter().map(PathBuf::into_os_string).collect()))
+        Ok(with_path(path, |p| v.layer_dirs(p))?
+            .map(|l| l.into_iter().map(PathBuf::into_os_string).collect()))
     }
 
     #[pyfunction]

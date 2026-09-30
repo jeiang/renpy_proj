@@ -220,9 +220,8 @@ fn convert(
             let src_full = ((*f).color_range == ffi::AVColorRange::AVCOL_RANGE_JPEG) as c_int;
             let cs = match (*f).colorspace {
                 ffi::AVColorSpace::AVCOL_SPC_BT709 => ffi::SWS_CS_ITU709,
-                ffi::AVColorSpace::AVCOL_SPC_BT2020_NCL | ffi::AVColorSpace::AVCOL_SPC_BT2020_CL => {
-                    ffi::SWS_CS_BT2020
-                }
+                ffi::AVColorSpace::AVCOL_SPC_BT2020_NCL
+                | ffi::AVColorSpace::AVCOL_SPC_BT2020_CL => ffi::SWS_CS_BT2020,
                 ffi::AVColorSpace::AVCOL_SPC_SMPTE240M => ffi::SWS_CS_SMPTE240M,
                 _ => ffi::SWS_CS_ITU601,
             };
@@ -232,7 +231,12 @@ fn convert(
         }
         let stride = w as usize * bytes_per_px;
         let mut out = vec![0u8; stride * h as usize];
-        let dst_data = [out.as_mut_ptr(), ptr::null_mut(), ptr::null_mut(), ptr::null_mut()];
+        let dst_data = [
+            out.as_mut_ptr(),
+            ptr::null_mut(),
+            ptr::null_mut(),
+            ptr::null_mut(),
+        ];
         let dst_stride = [stride as c_int, 0, 0, 0];
         let got = ffi::sws_scale(
             ctx,
@@ -315,7 +319,10 @@ pub fn decode(data: &[u8]) -> Result<Decoded, String> {
         }
         let color = color.ok_or("the file has no picture")?;
         let pics = decode_pictures(&mut s)?;
-        let cf = pics[color].as_ref().ok_or("the decoder produced no picture")?.frame;
+        let cf = pics[color]
+            .as_ref()
+            .ok_or("the decoder produced no picture")?
+            .frame;
         let (w, h) = ((*cf).width, (*cf).height);
         if w <= 0 || h <= 0 {
             return Err("empty picture".into());

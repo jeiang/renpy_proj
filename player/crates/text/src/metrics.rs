@@ -15,7 +15,11 @@ pub fn mul_fix(a: i64, b: i64) -> i64 {
 /// `FT_MulDiv`: `a * b / c`, rounded half away from zero.
 pub fn mul_div(a: i64, b: i64, c: i64) -> i64 {
     let p = a * b;
-    if p >= 0 { (p + c / 2) / c } else { -((-p + c / 2) / c) }
+    if p >= 0 {
+        (p + c / 2) / c
+    } else {
+        -((-p + c / 2) / c)
+    }
 }
 
 /// `FT_CEIL`, `FT_FLOOR` and `FT_ROUND` on a 26.6 value, giving pixels.

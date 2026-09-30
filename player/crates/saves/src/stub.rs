@@ -71,7 +71,9 @@ pub fn stub_load(data: &[u8]) -> Result<Graph, String> {
     let mut stack: Vec<V> = Vec::with_capacity(64);
 
     fn pop(stack: &mut Vec<V>) -> Result<V, String> {
-        stack.pop().ok_or_else(|| "unpickling stack underflow".to_string())
+        stack
+            .pop()
+            .ok_or_else(|| "unpickling stack underflow".to_string())
     }
     fn pop_mark(stack: &mut Vec<V>) -> Result<Vec<V>, String> {
         let i = stack
@@ -124,7 +126,9 @@ pub fn stub_load(data: &[u8]) -> Result<Graph, String> {
             Op::Bool(b) => stack.push(V::Bool(b)),
             Op::Int(i) => stack.push(V::Int(i)),
             Op::BigInt | Op::Float | Op::Bytes => stack.push(V::Other),
-            Op::Str { bytes, .. } => stack.push(V::Str(Rc::from(String::from_utf8_lossy(bytes).as_ref()))),
+            Op::Str { bytes, .. } => {
+                stack.push(V::Str(Rc::from(String::from_utf8_lossy(bytes).as_ref())))
+            }
             Op::Py2Quoted(b) => stack.push(V::Str(Rc::from(String::from_utf8_lossy(&b).as_ref()))),
             Op::Tuple0 => stack.push(V::Tuple(Rc::from(Vec::new()))),
             Op::Tuple1 => {
@@ -161,7 +165,12 @@ pub fn stub_load(data: &[u8]) -> Result<Graph, String> {
             }
             Op::Dict => {
                 let items = pop_mark(&mut stack)?;
-                let pairs = items.chunks_exact(2).map(|c| (c[0].clone(), c[1].clone())).collect();
+                let pairs = items
+                    .as_chunks::<2>()
+                    .0
+                    .iter()
+                    .map(|c| (c[0].clone(), c[1].clone()))
+                    .collect();
                 let v = new_obj(&mut objs, Obj::Dict(pairs));
                 stack.push(v);
             }
@@ -189,7 +198,12 @@ pub fn stub_load(data: &[u8]) -> Result<Graph, String> {
             }
             Op::SetItems => {
                 let xs = pop_mark(&mut stack)?;
-                let pairs = xs.chunks_exact(2).map(|c| (c[0].clone(), c[1].clone())).collect();
+                let pairs = xs
+                    .as_chunks::<2>()
+                    .0
+                    .iter()
+                    .map(|c| (c[0].clone(), c[1].clone()))
+                    .collect();
                 set_items(&mut objs, stack.last(), pairs);
             }
             Op::Global(m, n) => {
@@ -210,7 +224,14 @@ pub fn stub_load(data: &[u8]) -> Result<Graph, String> {
             Op::Inst(m, n) => {
                 let args = pop_mark(&mut stack)?;
                 let class = class_of(&text(m), &text(n), &mut classes);
-                let v = new_obj(&mut objs, Obj::Stub(Stub { class, args, ..Stub::default() }));
+                let v = new_obj(
+                    &mut objs,
+                    Obj::Stub(Stub {
+                        class,
+                        args,
+                        ..Stub::default()
+                    }),
+                );
                 stack.push(v);
             }
             Op::Obj => {
@@ -221,7 +242,14 @@ pub fn stub_load(data: &[u8]) -> Result<Graph, String> {
                 let V::Class(class) = items.remove(0) else {
                     return Err("OBJ needs a class".into());
                 };
-                let v = new_obj(&mut objs, Obj::Stub(Stub { class, args: items, ..Stub::default() }));
+                let v = new_obj(
+                    &mut objs,
+                    Obj::Stub(Stub {
+                        class,
+                        args: items,
+                        ..Stub::default()
+                    }),
+                );
                 stack.push(v);
             }
             Op::Reduce => {
@@ -234,7 +262,14 @@ pub fn stub_load(data: &[u8]) -> Result<Graph, String> {
                     V::Tuple(t) => t.to_vec(),
                     _ => return Err("REDUCE arguments are not a tuple".into()),
                 };
-                let v = new_obj(&mut objs, Obj::Stub(Stub { class, args, ..Stub::default() }));
+                let v = new_obj(
+                    &mut objs,
+                    Obj::Stub(Stub {
+                        class,
+                        args,
+                        ..Stub::default()
+                    }),
+                );
                 stack.push(v);
             }
             Op::NewObj | Op::NewObjEx => {
@@ -246,15 +281,21 @@ pub fn stub_load(data: &[u8]) -> Result<Graph, String> {
                 let V::Class(class) = callable else {
                     return Err("NEWOBJ class is not a class".into());
                 };
-                let v = new_obj(&mut objs, Obj::Stub(Stub { class, ..Stub::default() }));
+                let v = new_obj(
+                    &mut objs,
+                    Obj::Stub(Stub {
+                        class,
+                        ..Stub::default()
+                    }),
+                );
                 stack.push(v);
             }
             Op::Build => {
                 let state = pop(&mut stack)?;
-                if let Some(V::Obj(i)) = stack.last() {
-                    if let Obj::Stub(s) = &mut objs[*i as usize] {
-                        s.state = Some(state);
-                    }
+                if let Some(V::Obj(i)) = stack.last()
+                    && let Obj::Stub(s) = &mut objs[*i as usize]
+                {
+                    s.state = Some(state);
                 }
             }
             Op::Put(i) => {
@@ -267,13 +308,20 @@ pub fn stub_load(data: &[u8]) -> Result<Graph, String> {
                 memo_n += 1;
             }
             Op::Get(i) => {
-                let t = memo.get(&i).cloned().ok_or_else(|| format!("memo value not found at index {i}"))?;
+                let t = memo
+                    .get(&i)
+                    .cloned()
+                    .ok_or_else(|| format!("memo value not found at index {i}"))?;
                 stack.push(t);
             }
             Op::Unsupported(n) => return Err(format!("unsupported opcode {n}")),
         }
     };
-    Ok(Graph { objs, classes, root })
+    Ok(Graph {
+        objs,
+        classes,
+        root,
+    })
 }
 
 fn push_items(objs: &mut [Obj], target: Option<&V>, xs: Vec<V>) {
@@ -354,7 +402,9 @@ impl Graph {
 
     fn dict_get(&self, v: &V, key: &str) -> Option<V> {
         let V::Obj(i) = v else { return None };
-        let Obj::Dict(d) = &self.objs[*i as usize] else { return None };
+        let Obj::Dict(d) = &self.objs[*i as usize] else {
+            return None;
+        };
         d.iter()
             .rev()
             .find(|(k, _)| matches!(k, V::Str(s) if &**s == key))
@@ -365,11 +415,13 @@ impl Graph {
     fn state_get(&self, s: &Stub, key: &str) -> Option<V> {
         match s.state.as_ref()? {
             V::Tuple(t) if t.len() == 2 => {
-                let dict_or_none = matches!(t[0], V::None) || matches!(&t[0], V::Obj(i) if matches!(self.objs[*i as usize], Obj::Dict(_)));
+                let dict_or_none = matches!(t[0], V::None)
+                    || matches!(&t[0], V::Obj(i) if matches!(self.objs[*i as usize], Obj::Dict(_)));
                 if !dict_or_none {
                     return None;
                 }
-                self.dict_get(&t[1], key).or_else(|| self.dict_get(&t[0], key))
+                self.dict_get(&t[1], key)
+                    .or_else(|| self.dict_get(&t[0], key))
             }
             d => self.dict_get(d, key),
         }
@@ -445,11 +497,16 @@ impl Graph {
         let mut logs: Vec<Vec<V>> = Vec::new();
         self.walk(|s, (m, n)| {
             if m == "renpy.execution" && n == "Context" {
-                pos.contexts.push(Self::opt_name(self.state_get(s, "current")));
+                pos.contexts
+                    .push(Self::opt_name(self.state_get(s, "current")));
             }
             // renpy.python.* in 7.x, renpy.rollback.* in 8.x.
             if n == "RollbackLog" && m.starts_with("renpy.") {
-                logs.push(self.state_get(s, "log").map(|l| self.seq(&l)).unwrap_or_default());
+                logs.push(
+                    self.state_get(s, "log")
+                        .map(|l| self.seq(&l))
+                        .unwrap_or_default(),
+                );
             }
         });
         for log in logs {
@@ -474,14 +531,23 @@ impl Graph {
 
     /// The keys of a `Persistent` field such as `_seen_ever` (dict keys, set or list items).
     pub fn persistent_keys(&self, field: &str) -> Vec<SeenKey> {
-        let Some(root) = self.stub(&self.root) else { return Vec::new() };
-        let Some(v) = self.state_get(root, field) else { return Vec::new() };
+        let Some(root) = self.stub(&self.root) else {
+            return Vec::new();
+        };
+        let Some(v) = self.state_get(root, field) else {
+            return Vec::new();
+        };
         let keys = |v: &V| -> Vec<V> {
             match v {
                 V::Obj(i) => match &self.objs[*i as usize] {
                     Obj::Dict(d) => d.iter().map(|(k, _)| k.clone()).collect(),
                     Obj::List(l) | Obj::Set(l) => l.clone(),
-                    Obj::Stub(s) => s.map.iter().map(|(k, _)| k.clone()).chain(s.items.iter().cloned()).collect(),
+                    Obj::Stub(s) => s
+                        .map
+                        .iter()
+                        .map(|(k, _)| k.clone())
+                        .chain(s.items.iter().cloned())
+                        .collect(),
                 },
                 V::Tuple(t) => t.to_vec(),
                 _ => Vec::new(),
@@ -533,7 +599,11 @@ impl Name {
 }
 
 fn py_repr(s: &str) -> String {
-    let q = if s.contains('\'') && !s.contains('"') { '"' } else { '\'' };
+    let q = if s.contains('\'') && !s.contains('"') {
+        '"'
+    } else {
+        '\''
+    };
     let mut out = String::with_capacity(s.len() + 2);
     out.push(q);
     for c in s.chars() {
@@ -546,7 +616,9 @@ fn py_repr(s: &str) -> String {
                 out.push('\\');
                 out.push(c);
             }
-            c if (c as u32) < 0x20 || c as u32 == 0x7f => out.push_str(&format!("\\x{:02x}", c as u32)),
+            c if (c as u32) < 0x20 || c as u32 == 0x7f => {
+                out.push_str(&format!("\\x{:02x}", c as u32))
+            }
             c => out.push(c),
         }
     }
@@ -601,8 +673,15 @@ pub fn check_position(pos: &Position, namemap: &NameMap) -> Verdict {
     let mut v = Verdict {
         result: Result3::LoadFails,
         entries: rbs.len(),
-        entries_missing: rbs.iter().filter(|r| r.current.as_ref().is_some_and(|c| !known(c))).count(),
-        contexts_missing: pos.contexts.iter().filter(|c| c.as_ref().is_some_and(|c| !known(c))).count(),
+        entries_missing: rbs
+            .iter()
+            .filter(|r| r.current.as_ref().is_some_and(|c| !known(c)))
+            .count(),
+        contexts_missing: pos
+            .contexts
+            .iter()
+            .filter(|c| c.as_ref().is_some_and(|c| !known(c)))
+            .count(),
         dropped_entries: None,
         dropped_checkpoints: 0,
         return_stack_broken: 0,
@@ -610,7 +689,11 @@ pub fn check_position(pos: &Position, namemap: &NameMap) -> Verdict {
     let (mut dropped, mut dropped_cp) = (0usize, 0usize);
     for r in rbs.iter().rev() {
         if r.current.as_ref().is_some_and(known) {
-            v.result = if dropped == 0 { Result3::Ok } else { Result3::ResumesEarlier };
+            v.result = if dropped == 0 {
+                Result3::Ok
+            } else {
+                Result3::ResumesEarlier
+            };
             v.dropped_entries = Some(dropped);
             v.dropped_checkpoints = dropped_cp;
             v.return_stack_broken = r.return_stack.iter().filter(|n| !known(n)).count();

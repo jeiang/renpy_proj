@@ -43,23 +43,23 @@ pub struct VertSubst {
 impl VertSubst {
     pub fn new(face: Arc<Face>) -> VertSubst {
         let mut map = HashMap::new();
-        if let Ok(gsub) = face.font().gsub() {
-            if let (Ok(features), Ok(lookups)) = (gsub.feature_list(), gsub.lookup_list()) {
-                // `vert` first, so `vrt2` wins where both exist.
-                for wanted in [b"vert", b"vrt2"] {
-                    for rec in features.feature_records() {
-                        if rec.feature_tag() != Tag::new(wanted) {
-                            continue;
-                        }
-                        let Ok(feature) = rec.feature(features.offset_data()) else {
+        if let Ok(gsub) = face.font().gsub()
+            && let (Ok(features), Ok(lookups)) = (gsub.feature_list(), gsub.lookup_list())
+        {
+            // `vert` first, so `vrt2` wins where both exist.
+            for wanted in [b"vert", b"vrt2"] {
+                for rec in features.feature_records() {
+                    if rec.feature_tag() != Tag::new(wanted) {
+                        continue;
+                    }
+                    let Ok(feature) = rec.feature(features.offset_data()) else {
+                        continue;
+                    };
+                    for idx in feature.lookup_list_indices() {
+                        let Ok(lookup) = lookups.lookups().get(idx.get() as usize) else {
                             continue;
                         };
-                        for idx in feature.lookup_list_indices() {
-                            let Ok(lookup) = lookups.lookups().get(idx.get() as usize) else {
-                                continue;
-                            };
-                            collect_single(&lookup, &mut map);
-                        }
+                        collect_single(&lookup, &mut map);
                     }
                 }
             }

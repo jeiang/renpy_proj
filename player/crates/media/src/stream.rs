@@ -673,7 +673,8 @@ impl Decoder {
                             ad = (ad - (sh.skip * rate as f64) as i64).max(0);
                         }
                         st.audio_duration = ad;
-                        st.video_only = ad >= 0 && sh.want_video && d.astream < 0 && !d.vctx.is_null();
+                        st.video_only =
+                            ad >= 0 && sh.want_video && d.astream < 0 && !d.vctx.is_null();
                     }
                 }
                 st.has_video = d.vstream >= 0;
@@ -701,10 +702,7 @@ impl Decoder {
         &mut self,
         stream: *mut ffi::AVStream,
     ) -> *mut ffi::AVCodecContext {
-        unsafe {
-            
-            open_codec(stream, Some(self))
-        }
+        unsafe { open_codec(stream, Some(self)) }
     }
 
     fn run(&mut self) {
@@ -906,10 +904,11 @@ impl Decoder {
                 if ret < 0 {
                     // End of stream: flush what the resampler holds back.
                     if !self.swr.is_null()
-                        && let Some(d) = self.convert(ptr::null()) {
-                            let start = self.audio_next_pts;
-                            self.push_audio(d, start);
-                        }
+                        && let Some(d) = self.convert(ptr::null())
+                    {
+                        let start = self.audio_next_pts;
+                        self.push_audio(d, start);
+                    }
                     self.set_audio_finished();
                     return;
                 }
@@ -1068,16 +1067,17 @@ impl Decoder {
         {
             let st = self.sh.st.lock();
             if let Some(off) = st.video_pts_offset
-                && off + pts < st.video_read_time {
-                    drop(st);
-                    // Five seconds behind: give up on video so memory stays bounded.
-                    if off + pts < self.sh.st.lock().video_read_time - 5.0 {
-                        self.sh.st.lock().video_finished = true;
-                    }
-                    if self.sh.frame_drops {
-                        return None;
-                    }
+                && off + pts < st.video_read_time
+            {
+                drop(st);
+                // Five seconds behind: give up on video so memory stays bounded.
+                if off + pts < self.sh.st.lock().video_read_time - 5.0 {
+                    self.sh.st.lock().video_finished = true;
                 }
+                if self.sh.frame_drops {
+                    return None;
+                }
+            }
         }
 
         // Bring a hardware frame to system memory.

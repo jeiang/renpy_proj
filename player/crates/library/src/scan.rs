@@ -67,8 +67,12 @@ pub fn detect(dir: &Path) -> Option<Game> {
 fn py_string_assign(text: &str, name: &str) -> Option<String> {
     for line in text.lines() {
         let line = line.trim();
-        let Some(rest) = line.strip_prefix(name) else { continue };
-        let Some(rest) = rest.trim_start().strip_prefix('=') else { continue };
+        let Some(rest) = line.strip_prefix(name) else {
+            continue;
+        };
+        let Some(rest) = rest.trim_start().strip_prefix('=') else {
+            continue;
+        };
         let rest = rest.trim().trim_start_matches(['u', 'b']);
         let q = rest.chars().next().filter(|c| *c == '\'' || *c == '"')?;
         let inner = &rest[1..];
@@ -82,7 +86,11 @@ fn version_tuples(text: &str) -> Vec<String> {
     text.lines()
         .filter_map(|l| {
             let l = l.trim().strip_prefix("version_tuple")?;
-            let l = l.trim_start().strip_prefix('=')?.trim_start().strip_prefix('(')?;
+            let l = l
+                .trim_start()
+                .strip_prefix('=')?
+                .trim_start()
+                .strip_prefix('(')?;
             let nums: Vec<&str> = l
                 .split(',')
                 .take(3)
@@ -137,7 +145,9 @@ fn walk(dir: &Path, depth: usize, out: &mut Vec<Game>) {
         out.push(g);
         return;
     }
-    let Ok(rd) = std::fs::read_dir(dir) else { return };
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return;
+    };
     let mut subs: Vec<PathBuf> = rd
         .flatten()
         .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))

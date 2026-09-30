@@ -325,15 +325,16 @@ impl Surface {
         };
         let sample = depth.and_then(sample_format);
         if let Some(d) = depth
-            && sample.is_none() {
-                let bits: i64 = d.extract()?;
-                if masks.is_some() && bits != 32 && bits != 24 {
-                    return Err(pygame_error(py, "Only 32-bit surfaces are supported."));
-                }
-                if masks.is_none() && bits != 32 {
-                    return Err(pygame_error(py, "Only 32-bit surfaces are supported."));
-                }
+            && sample.is_none()
+        {
+            let bits: i64 = d.extract()?;
+            if masks.is_some() && bits != 32 && bits != 24 {
+                return Err(pygame_error(py, "Only 32-bit surfaces are supported."));
             }
+            if masks.is_none() && bits != 32 {
+                return Err(pygame_error(py, "Only 32-bit surfaces are supported."));
+            }
+        }
         let mut fmt = masks_from(flags, masks, sample);
         if masks.is_none() && sample.is_none() && flags & SRCALPHA == 0 {
             fmt = Format::RGBX;

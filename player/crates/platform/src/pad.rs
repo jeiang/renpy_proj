@@ -35,9 +35,27 @@ const AXES: [&str; 6] = [
     "righttrigger",
 ];
 const BUTTONS: [&str; 21] = [
-    "a", "b", "x", "y", "back", "guide", "start", "leftstick", "rightstick", "leftshoulder",
-    "rightshoulder", "dpup", "dpdown", "dpleft", "dpright", "misc1", "paddle1", "paddle2",
-    "paddle3", "paddle4", "touchpad",
+    "a",
+    "b",
+    "x",
+    "y",
+    "back",
+    "guide",
+    "start",
+    "leftstick",
+    "rightstick",
+    "leftshoulder",
+    "rightshoulder",
+    "dpup",
+    "dpdown",
+    "dpleft",
+    "dpright",
+    "misc1",
+    "paddle1",
+    "paddle2",
+    "paddle3",
+    "paddle4",
+    "touchpad",
 ];
 
 struct Dev {
@@ -281,7 +299,13 @@ impl Pads {
                     Axis::RightStickX => d.set_axis(2, to_i16(v), out),
                     Axis::RightStickY => d.set_axis(3, to_i16(-v), out),
                     Axis::DPadX => {
-                        let s = if v > 0.5 { 1 } else if v < -0.5 { -1 } else { 0 };
+                        let s = if v > 0.5 {
+                            1
+                        } else if v < -0.5 {
+                            -1
+                        } else {
+                            0
+                        };
                         let old = std::mem::replace(&mut d.dpad[0], s);
                         if old != s {
                             d.set_button(13, s < 0, out);
@@ -290,7 +314,13 @@ impl Pads {
                     }
                     Axis::DPadY => {
                         // gilrs reports up as positive.
-                        let s = if v > 0.5 { 1 } else if v < -0.5 { -1 } else { 0 };
+                        let s = if v > 0.5 {
+                            1
+                        } else if v < -0.5 {
+                            -1
+                        } else {
+                            0
+                        };
                         let old = std::mem::replace(&mut d.dpad[1], s);
                         if old != s {
                             d.set_button(11, s > 0, out);
@@ -313,11 +343,15 @@ fn flush(py: Python<'_>, out: Vec<Out>) -> PyResult<()> {
     for o in out {
         match o {
             Out::Added(index) => {
-                event::push_native(py, consts::CONTROLLERDEVICEADDED, |d| d.set_item("which", index))?;
+                event::push_native(py, consts::CONTROLLERDEVICEADDED, |d| {
+                    d.set_item("which", index)
+                })?;
                 event::push_native(py, consts::JOYDEVICEADDED, |d| d.set_item("which", index))?;
             }
             Out::Removed(inst) => {
-                event::push_native(py, consts::CONTROLLERDEVICEREMOVED, |d| d.set_item("which", inst))?;
+                event::push_native(py, consts::CONTROLLERDEVICEREMOVED, |d| {
+                    d.set_item("which", inst)
+                })?;
                 event::push_native(py, consts::JOYDEVICEREMOVED, |d| d.set_item("which", inst))?;
             }
             Out::CAxis(which, axis, value) => {
@@ -328,7 +362,11 @@ fn flush(py: Python<'_>, out: Vec<Out>) -> PyResult<()> {
                 })?;
             }
             Out::CButton(which, button, down) => {
-                let t = if down { consts::CONTROLLERBUTTONDOWN } else { consts::CONTROLLERBUTTONUP };
+                let t = if down {
+                    consts::CONTROLLERBUTTONDOWN
+                } else {
+                    consts::CONTROLLERBUTTONUP
+                };
                 event::push_native(py, t, |d| {
                     d.set_item("which", which)?;
                     d.set_item("button", button)?;
@@ -344,7 +382,11 @@ fn flush(py: Python<'_>, out: Vec<Out>) -> PyResult<()> {
                 })?;
             }
             Out::JButton(which, button, down) => {
-                let t = if down { consts::JOYBUTTONDOWN } else { consts::JOYBUTTONUP };
+                let t = if down {
+                    consts::JOYBUTTONDOWN
+                } else {
+                    consts::JOYBUTTONUP
+                };
                 event::push_native(py, t, |d| {
                     d.set_item("which", which)?;
                     d.set_item("joy", which)?;
@@ -456,7 +498,10 @@ pub mod joystick {
     impl Joystick {
         #[new]
         fn new(id: i64) -> Self {
-            Self { joyid: id, instance: None }
+            Self {
+                joyid: id,
+                instance: None,
+            }
         }
 
         fn init(&mut self, py: Python<'_>) -> PyResult<()> {
@@ -522,7 +567,10 @@ pub mod joystick {
 
         fn get_ball(&self, py: Python<'_>, ball_number: i64) -> PyResult<(i64, i64)> {
             self.with_dev(py, |_| ())?;
-            Err(util::pg_error(py, &format!("Joystick ball index {ball_number} out of range")))
+            Err(util::pg_error(
+                py,
+                &format!("Joystick ball index {ball_number} out of range"),
+            ))
         }
 
         fn get_button(&self, py: Python<'_>, button: i64) -> PyResult<bool> {
@@ -536,7 +584,10 @@ pub mod joystick {
 
         fn get_hat(&self, py: Python<'_>, hat_number: i64) -> PyResult<(i64, i64)> {
             self.with_dev(py, |_| ())?;
-            Err(util::pg_error(py, &format!("Joystick hat index {hat_number} out of range")))
+            Err(util::pg_error(
+                py,
+                &format!("Joystick hat index {hat_number} out of range"),
+            ))
         }
     }
 
@@ -588,7 +639,10 @@ pub mod controller {
                 continue;
             }
             if line.split(',').count() < 3 || line.split(',').next().is_none_or(|g| g.len() != 32) {
-                return Err(util::pg_error(py, &format!("Invalid controller mapping: {line}")));
+                return Err(util::pg_error(
+                    py,
+                    &format!("Invalid controller mapping: {line}"),
+                ));
             }
         }
         let mut out = Vec::new();
@@ -629,9 +683,10 @@ pub mod controller {
             text_of(&mapping_file.call_method0("read")?)?
         } else {
             let path = text_of(mapping_file)?;
-            String::from_utf8_lossy(&std::fs::read(&path).map_err(|e| {
-                util::pg_error(py, &format!("Could not read {path}: {e}"))
-            })?)
+            String::from_utf8_lossy(
+                &std::fs::read(&path)
+                    .map_err(|e| util::pg_error(py, &format!("Could not read {path}: {e}")))?,
+            )
             .into_owned()
         };
         add_text(py, &text)
@@ -650,17 +705,24 @@ pub mod controller {
     #[pyfunction]
     fn get_button_from_string(name: &Bound<'_, PyAny>) -> PyResult<i64> {
         let n = name_bytes(name)?;
-        Ok(BUTTONS.iter().position(|a| *a == n).map_or(-1, |i| i as i64))
+        Ok(BUTTONS
+            .iter()
+            .position(|a| *a == n)
+            .map_or(-1, |i| i as i64))
     }
 
     #[pyfunction]
     fn get_string_for_axis(axis: i64) -> Option<&'static str> {
-        usize::try_from(axis).ok().and_then(|i| AXES.get(i).copied())
+        usize::try_from(axis)
+            .ok()
+            .and_then(|i| AXES.get(i).copied())
     }
 
     #[pyfunction]
     fn get_string_for_button(button: i64) -> Option<&'static str> {
-        usize::try_from(button).ok().and_then(|i| BUTTONS.get(i).copied())
+        usize::try_from(button)
+            .ok()
+            .and_then(|i| BUTTONS.get(i).copied())
     }
 
     fn pad_not_init(py: Python<'_>) -> PyErr {
@@ -678,7 +740,11 @@ pub mod controller {
 
     impl Controller {
         /// Runs `f` on the device at this index, whether opened or not.
-        fn at_index<R>(&self, py: Python<'_>, f: impl FnOnce(&mut Pads, usize) -> R) -> PyResult<Option<R>> {
+        fn at_index<R>(
+            &self,
+            py: Python<'_>,
+            f: impl FnOnce(&mut Pads, usize) -> R,
+        ) -> PyResult<Option<R>> {
             let idx = usize::try_from(self.index).ok();
             with_pads(py, |p| idx.filter(|i| *i < p.devs.len()).map(|i| f(p, i)))
         }
@@ -688,7 +754,11 @@ pub mod controller {
     impl Controller {
         #[new]
         fn new(index: i64) -> Self {
-            Self { index, instance_id: 0, open: false }
+            Self {
+                index,
+                instance_id: 0,
+                open: false,
+            }
         }
 
         fn init(&mut self, py: Python<'_>) -> PyResult<()> {
@@ -727,7 +797,10 @@ pub mod controller {
             let inst = self.instance_id;
             let v = with_pads(py, |p| {
                 p.devs.iter().find(|d| d.instance == inst).map(|d| {
-                    usize::try_from(axis).ok().and_then(|i| d.axes.get(i)).map_or(0, |v| i64::from(*v))
+                    usize::try_from(axis)
+                        .ok()
+                        .and_then(|i| d.axes.get(i))
+                        .map_or(0, |v| i64::from(*v))
                 })
             })?;
             Ok(v.unwrap_or(0))
@@ -740,7 +813,10 @@ pub mod controller {
             let inst = self.instance_id;
             let v = with_pads(py, |p| {
                 p.devs.iter().find(|d| d.instance == inst).map(|d| {
-                    usize::try_from(button).ok().and_then(|i| d.buttons.get(i)).map_or(0, |v| i64::from(*v))
+                    usize::try_from(button)
+                        .ok()
+                        .and_then(|i| d.buttons.get(i))
+                        .map_or(0, |v| i64::from(*v))
                 })
             })?;
             Ok(v.unwrap_or(0))

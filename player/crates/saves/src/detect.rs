@@ -9,7 +9,7 @@ use serde_json::{Value, json};
 
 use crate::compat_names::{IMPORT_MAPPING, NAME_MAPPING};
 use crate::pickle::{Scan, scan_opcodes};
-use crate::stub::{NameMap, Result3, SeenKey, hash64, check_position, stub_load};
+use crate::stub::{NameMap, Result3, SeenKey, check_position, hash64, stub_load};
 
 /// Cap for a zip member (zip-bomb guard). The largest real log in the corpus is 20 MB.
 pub const MAX_MEMBER: u64 = 512 * 1024 * 1024;
@@ -47,7 +47,10 @@ pub fn fix_imports(m: &str, n: &str) -> (String, String) {
     if let Some((_, (a, b))) = NAME_MAPPING.iter().find(|(k, _)| *k == (m, n)) {
         return (a.to_string(), b.to_string());
     }
-    let m2 = IMPORT_MAPPING.iter().find(|(k, _)| *k == m).map_or(m, |(_, v)| v);
+    let m2 = IMPORT_MAPPING
+        .iter()
+        .find(|(k, _)| *k == m)
+        .map_or(m, |(_, v)| v);
     (m2.to_string(), n.to_string())
 }
 
@@ -79,7 +82,10 @@ impl Verdict {
 
     /// The save cannot load: it is copied with a `.blocked` suffix.
     pub fn blocked(self) -> bool {
-        matches!(self, Verdict::LoadFails | Verdict::ClassMissing | Verdict::Unreadable)
+        matches!(
+            self,
+            Verdict::LoadFails | Verdict::ClassMissing | Verdict::Unreadable
+        )
     }
 }
 
@@ -191,15 +197,28 @@ pub struct Pending {
 
 fn version_text(v: &Value) -> Option<String> {
     let a = v.as_array()?;
-    Some(a.iter().filter_map(|x| x.as_i64()).map(|x| x.to_string()).collect::<Vec<_>>().join("."))
+    Some(
+        a.iter()
+            .filter_map(|x| x.as_i64())
+            .map(|x| x.to_string())
+            .collect::<Vec<_>>()
+            .join("."),
+    )
 }
 
 fn version_triple(v: &Value) -> Option<(i64, i64, i64)> {
     let a = v.as_array()?;
-    Some((a.first()?.as_i64()?, a.get(1)?.as_i64()?, a.get(2)?.as_i64()?))
+    Some((
+        a.first()?.as_i64()?,
+        a.get(1)?.as_i64()?,
+        a.get(2)?.as_i64()?,
+    ))
 }
 
-fn read_member(z: &mut zip::ZipArchive<std::fs::File>, name: &str) -> Result<Option<Vec<u8>>, String> {
+fn read_member(
+    z: &mut zip::ZipArchive<std::fs::File>,
+    name: &str,
+) -> Result<Option<Vec<u8>>, String> {
     let mut f = match z.by_name(name) {
         Ok(f) => f,
         Err(zip::result::ZipError::FileNotFound) => return Ok(None),
@@ -209,15 +228,25 @@ fn read_member(z: &mut zip::ZipArchive<std::fs::File>, name: &str) -> Result<Opt
         return Err(format!("zip member {name} is too large"));
     }
     let mut buf = Vec::with_capacity(f.size() as usize);
-    f.read_to_end(&mut buf).map_err(|e| format!("zip member {name}: {e}"))?;
+    f.read_to_end(&mut buf)
+        .map_err(|e| format!("zip member {name}: {e}"))?;
     Ok(Some(buf))
 }
 
 /// Levels 0, 1 and 3 for one `.save` file. `player_version` is the engine the player embeds.
-pub fn analyze_save(path: &Path, namemap: Option<&NameMap>, player_version: (i64, i64, i64)) -> Pending {
-    let file = path.file_name().map_or_else(String::new, |f| f.to_string_lossy().into_owned());
+pub fn analyze_save(
+    path: &Path,
+    namemap: Option<&NameMap>,
+    player_version: (i64, i64, i64),
+) -> Pending {
+    let file = path
+        .file_name()
+        .map_or_else(String::new, |f| f.to_string_lossy().into_owned());
     let mut r = FileReport::new(&file, "save");
-    let none = |r: FileReport| Pending { report: r, globals: Vec::new() };
+    let none = |r: FileReport| Pending {
+        report: r,
+        globals: Vec::new(),
+    };
     let f = match std::fs::File::open(path) {
         Ok(f) => f,
         Err(e) => return none(r.fail(format!("open: {e}"))),
@@ -235,61 +264,92 @@ pub fn analyze_save(path: &Path, namemap: Option<&NameMap>, player_version: (i64
     let json_text = read_member(&mut z, "json").ok().flatten();
     if let Some(j) = json_text.and_then(|b| serde_json::from_slice::<Value>(&b).ok()) {
         r.engine_version = j.get("_renpy_version").and_then(version_text);
-        r.game_version = j.get("_version").and_then(|v| v.as_str().map(str::to_string));
-        r.save_name = j.get("_save_name").and_then(|v| v.as_str().map(str::to_string));
-        if let Some(t) = j.get("_renpy_version").and_then(version_triple) {
-            if t > player_version {
-                r.warnings.push(format!(
-                    "written by a newer engine ({}), the player embeds {}.{}.{}",
-                    r.engine_version.clone().unwrap_or_default(),
-                    player_version.0,
-                    player_version.1,
-                    player_version.2
-                ));
-            }
+        r.game_version = j
+            .get("_version")
+            .and_then(|v| v.as_str().map(str::to_string));
+        r.save_name = j
+            .get("_save_name")
+            .and_then(|v| v.as_str().map(str::to_string));
+        if let Some(t) = j.get("_renpy_version").and_then(version_triple)
+            && t > player_version
+        {
+            r.warnings.push(format!(
+                "written by a newer engine ({}), the player embeds {}.{}.{}",
+                r.engine_version.clone().unwrap_or_default(),
+                player_version.0,
+                player_version.1,
+                player_version.2
+            ));
         }
     }
-    if r.engine_version.is_none() {
-        if let Ok(Some(v)) = read_member(&mut z, "renpy_version") {
-            r.engine_version = Some(String::from_utf8_lossy(&v).into_owned());
-        }
+    if r.engine_version.is_none()
+        && let Ok(Some(v)) = read_member(&mut z, "renpy_version")
+    {
+        r.engine_version = Some(String::from_utf8_lossy(&v).into_owned());
     }
     r.has_signature = matches!(read_member(&mut z, "signatures"), Ok(Some(s)) if !s.is_empty());
     finish_pickle(r, &log, namemap, false)
 }
 
 /// Shared tail: scan, then stub load and walk. `persistent` skips the rollback walk.
-fn finish_pickle(mut r: FileReport, data: &[u8], namemap: Option<&NameMap>, persistent: bool) -> Pending {
+fn finish_pickle(
+    mut r: FileReport,
+    data: &[u8],
+    namemap: Option<&NameMap>,
+    persistent: bool,
+) -> Pending {
     let sc: Scan = scan_opcodes(data);
     r.protocol = sc.protocol;
     r.py2 = sc.py2_str_ops > 0;
     r.py2_markers = sc.py2_markers.iter().cloned().collect();
     if let Some(e) = sc.error {
-        return Pending { report: r.fail(format!("pickle scan: {e}")), globals: Vec::new() };
+        return Pending {
+            report: r.fail(format!("pickle scan: {e}")),
+            globals: Vec::new(),
+        };
     }
     if !sc.stopped {
-        return Pending { report: r.fail("pickle scan: no STOP opcode"), globals: Vec::new() };
+        return Pending {
+            report: r.fail("pickle scan: no STOP opcode"),
+            globals: Vec::new(),
+        };
     }
     if sc.max_op_proto > 5 {
-        return Pending { report: r.fail(format!("pickle uses protocol {} opcodes", sc.max_op_proto)), globals: Vec::new() };
+        return Pending {
+            report: r.fail(format!("pickle uses protocol {} opcodes", sc.max_op_proto)),
+            globals: Vec::new(),
+        };
     }
     let map_names = sc.protocol.unwrap_or(0) < 3;
     let mut globals: Vec<(String, String)> = Vec::new();
     for (m, n) in sc.globals.keys() {
-        let g = if map_names { fix_imports(m, n) } else { (m.clone(), n.clone()) };
+        let g = if map_names {
+            fix_imports(m, n)
+        } else {
+            (m.clone(), n.clone())
+        };
         if !globals.contains(&g) {
             globals.push(g);
         }
     }
     let graph = match stub_load(data) {
         Ok(g) => g,
-        Err(e) => return Pending { report: r.fail(format!("unpickle: {e}")), globals },
+        Err(e) => {
+            return Pending {
+                report: r.fail(format!("unpickle: {e}")),
+                globals,
+            };
+        }
     };
     if persistent {
         r.verdict = Verdict::Ok;
         if let Some(nm) = namemap {
             let keys = graph.persistent_keys("_seen_ever");
-            let hashed: std::collections::HashSet<u64> = nm.iter().filter_map(|n| n.py_str()).map(|s| hash64(&s)).collect();
+            let hashed: std::collections::HashSet<u64> = nm
+                .iter()
+                .filter_map(|n| n.py_str())
+                .map(|s| hash64(&s))
+                .collect();
             let (mut plain, mut hs) = (0, 0);
             for k in &keys {
                 match k {
@@ -298,7 +358,12 @@ fn finish_pickle(mut r: FileReport, data: &[u8], namemap: Option<&NameMap>, pers
                     _ => {}
                 }
             }
-            r.seen = Some(Seen { total: keys.len(), plain, hashed: hs, dead: keys.len() - plain - hs });
+            r.seen = Some(Seen {
+                total: keys.len(),
+                plain,
+                hashed: hs,
+                dead: keys.len() - plain - hs,
+            });
         }
         return Pending { report: r, globals };
     }
@@ -316,7 +381,10 @@ fn finish_pickle(mut r: FileReport, data: &[u8], namemap: Option<&NameMap>, pers
             Result3::LoadFails => Verdict::LoadFails,
         };
         if v.return_stack_broken > 0 {
-            r.warnings.push(format!("{} return-stack nodes are gone: a later return raises LabelNotFound", v.return_stack_broken));
+            r.warnings.push(format!(
+                "{} return-stack nodes are gone: a later return raises LabelNotFound",
+                v.return_stack_broken
+            ));
         }
         if v.result == Result3::ResumesEarlier {
             r.warnings.push(format!(
@@ -331,21 +399,36 @@ fn finish_pickle(mut r: FileReport, data: &[u8], namemap: Option<&NameMap>, pers
 
 /// Persistent = `zlib(pickle)` followed by the signature text (`persistent.py` L218-237).
 pub fn analyze_persistent(path: &Path, namemap: Option<&NameMap>) -> Pending {
-    let file = path.file_name().map_or_else(String::new, |f| f.to_string_lossy().into_owned());
+    let file = path
+        .file_name()
+        .map_or_else(String::new, |f| f.to_string_lossy().into_owned());
     let r = FileReport::new(&file, "persistent");
     let raw = match std::fs::read(path) {
         Ok(b) => b,
-        Err(e) => return Pending { report: r.fail(format!("read: {e}")), globals: Vec::new() },
+        Err(e) => {
+            return Pending {
+                report: r.fail(format!("read: {e}")),
+                globals: Vec::new(),
+            };
+        }
     };
     // `bufread` consumes only the bytes of the zlib stream; the rest is the signature text.
     let mut cur = std::io::Cursor::new(&raw[..]);
     let mut out: Vec<u8> = Vec::with_capacity(raw.len() * 4);
-    let read = flate2::bufread::ZlibDecoder::new(&mut cur).take(MAX_MEMBER + 1).read_to_end(&mut out);
+    let read = flate2::bufread::ZlibDecoder::new(&mut cur)
+        .take(MAX_MEMBER + 1)
+        .read_to_end(&mut out);
     if let Err(e) = read {
-        return Pending { report: r.fail(format!("zlib: {e}")), globals: Vec::new() };
+        return Pending {
+            report: r.fail(format!("zlib: {e}")),
+            globals: Vec::new(),
+        };
     }
     if out.len() as u64 > MAX_MEMBER {
-        return Pending { report: r.fail("persistent is too large"), globals: Vec::new() };
+        return Pending {
+            report: r.fail("persistent is too large"),
+            globals: Vec::new(),
+        };
     }
     let trailer = &raw[cur.position() as usize..];
     let mut r = r;
@@ -393,7 +476,9 @@ pub fn analyze_files(
     player_version: (i64, i64, i64),
     resolver: &mut dyn Resolver,
 ) -> Vec<FileReport> {
-    let workers = std::thread::available_parallelism().map_or(2, |n| n.get()).min(paths.len().max(1));
+    let workers = std::thread::available_parallelism()
+        .map_or(2, |n| n.get())
+        .min(paths.len().max(1));
     let next = std::sync::atomic::AtomicUsize::new(0);
     let mut slots: Vec<Option<Pending>> = (0..paths.len()).map(|_| None).collect();
     let results = parking_lot::Mutex::new(&mut slots);
@@ -406,13 +491,20 @@ pub fn analyze_files(
                         let i = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                         let Some(p) = paths.get(i) else { break };
                         let is_persistent = p.file_name().is_some_and(|f| f == "persistent");
-                        let pend = if is_persistent { analyze_persistent(p, namemap) } else { analyze_save(p, namemap, player_version) };
+                        let pend = if is_persistent {
+                            analyze_persistent(p, namemap)
+                        } else {
+                            analyze_save(p, namemap, player_version)
+                        };
                         results.lock()[i] = Some(pend);
                     }
                 })
                 .expect("spawn analysis thread");
         }
     });
-    let pending = slots.into_iter().map(|p| p.expect("every path analyzed")).collect();
+    let pending = slots
+        .into_iter()
+        .map(|p| p.expect("every path analyzed"))
+        .collect();
     resolve_all(pending, resolver)
 }

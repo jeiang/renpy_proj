@@ -196,9 +196,10 @@ pub fn create_window(
     })?
     .context("cannot create the window")?;
     if let Some((iw, ih, rgba)) = INPUT.lock().icon.clone()
-        && let Ok(icon) = Icon::from_rgba(rgba, iw, ih) {
-            w.set_window_icon(Some(icon));
-        }
+        && let Ok(icon) = Icon::from_rgba(rgba, iw, ih)
+    {
+        w.set_window_icon(Some(icon));
+    }
     pump(Some(Duration::ZERO));
     Ok(w)
 }
@@ -219,9 +220,10 @@ pub fn monitors() -> anyhow::Result<Vec<Monitor>> {
         let primary = el.primary_monitor();
         let mut list: Vec<_> = el.available_monitors().collect();
         if let Some(p) = primary
-            && let Some(i) = list.iter().position(|m| *m == p) {
-                list.swap(0, i);
-            }
+            && let Some(i) = list.iter().position(|m| *m == p)
+        {
+            list.swap(0, i);
+        }
         list.into_iter()
             .map(|m| {
                 let s = m.scale_factor();
@@ -447,11 +449,14 @@ fn key_event(py: Python<'_>, e: &KeyEvent) -> PyResult<()> {
         Ok(())
     })?;
 
-    if pressed && text_input && !shortcut
-        && let Some(t) = text {
-            let t = t.to_string();
-            event::push_native(py, consts::TEXTINPUT, |d| d.set_item("text", t))?;
-        }
+    if pressed
+        && text_input
+        && !shortcut
+        && let Some(t) = text
+    {
+        let t = t.to_string();
+        event::push_native(py, consts::TEXTINPUT, |d| d.set_item("text", t))?;
+    }
     Ok(())
 }
 

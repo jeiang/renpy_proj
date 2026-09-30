@@ -9,10 +9,10 @@ use pyo3::types::PyList;
 use crate::bidi::chars_of;
 use crate::face::Face;
 use crate::glue::{self, GlyphIn};
+use crate::load_face;
 use crate::metrics;
 use crate::raster::{Hinting, Rasterizer, Rotation, Settings};
 use crate::shape::VertSubst;
-use crate::load_face;
 
 #[pyfunction]
 pub fn init() {}
@@ -84,10 +84,15 @@ impl FTFont {
         let mut size = size.max(1.0);
         let (italic, antialias, vertical) = (italic.0, antialias.0 || bold != 0.0, vertical.0);
         let f = face.borrow();
-        size = size * glue::config_scale(py, "ftfont_scale", f.r#fn.bind(py))? * glue::pref_font_size(py)?;
+        size = size
+            * glue::config_scale(py, "ftfont_scale", f.r#fn.bind(py))?
+            * glue::pref_font_size(py)?;
 
         let hint_str = hinting.extract::<String>().ok();
-        let hinting = Hinting::parse(hint_str.as_deref(), hinting.is_none() || hint_str.as_deref() == Some("none"));
+        let hinting = Hinting::parse(
+            hint_str.as_deref(),
+            hinting.is_none() || hint_str.as_deref() == Some("none"),
+        );
         let rotation = if !vertical {
             Rotation::None
         } else if f.face.has_vertical {
@@ -107,7 +112,11 @@ impl FTFont {
         let arc = f.face.clone();
         let location = arc.location(&[]);
         let raster = Rasterizer::new(arc.clone(), settings, location);
-        let overhang = if bold != 0.0 { raster.ppem.round() as i32 / 10 } else { 0 };
+        let overhang = if bold != 0.0 {
+            raster.ppem.round() as i32 / 10
+        } else {
+            0
+        };
         drop(f);
         Ok(FTFont {
             face_obj: face.unbind(),
@@ -127,7 +136,12 @@ impl FTFont {
         })
     }
 
-    fn glyphs<'py>(&mut self, py: Python<'py>, s: &Bound<'py, PyAny>, _level: i32) -> PyResult<Bound<'py, PyList>> {
+    fn glyphs<'py>(
+        &mut self,
+        py: Python<'py>,
+        s: &Bound<'py, PyAny>,
+        _level: i32,
+    ) -> PyResult<Bound<'py, PyList>> {
         self.setup(py)?;
         let chars: Vec<u32> = chars_of(s)?.into_iter().map(|c| c as u32).collect();
         let rv = PyList::empty(py);
@@ -324,7 +338,10 @@ impl FTFont {
         if units == 0 {
             return 0;
         }
-        let mut k = metrics::mul_fix(units, metrics::y_scale(&self.face, self.raster.settings.size));
+        let mut k = metrics::mul_fix(
+            units,
+            metrics::y_scale(&self.face, self.raster.settings.size),
+        );
         let ppem = self.raster.ppem.round() as i64;
         if ppem < 25 {
             k = metrics::mul_div(k, ppem, 25);
@@ -355,8 +372,8 @@ impl FTFont {
         let fn_obj = self.face_obj.bind(py).borrow().r#fn.clone_ref(py);
         let vext = glue::config_scale(py, "ftfont_vertical_extent_scale", fn_obj.bind(py))? as f64;
 
-        self.ascent = metrics::ceil(((asc as f64 * vext) as i64).into()) as i32;
-        self.descent = metrics::floor(((desc as f64 * vext) as i64).into()) as i32;
+        self.ascent = metrics::ceil(((asc as f64 * vext) as i64)) as i32;
+        self.descent = metrics::floor(((desc as f64 * vext) as i64)) as i32;
         if self.descent > 0 {
             self.descent = -self.descent;
         }
@@ -373,7 +390,8 @@ impl FTFont {
         } else {
             metrics::floor(metrics::mul_fix(face.underline_position as i64, scale)) as i32
         };
-        self.underline_height = metrics::floor(metrics::mul_fix(face.underline_thickness as i64, scale)) as i32;
+        self.underline_height =
+            metrics::floor(metrics::mul_fix(face.underline_thickness as i64, scale)) as i32;
         if self.underline_height < 1 {
             self.underline_height = 1;
         }

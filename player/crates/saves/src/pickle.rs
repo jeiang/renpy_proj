@@ -22,7 +22,10 @@ pub enum Op<'a> {
     BigInt,
     Float,
     /// Text. `py2` marks the Python 2 `str` opcodes (`STRING`, `BINSTRING`, `SHORT_BINSTRING`).
-    Str { bytes: &'a [u8], py2: bool },
+    Str {
+        bytes: &'a [u8],
+        py2: bool,
+    },
     /// A protocol 0 `STRING` (already unquoted). Counts as a Python 2 string opcode.
     Py2Quoted(Vec<u8>),
     Bytes,
@@ -70,7 +73,11 @@ fn err<T>(msg: impl Into<String>) -> Result<T, String> {
 
 impl<'a> Decoder<'a> {
     pub fn new(data: &'a [u8]) -> Self {
-        Decoder { data, pos: 0, max_op_proto: 0 }
+        Decoder {
+            data,
+            pos: 0,
+            max_op_proto: 0,
+        }
     }
 
     fn take(&mut self, n: usize) -> Result<&'a [u8], String> {
@@ -135,7 +142,10 @@ impl<'a> Decoder<'a> {
                 match l {
                     b"00" => Op::Bool(false),
                     b"01" => Op::Bool(true),
-                    _ => match std::str::from_utf8(l).ok().and_then(|s| s.trim().parse::<i128>().ok()) {
+                    _ => match std::str::from_utf8(l)
+                        .ok()
+                        .and_then(|s| s.trim().parse::<i128>().ok())
+                    {
                         Some(v) => Op::Int(v),
                         None => Op::BigInt,
                     },
@@ -181,21 +191,33 @@ impl<'a> Decoder<'a> {
                 if n < 0 {
                     return err("BINSTRING pickle has negative byte count");
                 }
-                Op::Str { bytes: self.len_bytes(n as u64)?, py2: true }
+                Op::Str {
+                    bytes: self.len_bytes(n as u64)?,
+                    py2: true,
+                }
             }
             b'U' => {
                 self.proto(1);
                 let n = self.uint(1)?;
-                Op::Str { bytes: self.len_bytes(n)?, py2: true }
+                Op::Str {
+                    bytes: self.len_bytes(n)?,
+                    py2: true,
+                }
             }
             b'V' => {
                 let l = self.line()?;
-                Op::Str { bytes: l, py2: false }
+                Op::Str {
+                    bytes: l,
+                    py2: false,
+                }
             }
             b'X' => {
                 self.proto(1);
                 let n = self.uint(4)?;
-                Op::Str { bytes: self.len_bytes(n)?, py2: false }
+                Op::Str {
+                    bytes: self.len_bytes(n)?,
+                    py2: false,
+                }
             }
             b'a' => Op::Append,
             b'b' => Op::Build,
@@ -215,7 +237,12 @@ impl<'a> Decoder<'a> {
             }
             b'g' => {
                 let l = self.line()?;
-                Op::Get(std::str::from_utf8(l).ok().and_then(|s| s.parse().ok()).ok_or("bad GET")?)
+                Op::Get(
+                    std::str::from_utf8(l)
+                        .ok()
+                        .and_then(|s| s.parse().ok())
+                        .ok_or("bad GET")?,
+                )
             }
             b'h' => {
                 self.proto(1);
@@ -241,7 +268,12 @@ impl<'a> Decoder<'a> {
             }
             b'p' => {
                 let l = self.line()?;
-                Op::Put(std::str::from_utf8(l).ok().and_then(|s| s.parse().ok()).ok_or("bad PUT")?)
+                Op::Put(
+                    std::str::from_utf8(l)
+                        .ok()
+                        .and_then(|s| s.parse().ok())
+                        .ok_or("bad PUT")?,
+                )
             }
             b'q' => {
                 self.proto(1);
@@ -338,12 +370,18 @@ impl<'a> Decoder<'a> {
             0x8c => {
                 self.proto(4);
                 let n = self.uint(1)?;
-                Op::Str { bytes: self.len_bytes(n)?, py2: false }
+                Op::Str {
+                    bytes: self.len_bytes(n)?,
+                    py2: false,
+                }
             }
             0x8d => {
                 self.proto(4);
                 let n = self.uint(8)?;
-                Op::Str { bytes: self.len_bytes(n)?, py2: false }
+                Op::Str {
+                    bytes: self.len_bytes(n)?,
+                    py2: false,
+                }
             }
             0x8e => {
                 self.proto(4);
@@ -434,7 +472,9 @@ pub fn unquote_py2(line: &[u8]) -> Vec<u8> {
                     b'r' => out.push(b'\r'),
                     b't' => out.push(b'\t'),
                     b'x' if i + 2 < inner.len() => {
-                        let h = std::str::from_utf8(&inner[i + 1..i + 3]).ok().and_then(|s| u8::from_str_radix(s, 16).ok());
+                        let h = std::str::from_utf8(&inner[i + 1..i + 3])
+                            .ok()
+                            .and_then(|s| u8::from_str_radix(s, 16).ok());
                         if let Some(h) = h {
                             out.push(h);
                             i += 2;
@@ -454,7 +494,16 @@ pub fn unquote_py2(line: &[u8]) -> Vec<u8> {
 }
 
 /// Modules only a Python 2 engine writes (`fix_imports` maps them).
-const PY2_MODULES: &[&str] = &["__builtin__", "copy_reg", "cPickle", "cStringIO", "StringIO", "Queue", "exceptions", "UserDict"];
+const PY2_MODULES: &[&str] = &[
+    "__builtin__",
+    "copy_reg",
+    "cPickle",
+    "cStringIO",
+    "StringIO",
+    "Queue",
+    "exceptions",
+    "UserDict",
+];
 
 /// Result of the L1 scan. Never an error: a malformed pickle sets `error`.
 #[derive(Debug, Default, Clone)]
@@ -500,11 +549,19 @@ pub fn scan_opcodes(data: &[u8]) -> Scan {
                 if py2 {
                     rv.py2_str_ops += 1;
                 }
-                last.push(if bytes.len() <= MAX_KEPT_STR { Some(text(bytes)) } else { None });
+                last.push(if bytes.len() <= MAX_KEPT_STR {
+                    Some(text(bytes))
+                } else {
+                    None
+                });
             }
             Op::Py2Quoted(b) => {
                 rv.py2_str_ops += 1;
-                last.push(if b.len() <= MAX_KEPT_STR { Some(text(&b)) } else { None });
+                last.push(if b.len() <= MAX_KEPT_STR {
+                    Some(text(&b))
+                } else {
+                    None
+                });
             }
             Op::Global(m, n) => {
                 add(&mut rv, text(m), text(n));

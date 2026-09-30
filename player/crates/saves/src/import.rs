@@ -14,7 +14,11 @@ use crate::stub::NameMap;
 /// Where stock Ren'Py keeps the saves of a game: `<save root>/<save_directory>` and `<gamedir>/saves`.
 /// `save_root` is `RENPY_PATH_TO_SAVES` when set, else the platform folder (`~/Library/RenPy` on macOS).
 /// Returned in the order the import prefers on equal timestamps: the game-local folder first.
-pub fn stock_dirs(gamedir: &Path, save_directory: Option<&str>, save_root: Option<&Path>) -> Vec<PathBuf> {
+pub fn stock_dirs(
+    gamedir: &Path,
+    save_directory: Option<&str>,
+    save_root: Option<&Path>,
+) -> Vec<PathBuf> {
     let mut dirs = vec![gamedir.join("saves")];
     if let (Some(sd), Some(root)) = (save_directory.filter(|s| !s.is_empty()), save_root) {
         dirs.push(root.join(sd));
@@ -85,24 +89,44 @@ pub fn import_stock(
             let mtime = md.modified().unwrap_or(SystemTime::UNIX_EPOCH);
             if best.get(&name).is_none_or(|(_, t)| mtime > *t) {
                 if let Some((old, _)) = best.insert(name.clone(), (e.path(), mtime)) {
-                    outcomes.push(Outcome { name, source: old, action: "older-duplicate", report: None });
+                    outcomes.push(Outcome {
+                        name,
+                        source: old,
+                        action: "older-duplicate",
+                        report: None,
+                    });
                 }
             } else {
-                outcomes.push(Outcome { name, source: e.path(), action: "older-duplicate", report: None });
+                outcomes.push(Outcome {
+                    name,
+                    source: e.path(),
+                    action: "older-duplicate",
+                    report: None,
+                });
             }
         }
     }
-    let todo: Vec<(String, PathBuf, SystemTime)> = best.into_iter().map(|(n, (p, t))| (n, p, t)).collect();
+    let todo: Vec<(String, PathBuf, SystemTime)> =
+        best.into_iter().map(|(n, (p, t))| (n, p, t)).collect();
     let paths: Vec<PathBuf> = todo.iter().map(|(_, p, _)| p.clone()).collect();
     let reports = analyze_files(&paths, namemap, player_version, resolver);
     fs::create_dir_all(dest)?;
     for ((name, src, mtime), report) in todo.into_iter().zip(reports) {
         // A persistent file that is unreadable is still copied under its name: the engine ignores it, as stock does.
         let blocked = report.verdict.blocked() && name != "persistent";
-        let target_name = if blocked { format!("{name}.blocked") } else { name.clone() };
+        let target_name = if blocked {
+            format!("{name}.blocked")
+        } else {
+            name.clone()
+        };
         let target = dest.join(&target_name);
         if dest.join(&name).exists() || dest.join(format!("{name}.blocked")).exists() {
-            outcomes.push(Outcome { name, source: src, action: "exists", report: Some(report) });
+            outcomes.push(Outcome {
+                name,
+                source: src,
+                action: "exists",
+                report: Some(report),
+            });
             continue;
         }
         let tmp = dest.join(format!(".{target_name}.importing"));
@@ -111,7 +135,12 @@ pub fn import_stock(
             let _ = f.set_modified(mtime);
         }
         fs::rename(&tmp, &target)?;
-        outcomes.push(Outcome { name, source: src, action: if blocked { "copied-blocked" } else { "copied" }, report: Some(report) });
+        outcomes.push(Outcome {
+            name,
+            source: src,
+            action: if blocked { "copied-blocked" } else { "copied" },
+            report: Some(report),
+        });
     }
     outcomes.sort_by(|a, b| a.name.cmp(&b.name).then(a.action.cmp(b.action)));
     Ok(outcomes)
@@ -124,10 +153,15 @@ pub fn scan_dir(
     player_version: (i64, i64, i64),
     resolver: &mut dyn Resolver,
 ) -> Vec<FileReport> {
-    let Ok(rd) = fs::read_dir(dir) else { return Vec::new() };
+    let Ok(rd) = fs::read_dir(dir) else {
+        return Vec::new();
+    };
     let mut paths: Vec<PathBuf> = rd
         .flatten()
-        .filter(|e| is_candidate(&e.file_name().to_string_lossy()) && e.metadata().is_ok_and(|m| m.is_file()))
+        .filter(|e| {
+            is_candidate(&e.file_name().to_string_lossy())
+                && e.metadata().is_ok_and(|m| m.is_file())
+        })
         .map(|e| e.path())
         .collect();
     paths.sort();

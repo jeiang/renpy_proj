@@ -76,9 +76,8 @@ pub fn gpu_memory_bytes() -> Option<u64> {
 fn default_gpu_memory() -> Option<u64> {
     use objc2_metal::{MTLCreateSystemDefaultDevice, MTLDevice};
     static DEFAULT: std::sync::OnceLock<Option<u64>> = std::sync::OnceLock::new();
-    *DEFAULT.get_or_init(|| {
-        MTLCreateSystemDefaultDevice().map(|d| d.recommendedMaxWorkingSetSize())
-    })
+    *DEFAULT
+        .get_or_init(|| MTLCreateSystemDefaultDevice().map(|d| d.recommendedMaxWorkingSetSize()))
 }
 
 #[cfg(not(target_vendor = "apple"))]
@@ -806,7 +805,9 @@ impl Renderer {
                                 break;
                             }
                             other => {
-                                return Err(format!("cannot acquire the window surface: {other:?}"));
+                                return Err(format!(
+                                    "cannot acquire the window surface: {other:?}"
+                                ));
                             }
                         }
                     }
@@ -842,9 +843,10 @@ impl Renderer {
 
     fn grow(dev: &Device, slot: &mut Option<Buffer>, need: u64, usage: BufferUsages) -> Buffer {
         if let Some(b) = slot
-            && b.size() >= need {
-                return b.clone();
-            }
+            && b.size() >= need
+        {
+            return b.clone();
+        }
         let size = need.max(1 << 20).next_power_of_two();
         let b = dev.create_buffer(&BufferDescriptor {
             label: None,
@@ -1050,9 +1052,10 @@ impl Renderer {
     pub fn present(&mut self) -> Result<(), String> {
         self.flush()?;
         if let Screen::Window { frame, .. } = &mut self.screen
-            && let Some(f) = frame.take() {
-                self.sh.queue.present(f);
-            }
+            && let Some(f) = frame.take()
+        {
+            self.sh.queue.present(f);
+        }
         // Depth targets are cheap to rebuild and can be resized away.
         if self.depth.len() > 8 {
             self.depth.clear();

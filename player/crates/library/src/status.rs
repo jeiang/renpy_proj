@@ -21,10 +21,18 @@ pub fn preflight(data: &Path, key: &str) -> Option<Preflight> {
     let text = match std::fs::read_to_string(preflight_path(data, key)) {
         Ok(t) => t,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return None,
-        Err(_) => return Some(Preflight { status: "unreadable".into(), renpy7: None }),
+        Err(_) => {
+            return Some(Preflight {
+                status: "unreadable".into(),
+                renpy7: None,
+            });
+        }
     };
     let Ok(v) = serde_json::from_str::<Value>(&text) else {
-        return Some(Preflight { status: "unreadable".into(), renpy7: None });
+        return Some(Preflight {
+            status: "unreadable".into(),
+            renpy7: None,
+        });
     };
     let status = v
         .get("status")
@@ -64,5 +72,8 @@ pub fn mods_info(data: &Path, key: &str) -> ModsInfo {
                 .count()
         })
         .unwrap_or(0);
-    ModsInfo { installed: names.len(), enabled }
+    ModsInfo {
+        installed: names.len(),
+        enabled,
+    }
 }

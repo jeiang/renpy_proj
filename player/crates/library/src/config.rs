@@ -36,7 +36,9 @@ pub struct Library {
 
 /// The default player data folder, as `_player.boot.default_data_dir`.
 pub fn default_data_dir() -> PathBuf {
-    let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
+    let home = std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .unwrap_or_default();
     if cfg!(target_os = "macos") {
         home.join("Library/Application Support/renpy-player")
     } else if cfg!(windows) {

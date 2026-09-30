@@ -107,19 +107,20 @@ impl App {
     /// Drops finished children and reports a failed exit.
     fn reap(&mut self) {
         let mut done = Vec::new();
-        self.running.retain_mut(|(key, child)| match child.try_wait() {
-            Ok(None) => true,
-            Ok(Some(st)) => {
-                if !st.success() {
-                    done.push(format!("{key} exited with {st}"));
+        self.running
+            .retain_mut(|(key, child)| match child.try_wait() {
+                Ok(None) => true,
+                Ok(Some(st)) => {
+                    if !st.success() {
+                        done.push(format!("{key} exited with {st}"));
+                    }
+                    false
                 }
-                false
-            }
-            Err(e) => {
-                done.push(format!("{key}: cannot wait for the game: {e}"));
-                false
-            }
-        });
+                Err(e) => {
+                    done.push(format!("{key}: cannot wait for the game: {e}"));
+                    false
+                }
+            });
         if let Some(m) = done.pop() {
             self.message = m;
         }
@@ -168,7 +169,11 @@ impl App {
                     .set_title("Add a folder that holds Ren'Py games")
                     .pick_folder()
                 {
-                    self.message = match self.library.add_folders(&[dir]).and_then(|()| self.library.save(&self.data)) {
+                    self.message = match self
+                        .library
+                        .add_folders(&[dir])
+                        .and_then(|()| self.library.save(&self.data))
+                    {
                         Ok(()) => format!("{} games in the library", self.library.games.len()),
                         Err(e) => format!("{e:#}"),
                     };
@@ -230,70 +235,77 @@ impl App {
             ui.label("No games yet. Press \"Add folder...\" and choose a folder that holds Ren'Py games.");
         }
         let games = self.library.games.clone();
-        egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
-            for (i, g) in games.iter().enumerate() {
-                let (pre, mods) = self.status.get(&g.key).cloned().unwrap_or_default();
-                let running = self.running.iter().any(|(k, _)| *k == g.key);
-                let icon = self.icon(g);
-                ui.horizontal(|ui| {
-                    match &icon {
-                        Some(t) => {
-                            ui.add(egui::Image::new(t).fit_to_exact_size(egui::vec2(48.0, 48.0)));
-                        }
-                        None => {
-                            ui.allocate_space(egui::vec2(48.0, 48.0));
-                        }
-                    }
-                    ui.vertical(|ui| {
-                        ui.set_min_width(340.0);
-                        ui.label(RichText::new(&g.name).strong());
-                        ui.label(RichText::new(g.path.display().to_string()).small().weak());
-                        ui.horizontal_wrapped(|ui| {
-                            match &g.engine {
-                                Some(v) => ui.label(format!("Ren'Py {v}")),
-                                None => ui.label(RichText::new("Ren'Py version unknown").weak()),
-                            };
-                            if g.renpy7 {
-                                ui.label(
-                                    RichText::new(" Ren'Py 7: needs the compatibility module ")
-                                        .color(Color32::BLACK)
-                                        .background_color(Color32::from_rgb(255, 176, 32)),
+        egui::ScrollArea::vertical()
+            .auto_shrink(false)
+            .show(ui, |ui| {
+                for (i, g) in games.iter().enumerate() {
+                    let (pre, mods) = self.status.get(&g.key).cloned().unwrap_or_default();
+                    let running = self.running.iter().any(|(k, _)| *k == g.key);
+                    let icon = self.icon(g);
+                    ui.horizontal(|ui| {
+                        match &icon {
+                            Some(t) => {
+                                ui.add(
+                                    egui::Image::new(t).fit_to_exact_size(egui::vec2(48.0, 48.0)),
                                 );
                             }
-                            if mods.installed > 0 {
-                                ui.label(format!("Mods {}/{}", mods.enabled, mods.installed));
+                            None => {
+                                ui.allocate_space(egui::vec2(48.0, 48.0));
                             }
-                            match &pre {
-                                None => ui.label(RichText::new("Pre-flight: not run").weak()),
-                                Some(p) => {
-                                    let colour = match p.status.as_str() {
-                                        "ok" => Color32::LIGHT_GREEN,
-                                        "warning" => Color32::from_rgb(255, 176, 32),
-                                        _ => Color32::LIGHT_RED,
-                                    };
+                        }
+                        ui.vertical(|ui| {
+                            ui.set_min_width(340.0);
+                            ui.label(RichText::new(&g.name).strong());
+                            ui.label(RichText::new(g.path.display().to_string()).small().weak());
+                            ui.horizontal_wrapped(|ui| {
+                                match &g.engine {
+                                    Some(v) => ui.label(format!("Ren'Py {v}")),
+                                    None => {
+                                        ui.label(RichText::new("Ren'Py version unknown").weak())
+                                    }
+                                };
+                                if g.renpy7 {
                                     ui.label(
-                                        RichText::new(format!("Pre-flight: {}", p.status)).color(colour),
-                                    )
+                                        RichText::new(" Ren'Py 7: needs the compatibility module ")
+                                            .color(Color32::BLACK)
+                                            .background_color(Color32::from_rgb(255, 176, 32)),
+                                    );
                                 }
-                            };
+                                if mods.installed > 0 {
+                                    ui.label(format!("Mods {}/{}", mods.enabled, mods.installed));
+                                }
+                                match &pre {
+                                    None => ui.label(RichText::new("Pre-flight: not run").weak()),
+                                    Some(p) => {
+                                        let colour = match p.status.as_str() {
+                                            "ok" => Color32::LIGHT_GREEN,
+                                            "warning" => Color32::from_rgb(255, 176, 32),
+                                            _ => Color32::LIGHT_RED,
+                                        };
+                                        ui.label(
+                                            RichText::new(format!("Pre-flight: {}", p.status))
+                                                .color(colour),
+                                        )
+                                    }
+                                };
+                            });
+                        });
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if ui.button("Open folder").clicked() {
+                                actions.push(Action::OpenFolder(i));
+                            }
+                            if ui.button("Report").clicked() {
+                                actions.push(Action::Report(i));
+                            }
+                            let label = if running { "Running" } else { "Play" };
+                            if ui.add_enabled(!running, egui::Button::new(label)).clicked() {
+                                actions.push(Action::Play(i));
+                            }
                         });
                     });
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.button("Open folder").clicked() {
-                            actions.push(Action::OpenFolder(i));
-                        }
-                        if ui.button("Report").clicked() {
-                            actions.push(Action::Report(i));
-                        }
-                        let label = if running { "Running" } else { "Play" };
-                        if ui.add_enabled(!running, egui::Button::new(label)).clicked() {
-                            actions.push(Action::Play(i));
-                        }
-                    });
-                });
-                ui.separator();
-            }
-        });
+                    ui.separator();
+                }
+            });
         actions
     }
 
@@ -301,7 +313,10 @@ impl App {
         let attrs = Window::default_attributes()
             .with_title("Ren'Py Player Library")
             .with_inner_size(winit::dpi::LogicalSize::new(1000.0, 640.0));
-        let window = Arc::new(el.create_window(attrs).context("cannot create the window")?);
+        let window = Arc::new(
+            el.create_window(attrs)
+                .context("cannot create the window")?,
+        );
         let instance = Instance::new(InstanceDescriptor::new_without_display_handle());
         let surface = instance
             .create_surface(window.clone())
@@ -355,13 +370,23 @@ impl App {
             Some(device.limits().max_texture_dimension_2d as usize),
         );
         window.request_redraw();
-        self.gpu = Some(Gpu { window, surface, config, device, queue, renderer, state });
+        self.gpu = Some(Gpu {
+            window,
+            surface,
+            config,
+            device,
+            queue,
+            renderer,
+            state,
+        });
         Ok(())
     }
 
     fn redraw(&mut self) -> Result<()> {
         self.reap();
-        let Some(mut gpu) = self.gpu.take() else { return Ok(()) };
+        let Some(mut gpu) = self.gpu.take() else {
+            return Ok(());
+        };
         let result = self.redraw_with(&mut gpu);
         self.gpu = Some(gpu);
         result
@@ -379,14 +404,16 @@ impl App {
         for a in actions {
             self.perform(a);
         }
-        gpu.state.handle_platform_output(&gpu.window, out.platform_output);
+        gpu.state
+            .handle_platform_output(&gpu.window, out.platform_output);
         let ppp = out.pixels_per_point;
         let jobs = ctx.tessellate(out.shapes, ppp);
 
         // Upload textures even when no frame can be shown: egui sends each delta once.
         for (id, deltas) in &out.textures_delta.set {
             for delta in deltas {
-                gpu.renderer.update_texture(&gpu.device, &gpu.queue, *id, delta);
+                gpu.renderer
+                    .update_texture(&gpu.device, &gpu.queue, *id, delta);
             }
         }
 
@@ -406,7 +433,9 @@ impl App {
         };
         let mut enc = gpu
             .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("library") });
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("library"),
+            });
         let extra = gpu
             .renderer
             .update_buffers(&gpu.device, &gpu.queue, &mut enc, &jobs, &screen);
@@ -420,7 +449,12 @@ impl App {
                         depth_slice: None,
                         resolve_target: None,
                         ops: Operations {
-                            load: LoadOp::Clear(wgpu::Color { r: 0.1, g: 0.1, b: 0.11, a: 1.0 }),
+                            load: LoadOp::Clear(wgpu::Color {
+                                r: 0.1,
+                                g: 0.1,
+                                b: 0.11,
+                                a: 1.0,
+                            }),
                             store: StoreOp::Store,
                         },
                     })],
@@ -485,7 +519,9 @@ impl ApplicationHandler for App {
 
     fn about_to_wait(&mut self, el: &ActiveEventLoop) {
         // Wake twice a second to notice finished games and new pre-flight reports.
-        el.set_control_flow(ControlFlow::WaitUntil(Instant::now() + Duration::from_millis(500)));
+        el.set_control_flow(ControlFlow::WaitUntil(
+            Instant::now() + Duration::from_millis(500),
+        ));
     }
 
     fn new_events(&mut self, _el: &ActiveEventLoop, cause: StartCause) {
@@ -520,10 +556,18 @@ fn load_png(path: &Path) -> Option<egui::ColorImage> {
     let data = &buf[..info.buffer_size()];
     let rgba: Vec<u8> = match info.color_type {
         png::ColorType::Rgba => data.to_vec(),
-        png::ColorType::Rgb => data.chunks_exact(3).flat_map(|p| [p[0], p[1], p[2], 255]).collect(),
-        png::ColorType::GrayscaleAlpha => {
-            data.chunks_exact(2).flat_map(|p| [p[0], p[0], p[0], p[1]]).collect()
-        }
+        png::ColorType::Rgb => data
+            .as_chunks::<3>()
+            .0
+            .iter()
+            .flat_map(|p| [p[0], p[1], p[2], 255])
+            .collect(),
+        png::ColorType::GrayscaleAlpha => data
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .flat_map(|p| [p[0], p[0], p[0], p[1]])
+            .collect(),
         png::ColorType::Grayscale => data.iter().flat_map(|&g| [g, g, g, 255]).collect(),
         png::ColorType::Indexed => return None,
     };

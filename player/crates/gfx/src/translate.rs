@@ -308,27 +308,28 @@ fn split(toks: Vec<T>) -> Result<Split, String> {
             }
         }
         if depth == 0
-            && let Tok::Id(s) = &toks[i].t {
-                if matches!(
-                    s.as_str(),
-                    "uniform" | "attribute" | "varying" | "invariant"
-                ) {
-                    let mut j = i;
-                    while j < toks.len() && toks[j].t != Tok::Punct(";".into()) {
-                        j += 1;
-                    }
-                    decls.push(parse_decl(&toks[i..j])?);
-                    i = j + 1;
-                    continue;
+            && let Tok::Id(s) = &toks[i].t
+        {
+            if matches!(
+                s.as_str(),
+                "uniform" | "attribute" | "varying" | "invariant"
+            ) {
+                let mut j = i;
+                while j < toks.len() && toks[j].t != Tok::Punct(";".into()) {
+                    j += 1;
                 }
-                if s == "precision" {
-                    while i < toks.len() && toks[i].t != Tok::Punct(";".into()) {
-                        i += 1;
-                    }
-                    i += 1;
-                    continue;
-                }
+                decls.push(parse_decl(&toks[i..j])?);
+                i = j + 1;
+                continue;
             }
+            if s == "precision" {
+                while i < toks.len() && toks[i].t != Tok::Punct(";".into()) {
+                    i += 1;
+                }
+                i += 1;
+                continue;
+            }
+        }
         if toks[i].t == Tok::Punct("{".into()) {
             depth += 1;
         }
@@ -502,11 +503,14 @@ pub fn translate(vs: &str, fs: &str) -> Result<Program, String> {
             if is_p(&body[i], "}") {
                 depth -= 1;
             }
-            if depth == 0 && i >= 2 && is_p(&body[i], "(")
+            if depth == 0
+                && i >= 2
+                && is_p(&body[i], "(")
                 && let (Tok::Id(name), Tok::Id(_)) = (&body[i - 1].t, &body[i - 2].t)
-                    && name != "main" {
-                        user_fns.insert(name.clone());
-                    }
+                && name != "main"
+            {
+                user_fns.insert(name.clone());
+            }
         }
     }
 
@@ -697,77 +701,77 @@ fn specialize_samplers(body: &[T], samplers: &BTreeSet<String>) -> Result<Vec<T>
             if let Tok::Id(n) = &toks[i].t
                 && let (Some((ds, de, _, params)), true) =
                     (defs.get(n), i + 1 < toks.len() && is_p(&toks[i + 1], "("))
-                {
-                    let (args, close) = split_args(&toks, i + 1);
-                    let mut binding: BTreeMap<String, String> = BTreeMap::new();
-                    let mut keep = vec![];
-                    for (k, (a, b)) in args.iter().enumerate() {
-                        if !params[k].is_empty() {
-                            match &toks[*a].t {
-                                Tok::Id(s) if b - a == 1 && samplers.contains(s) => {
-                                    binding.insert(params[k].clone(), s.clone());
-                                }
-                                _ => {
-                                    return Err(format!(
-                                        "sampler2D argument to {n} must be a sampler uniform (line {})",
-                                        toks[*a].line
-                                    ));
-                                }
+            {
+                let (args, close) = split_args(&toks, i + 1);
+                let mut binding: BTreeMap<String, String> = BTreeMap::new();
+                let mut keep = vec![];
+                for (k, (a, b)) in args.iter().enumerate() {
+                    if !params[k].is_empty() {
+                        match &toks[*a].t {
+                            Tok::Id(s) if b - a == 1 && samplers.contains(s) => {
+                                binding.insert(params[k].clone(), s.clone());
                             }
-                        } else {
-                            keep.push((*a, *b));
-                        }
-                    }
-                    let key = format!(
-                        "{n}__{}",
-                        binding.values().cloned().collect::<Vec<_>>().join("_")
-                    );
-                    if !made.contains_key(&key) {
-                        // clone def tokens [ds..=de] with params removed
-                        let def = &toks[*ds..=*de];
-                        let open = def.iter().position(|t| is_p(t, "(")).unwrap();
-                        let (dargs, dclose) = split_args(def, open);
-                        let mut c: Vec<T> = def[..open - 1].to_vec();
-                        c.push(id(&key, def[open - 1].line));
-                        c.push(pu("(", def[open].line));
-                        let mut first = true;
-                        for (k, (a, b)) in dargs.iter().enumerate() {
-                            if params[k].is_empty() {
-                                if !first {
-                                    c.push(pu(",", def[*a].line));
-                                }
-                                first = false;
-                                c.extend_from_slice(&def[*a..*b]);
+                            _ => {
+                                return Err(format!(
+                                    "sampler2D argument to {n} must be a sampler uniform (line {})",
+                                    toks[*a].line
+                                ));
                             }
                         }
-                        c.push(pu(")", def[dclose].line));
-                        for t in &def[dclose + 1..] {
-                            match &t.t {
-                                Tok::Id(x)
-                                    if binding.contains_key(x)
-                                        && !(matches!(c.last(), Some(l) if is_p(l, "."))) =>
-                                {
-                                    c.push(id(&binding[x], t.line))
-                                }
-                                _ => c.push(t.clone()),
-                            }
-                        }
-                        clones.extend(c);
-                        made.insert(key.clone(), key.clone());
-                        let _ = de;
+                    } else {
+                        keep.push((*a, *b));
                     }
-                    out.push(id(&key, toks[i].line));
-                    out.push(pu("(", toks[i].line));
-                    for (j, (a, b)) in keep.iter().enumerate() {
-                        if j > 0 {
-                            out.push(pu(",", toks[*a].line));
-                        }
-                        out.extend_from_slice(&toks[*a..*b]);
-                    }
-                    out.push(pu(")", toks[close].line));
-                    i = close + 1;
-                    continue;
                 }
+                let key = format!(
+                    "{n}__{}",
+                    binding.values().cloned().collect::<Vec<_>>().join("_")
+                );
+                if !made.contains_key(&key) {
+                    // clone def tokens [ds..=de] with params removed
+                    let def = &toks[*ds..=*de];
+                    let open = def.iter().position(|t| is_p(t, "(")).unwrap();
+                    let (dargs, dclose) = split_args(def, open);
+                    let mut c: Vec<T> = def[..open - 1].to_vec();
+                    c.push(id(&key, def[open - 1].line));
+                    c.push(pu("(", def[open].line));
+                    let mut first = true;
+                    for (k, (a, b)) in dargs.iter().enumerate() {
+                        if params[k].is_empty() {
+                            if !first {
+                                c.push(pu(",", def[*a].line));
+                            }
+                            first = false;
+                            c.extend_from_slice(&def[*a..*b]);
+                        }
+                    }
+                    c.push(pu(")", def[dclose].line));
+                    for t in &def[dclose + 1..] {
+                        match &t.t {
+                            Tok::Id(x)
+                                if binding.contains_key(x)
+                                    && !(matches!(c.last(), Some(l) if is_p(l, "."))) =>
+                            {
+                                c.push(id(&binding[x], t.line))
+                            }
+                            _ => c.push(t.clone()),
+                        }
+                    }
+                    clones.extend(c);
+                    made.insert(key.clone(), key.clone());
+                    let _ = de;
+                }
+                out.push(id(&key, toks[i].line));
+                out.push(pu("(", toks[i].line));
+                for (j, (a, b)) in keep.iter().enumerate() {
+                    if j > 0 {
+                        out.push(pu(",", toks[*a].line));
+                    }
+                    out.extend_from_slice(&toks[*a..*b]);
+                }
+                out.push(pu(")", toks[close].line));
+                i = close + 1;
+                continue;
+            }
             out.push(toks[i].clone());
             i += 1;
         }

@@ -247,25 +247,25 @@ impl Rasterizer {
 
         let mut vert_advance = 0.0;
         let mut vert_bearing_y = 0.0f32;
-        if let Ok(vmtx) = read_fonts::TableProvider::vmtx(face.font()) {
-            if face.has_vertical {
-                let scale = self.scale();
-                let long = vmtx.v_metrics();
-                let (adv, tsb) = match long.get(gid as usize) {
-                    Some(m) => (m.advance.get() as f32, m.side_bearing.get() as f32),
-                    None => {
-                        let adv = long.last().map(|m| m.advance.get() as f32).unwrap_or(0.0);
-                        let tsb = vmtx
-                            .top_side_bearings()
-                            .get((gid as usize).saturating_sub(long.len()))
-                            .map(|v| v.get() as f32)
-                            .unwrap_or(0.0);
-                        (adv, tsb)
-                    }
-                };
-                vert_advance = round64(adv * scale);
-                vert_bearing_y = round64(tsb * scale);
-            }
+        if let Ok(vmtx) = read_fonts::TableProvider::vmtx(face.font())
+            && face.has_vertical
+        {
+            let scale = self.scale();
+            let long = vmtx.v_metrics();
+            let (adv, tsb) = match long.get(gid as usize) {
+                Some(m) => (m.advance.get() as f32, m.side_bearing.get() as f32),
+                None => {
+                    let adv = long.last().map(|m| m.advance.get() as f32).unwrap_or(0.0);
+                    let tsb = vmtx
+                        .top_side_bearings()
+                        .get((gid as usize).saturating_sub(long.len()))
+                        .map(|v| v.get() as f32)
+                        .unwrap_or(0.0);
+                    (adv, tsb)
+                }
+            };
+            vert_advance = round64(adv * scale);
+            vert_bearing_y = round64(tsb * scale);
         }
 
         if s.italic {
@@ -279,7 +279,10 @@ impl Rasterizer {
                 if s.rotation == Rotation::FtVertical || s.rotation == Rotation::FtSimulated {
                     let (dx, dy) = if s.rotation == Rotation::FtVertical {
                         let y_max = cbox(&cmds).map(|b| b.3).unwrap_or(0.0);
-                        (-((advance * 64.0) / 2.0).ceil() / 64.0, -vert_bearing_y - y_max)
+                        (
+                            -((advance * 64.0) / 2.0).ceil() / 64.0,
+                            -vert_bearing_y - y_max,
+                        )
                     } else {
                         // FreeType's face bbox is in font units, and the translation adds it as 26.6.
                         (
@@ -291,7 +294,9 @@ impl Rasterizer {
                 }
                 map_points(&mut cmds, |p| Point::new(-p.y, p.x));
                 if s.rotation != Rotation::Hb {
-                    let dy = ((face.bbox_y_max as i32 + face.bbox_y_min as i32).div_euclid(2)) as f32 / 64.0;
+                    let dy = ((face.bbox_y_max as i32 + face.bbox_y_min as i32).div_euclid(2))
+                        as f32
+                        / 64.0;
                     map_points(&mut cmds, |p| Point::new(p.x, p.y + dy));
                 }
             }

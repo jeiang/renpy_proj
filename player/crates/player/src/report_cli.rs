@@ -29,12 +29,20 @@ fn game_folder(path: &Path) -> Result<PathBuf> {
 fn find_report_dir(data: &Path, gamedir: &Path) -> Result<PathBuf> {
     let reports = data.join("reports");
     let rd = std::fs::read_dir(&reports).with_context(|| {
-        format!("no reports in {}: run the game once so that it writes a pre-flight report", reports.display())
+        format!(
+            "no reports in {}: run the game once so that it writes a pre-flight report",
+            reports.display()
+        )
     })?;
     for e in rd.flatten() {
-        let Ok(text) = std::fs::read_to_string(e.path().join("game.txt")) else { continue };
-        let Some(line) = text.lines().nth(1) else { continue };
-        if Path::new(line).canonicalize().is_ok_and(|p| p == gamedir) || Path::new(line) == gamedir {
+        let Ok(text) = std::fs::read_to_string(e.path().join("game.txt")) else {
+            continue;
+        };
+        let Some(line) = text.lines().nth(1) else {
+            continue;
+        };
+        if Path::new(line).canonicalize().is_ok_and(|p| p == gamedir) || Path::new(line) == gamedir
+        {
             return Ok(e.path());
         }
     }
@@ -63,8 +71,13 @@ pub fn run(args: &[String], data: &Path) -> Result<i32> {
     }
     let game = game.with_context(|| USAGE.to_string())?;
     let dir = find_report_dir(data, &game_folder(Path::new(game))?)?;
-    let file = dir.join(if json { "preflight.json" } else { "preflight.md" });
-    let text = std::fs::read_to_string(&file).with_context(|| format!("cannot read {}", file.display()))?;
+    let file = dir.join(if json {
+        "preflight.json"
+    } else {
+        "preflight.md"
+    });
+    let text = std::fs::read_to_string(&file)
+        .with_context(|| format!("cannot read {}", file.display()))?;
     print!("{text}");
     Ok(0)
 }
