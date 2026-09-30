@@ -1,0 +1,34 @@
+# Reason: register the wgpu draw backend as the only hardware renderer on every platform.
+
+diff --git a/renpy/display/core.py b/renpy/display/core.py
+index 89c74d1..203f68d 100644
+--- a/renpy/display/core.py
++++ b/renpy/display/core.py
+@@ -1102,14 +1102,8 @@ class Interface:
+ 
+         renpy.config.renderer = renderer
+ 
+-        if renpy.android or renpy.ios or renpy.emscripten:
+-            renderers = ["gles2"]
+-        elif renpy.windows:
+-            renderers = ["gl2", "angle2", "gles2"]
+-        elif renpy.linux and platform.machine() == "aarch64":
+-            renderers = ["gles2", "gl2"]
+-        else:
+-            renderers = ["gl2", "gles2"]
++        # The player's wgpu backend is the first renderer on every platform.
++        renderers = ["wgpu"]
+ 
+         # Prevent a performance warning if the renderer
+         # is taken from old persistent data.
+@@ -1148,9 +1142,7 @@ class Interface:
+ 
+                 return False
+ 
+-        make_draw("gl2", "renpy.gl2.gl2draw", "GL2Draw", "gl2")
+-        make_draw("angle2", "renpy.gl2.gl2draw", "GL2Draw", "angle2")
+-        make_draw("gles2", "renpy.gl2.gl2draw", "GL2Draw", "gles2")
++        make_draw("wgpu", "renpy.gl2.wgpudraw", "WgpuDraw")
+ 
+         make_draw("sw", "renpy.display.swdraw", "SWDraw")
+ 
