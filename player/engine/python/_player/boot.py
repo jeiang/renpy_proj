@@ -212,6 +212,12 @@ def path_to_common(renpy_base):
     renpy.vfs.register(commondir, settings["provider"])
     install_loader(settings["provider"], commondir)
 
+    # compat slice (begin): hooks for a Ren'Py 7 game; Ren'Py is imported and no script has loaded yet.
+    import _player.compat
+
+    _player.compat.install(settings)
+    # compat slice (end)
+
     if settings["harness"]:
         install_harness(settings["harness"], settings["harnessdir"])
 
@@ -239,6 +245,13 @@ def path_to_saves(gamedir, save_directory=None):
 
         _player.preflight.on_script_loaded(settings, rv)
     # saves slice (end)
+
+    # compat slice (begin): scan the game's Python, write the rewrite events.
+    if own_call:
+        import _player.compat
+
+        _player.compat.loaded(settings)
+    # compat slice (end)
 
     return rv
 
@@ -302,6 +315,12 @@ def main():
         settings["harnessdir"] = renpy_base + "/harness"
 
     os.makedirs(settings["cachedir"], exist_ok=True)
+
+    # compat slice (begin): Ren'Py 7 detection, from the game's own engine files, before any script loads.
+    import _player.compat
+
+    settings["compat"] = _player.compat.detect(basedir, gamedir)
+    # compat slice (end)
 
     if renderer:
         os.environ["RENPY_RENDERER"] = renderer

@@ -356,6 +356,14 @@ def build_report(settings, savedir, record, files, features, errors):
 
     engine, source, pymajor = detect_engine(settings["basedir"])
     renpy7 = None if engine is None else int(engine.split(".")[0]) < 8
+
+    # compat slice (begin): Ren'Py 7 status and engine version come from the one detection (_player.compat.detect).
+    import _player.compat
+
+    detection = settings.get("compat") or _player.compat.detect(settings["basedir"], settings["gamedir"])
+    engine = detection.engine_version
+    renpy7 = True if detection.renpy7 else (None if engine is None and "assuming Ren'Py 8" in detection.reason else False)
+    # compat slice (end)
     mods, patches = _mods_and_patches(settings["data"], settings["key"])
     summary = _summary(files)
 
@@ -383,9 +391,9 @@ def build_report(settings, savedir, record, files, features, errors):
     status = "blocked" if blocking else "warning" if warn else "ok"
 
     if renpy7 is None:
-        r7 = "unknown: the game has no readable renpy/ folder"
+        r7 = "unknown: " + detection.reason
     elif renpy7:
-        r7 = "Ren'Py 7 game (%s, Python %s); it runs on the embedded Ren'Py %s layer" % (engine, pymajor or "?", renpy.version_only)
+        r7 = "Ren'Py 7 game (%s, Python %s; %s); it runs on the embedded Ren'Py %s layer" % (engine or "version unknown", pymajor or "?", detection.reason, renpy.version_only)
     else:
         r7 = "not Ren'Py 7"
 

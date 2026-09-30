@@ -1,0 +1,222 @@
+"""Run-time error handler (prototype item 4): an error-driven fix for Python 2 mixed-type ordering.
+
+A `config.exception_handler` chained after the game's own. On a `TypeError` "not supported between instances" from game
+code it recompiles the enclosing `PyCode` with Python 2 ordering, swaps the code into the live functions, rolls the game
+back and lets it retry. A fixed error is written to runtime.jsonl as a `fix` event, its `traceback.txt` is moved out of
+the log folder, and the player sees one notice. Any other error goes to the game's own handler and then Ren'Py's
+(stock behavior: `traceback.txt`).
+"""
+
+import collections
+import gc
+import os
+import re
+import sys
+import time
+import types
+
+import renpy
+
+from _player.compat import hooks, notice, report
+from _player.compat.report import log
+
+_attempts = collections.Counter()
+_ORDERING_RE = re.compile(r"not supported between instances of|unorderable types")
+
+_PATTERNS = [
+    (re.compile(r"'(dict_keys|dict_values|dict_items|map|filter|zip)' object is not subscriptable|'(dict_keys|dict_values|dict_items|map|filter|zip)' object has no attribute"), "Python 2 list-returning call reached through a path the rewriter cannot see"),
+    (re.compile(r"a bytes-like object is required, not 'str'|must be str, not bytes|can't concat|cannot use a string pattern on a bytes-like|'str' object has no attribute 'decode'|'bytes' object has no attribute"), "str/bytes mixing (Python 2 str was bytes)"),
+    (re.compile(r"unhashable type"), "object with __eq__ but no __hash__, or a list used as a dict key"),
+    (re.compile(r"name '(\w+)' is not defined"), "a Python 2 builtin or name that no shim provides"),
+    (re.compile(r"module '(\w+)' has no attribute"), "a Python 2-only module attribute"),
+    (re.compile(r"'float' object cannot be interpreted as an integer"), "true division where the game expected integer division"),
+    (re.compile(r"unsupported operand type\(s\) for >>"), "print >>f, x statement"),
+    (re.compile(r"No module named"), "Python 2-only module"),
+]
+
+
+def classify(msg):
+    for rx, text in _PATTERNS:
+        if rx.search(msg):
+            return text
+
+    return "not a known Python 2 pattern"
+
+
+def _frames(exc):
+    tb = exc.__traceback__
+    out = []
+
+    while tb is not None:
+        out.append((tb.tb_frame.f_code, tb.tb_lineno))
+        tb = tb.tb_next
+
+    return out
+
+
+def _find_code_node(filename, lineno):
+    """The PyCode node whose source covers filename:lineno (init blocks, python blocks, $ lines)."""
+
+    best = None
+
+    for node in renpy.game.script.namemap.values():
+        code = getattr(node, "code", None)
+
+        if not isinstance(code, renpy.ast.PyCode) or code.mode not in ("exec", "hide"):
+            continue
+
+        if code.filename.replace("\\", "/") != filename.replace("\\", "/"):
+            continue
+
+        n = str(code.source).count("\n") + 1
+
+        if code.linenumber <= lineno < code.linenumber + n + 1:
+            if best is None or code.linenumber > best[1].linenumber:
+                best = (node, code)
+
+    return best
+
+
+def _nested_codes(co, out):
+    out[(co.co_name, co.co_firstlineno)] = co
+
+    for c in co.co_consts:
+        if isinstance(c, types.CodeType):
+            _nested_codes(c, out)
+
+    return out
+
+
+def fix_ordering(exc):
+    """Recompile the game code in the traceback with Python 2 ordering and patch it in place.
+    Returns a list of (file, line, name) fixed, or [] if nothing could be fixed."""
+
+    frames = _frames(exc)
+
+    if not frames or not hooks.is_game_file(frames[-1][0].co_filename):
+        return []
+
+    fixed = []
+
+    for co, lineno in reversed(frames):
+        if not hooks.is_game_file(co.co_filename):
+            break
+
+        key = (co.co_filename, co.co_firstlineno, co.co_name)
+        _attempts[key] += 1
+
+        if _attempts[key] > 1:
+            return []  # fixed once and it failed again: not an ordering problem we can fix
+
+        found = _find_code_node(co.co_filename, co.co_firstlineno if co.co_name != "<module>" else lineno)
+
+        if found is None:
+            continue
+
+        node, code = found
+        new_module = hooks.compile_variant(code, ordering=True)
+
+        if co.co_name == "<module>":
+            code.bytecode = new_module
+            fixed.append((co.co_filename, lineno, "<module>"))
+            continue
+
+        new_co = _nested_codes(new_module, {}).get((co.co_name, co.co_firstlineno))
+
+        if new_co is None:
+            continue
+
+        done = 0
+
+        for fn in gc.get_referrers(co):
+            if isinstance(fn, types.FunctionType) and fn.__code__ is co:
+                try:
+                    fn.__code__ = new_co
+                    done += 1
+                except ValueError:  # different free variables
+                    pass
+
+        if done:
+            fixed.append((co.co_filename, co.co_firstlineno, co.co_name))
+
+    return fixed
+
+
+def _retire_traceback(te):
+    """The error is fixed: its traceback.txt and trace save must not stay behind."""
+
+    try:
+        fn = getattr(te, "traceback_fn", None)
+
+        if fn and os.path.exists(fn):
+            dest = os.path.join(report.reports_dir(), "last-fixed-traceback.txt")
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            os.replace(fn, dest)
+    except Exception as e:
+        log("could not move traceback.txt: %r" % (e,))
+
+    try:
+        renpy.loadsave.unlink_save("_tracesave-1")
+    except Exception:
+        pass
+
+
+def make_handler(previous):
+    from renpy.rollback import RollbackException
+
+    def handler(te):
+        try:
+            exc = sys.exception()
+            msg = str(exc) if exc is not None else ""
+            ctx = renpy.game.context()
+            node = None
+
+            try:
+                node = renpy.game.script.lookup(ctx.current)
+            except Exception:
+                pass
+
+            loc = "%s:%s" % (getattr(node, "filename", "?"), getattr(node, "linenumber", "?"))
+
+            try:
+                last = te.stack[-1]
+                where = "%s:%s in %s" % (last.filename, last.lineno, last.name)
+            except Exception:
+                where = loc
+
+            if isinstance(exc, TypeError) and _ORDERING_RE.search(msg):
+                fixed = fix_ordering(exc)
+
+                if fixed:
+                    file, line, _name = fixed[0]
+                    names = ", ".join("%s:%d %s" % f for f in fixed)
+                    report.event("fix", file, line, "Python 2 ordering: %s; at %s; recompiled %s" % (msg, where, names))
+                    notice.notify("Ren'Py 7 compatibility: fixed a Python 2 comparison (%s) and retried." % where.split(" in ")[0])
+                    _retire_traceback(te)
+
+                    if renpy.exports.can_rollback() and not ctx.init_phase:
+                        renpy.exports.rollback(force=True)  # raises RollbackException: run_context re-enters
+
+                    ctx.next_node = node
+                    return True
+
+            log("unfixed error at %s: %s: %s (%s)" % (where, type(exc).__name__, msg, classify(msg)))
+        except renpy.game.CONTROL_EXCEPTIONS:
+            raise
+        except RollbackException:
+            raise
+        except BaseException as e:
+            log("handler failed: %r" % (e,))
+
+        if previous is not None:
+            return previous(te)
+
+        return False
+
+    return handler
+
+
+def install():
+    """`renpy.game.post_init`: the game's own `config.exception_handler` is set by now and stays in the chain."""
+
+    renpy.config.exception_handler = make_handler(renpy.config.exception_handler)
