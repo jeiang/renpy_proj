@@ -1,0 +1,32 @@
+adapter: Apple M3 Pro / Metal / IntegratedGpu
+limits: max_texture_2d=16384 max_bind_groups=8 max_uniform_buffer=4294967295 
+T1 pipeline(renpy.geometry+renpy.texture, naga IR): ok; uniform offsets [("renpy_flip_y", 80), ("renpy_target_size", 88), ("u_lod_bias", 0), ("u_transform", 16)] size 96
+T2 screen pass (screen_projection, flip_y=+1)          : 0 of 64 texels differ from source
+T3 RTT pass (texture_projection, translator flip_y=-1) : 0 of 64 texels differ from source
+T3b RTT pass without the flip epilogue (flip_y=+1)     : 0 of 64 texels differ from vertically mirrored source
+T4 mip chain 32x32 -> 6 levels by blit passes: 1.268042ms
+T4 blit-generated level 1 vs CPU 2x2 box average, max abs diff over 16x16x4: 1
+T5 draw at 1:1 with u_lod_bias=0: 0 of 1024 pixels differ from mip level 0
+T5 draw at 1:1 with u_lod_bias=1: 0 of 1024 pixels differ from mip level 1
+T5 draw at 1:1 with u_lod_bias=2: 0 of 1024 pixels differ from mip level 2
+T5 draw at 1:1 with u_lod_bias=3: 0 of 1024 pixels differ from mip level 3
+T6 sampler aniso16 + min/mag Linear + mipmap Nearest (Ren'Py LINEAR_MIPMAP_NEAREST + anisotropy): REJECTED: Validation Error
+T6 sampler aniso16 + min/mag/mipmap Linear: accepted
+T6 sampler lod_max_clamp = 0 (Ren'Py max_mipmap_level=0): accepted
+T7 blend GL_MIN (min, One, One): accepted
+T7 blend GL_MAX with non-One factors: REJECTED: Validation Error
+T7 blend multiply: (DST_COLOR, ONE_MINUS_SRC_ALPHA / ZERO, ONE): accepted
+T8 e01_mod_negative             naga-IR: ok       WGSL text: ok
+T8 e02_sampler_param            naga-IR: ok       WGSL text: ok
+T8 e03_nonuniform_sampling      naga-IR: ok       WGSL text: ok
+T8 e04_reserved_names           naga-IR: ok       WGSL text: ok
+T8 e05_uniform_types            naga-IR: ok       WGSL text: ok
+T8 e08_vertex_texture           naga-IR: ok       WGSL text: ok
+T8 e12_bias_uniform_branch      naga-IR: ok       WGSL text: ok
+T8 e14_int_loop_matrix          naga-IR: ok       WGSL text: ok
+T8 e15_array_sum                naga-IR: ok       WGSL text: ok
+T10 array types (size, IR stride bytes) in the fragment module: [("Constant(3)", 16), ("Constant(5)", 16)]
+T10 offsets [("u_colors", 0), ("u_flag", 48), ("u_m2", 64), ("u_transform", 80), ("u_weights", 144), ("renpy_flip_y", 224), ("renpy_target_size", 232)] size 240
+T10 rendered RGBA8 = [179, 191, 128, 255]  (expected r=0.7*255=178.5, g=0.75*255=191, b=0.5*255=127.5, a=255)
+T11 25 built-in combos, 0 pipeline failures; translate-only mean 0.04 ms; translate+naga+pipeline: min 0.4 / median 135.2 / max 185.9 ms
+T9 1080p clear+copy_texture_to_buffer+map, 120 frames: 0.52 ms/frame (1911 fps) sequential, no pipelining

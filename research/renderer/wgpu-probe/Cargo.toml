@@ -1,0 +1,9 @@
+[package]
+name = "wgpu-probe"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+wgpu = { version = "30", features = ["naga-ir", "glsl"] }
+naga = { version = "30", features = ["wgsl-in", "glsl-in", "wgsl-out", "msl-out", "spv-out"] }
+pollster = "0.4"

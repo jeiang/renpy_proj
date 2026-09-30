@@ -1,0 +1,18 @@
+e01_mod_negative                            [OK ] vs: wgsl 1316B msl 2304B | fs: wgsl 1619B msl 2803B
+e02_sampler_param                           [OK ] vs: wgsl 1398B msl 2269B | fs: wgsl 1923B msl 3475B
+e03_nonuniform_sampling                     [OK ] vs: wgsl 1302B msl 2269B | fs: wgsl 1584B msl 2661B
+e04_reserved_names                          [OK ] vs: wgsl 1302B msl 2269B | fs: wgsl 1959B msl 3079B
+e05_uniform_types                           [OK ] vs: wgsl 1502B msl 2580B | fs: wgsl 2938B msl 4680B
+e06_implicit_conversions                    [OK ] vs: wgsl 1302B msl 2269B | fs: wgsl 1723B msl 2838B
+e07_fragcoord_discard                       [OK ] vs: wgsl 1302B msl 2269B | fs: wgsl 1667B msl 2826B
+e08_vertex_texture                          [OK ] vs: wgsl 1461B msl 2919B | fs: wgsl 1447B msl 2242B
+e09_proj_lod                                [OK ] vs: wgsl 1302B msl 2269B | fs: wgsl 1576B msl 2676B
+e10_derivatives_es                          [OK ] vs: wgsl 1302B msl 2269B | fs: wgsl 1536B msl 2615B
+e11_struct_globals                          [OK ] vs: wgsl 1302B msl 2269B | fs: wgsl 1929B msl 3147B
+e12_bias_uniform_branch                     [OK ] vs: wgsl 1340B msl 2328B | fs: wgsl 1853B msl 3011B
+e13_fixed_function_builtin                  [ERR] vs: wgsl 1302B msl 2269B | fs: ERR Unknown variable: gl_Color
+e14_int_loop_matrix                         [OK ] vs: wgsl 1324B msl 2313B | fs: wgsl 2576B msl 4407B
+e15_array_sum                               [OK ] vs: wgsl 989B msl 1760B | fs: wgsl 2100B msl 3200B
+e19_red_plain                               [OK ] vs: wgsl 893B msl 1558B | fs: wgsl 1201B msl 1836B
+
+15 ok, 1 failed
