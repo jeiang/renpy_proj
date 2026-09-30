@@ -300,6 +300,13 @@ def main():
 
     sys.argv = ["renpy", basedir] + rest
 
+    # --- vfs: the game file view (overlay, mods, patch files). Installed before Ren'Py touches a file.
+    if not os.environ.get("RENPY_PLAYER_NO_VFS"):  # A/B switch for timing runs only.
+        import _player.vfs
+
+        _player.vfs.install(basedir, data, key, [os.path.relpath(os.path.join(gamedir, "cache"), basedir)])
+    # --- end vfs
+
     import renpy.bootstrap
 
     renpy.__main__ = sys.modules[__name__]
