@@ -1,0 +1,63 @@
+{
+ "A_World_Between_Us": {
+  "probe_labels": 11,
+  "probe_process_at_45s": "alive",
+  "probe_say_lines": 0
+ },
+ "AlexsVantasticAdventure": {
+  "probe_labels": 20,
+  "probe_process_at_45s": "alive",
+  "probe_say_lines": 47
+ },
+ "BlackRose": {
+  "probe_labels": 8,
+  "probe_process_at_45s": "exited rc=0",
+  "probe_say_lines": 3
+ },
+ "BloomWar": {
+  "probe_labels": 16,
+  "probe_process_at_45s": "alive",
+  "probe_say_lines": 39
+ },
+ "BraveheartAcademy": {
+  "probe_labels": 15,
+  "probe_process_at_45s": "alive",
+  "probe_say_lines": 3
+ },
+ "Bumpkin": {
+  "probe_labels": 3,
+  "probe_process_at_45s": "exited rc=1",
+  "probe_say_lines": 0,
+  "probe_traceback_context": "While running game code:",
+  "probe_traceback_first_exception": "ValueError: AST node line range (109, 1) is not valid",
+  "probe_traceback_location": "File \"game/game_system/inventory.rpy\", line 95, in prepare_screen"
+ },
+ "CabinByTheLake": {
+  "probe_labels": 12,
+  "probe_process_at_45s": "alive",
+  "probe_say_lines": 9
+ },
+ "DFraction": {
+  "probe_labels": 12,
+  "probe_process_at_45s": "alive",
+  "probe_say_lines": 51
+ },
+ "DTRemake": {
+  "probe_errors_txt_head": [
+   "\ufeffI'm sorry, but errors were detected in your script. Please correct the",
+   "errors listed below, and try again.",
+   "File \"game/ui.rpy\", line 80: the focus_mask keyword argument was not given a value.",
+   "    imagebutton auto \"images/minimaps/centericon_%s.png\" action Jump('center') xpos 400 ypos 0 focus_mask"
+  ],
+  "probe_process_at_45s": "alive"
+ },
+ "Dreamscape": {
+  "probe_errors_txt_head": [
+   "\ufeffI'm sorry, but errors were detected in your script. Please correct the",
+   "errors listed below, and try again.",
+   "File \"game/screens.rpy\", line 372: the auto keyword argument was not given a value.",
+   "    imagebutton auto:"
+  ],
+  "probe_process_at_45s": "alive"
+ }
+}
