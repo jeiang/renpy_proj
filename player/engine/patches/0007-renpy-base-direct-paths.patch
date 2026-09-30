@@ -1,0 +1,34 @@
+# Reason: renpy_base and commondir are virtual in the player (renpy/common is served from an embedded
+# zip). Direct file uses of those paths go through renpy.loader instead or are removed.
+
+diff --git a/renpy/audio/audio.py b/renpy/audio/audio.py
+index 1cda74b..532be94 100644
+--- a/renpy/audio/audio.py
++++ b/renpy/audio/audio.py
+@@ -85,7 +85,8 @@ def load(fn):
+             return "url:" + renpy.config.web_video_base + "/" + exception.relpath
+ 
+         # temporary 1s placeholder, will retry loading when looping:
+-        rv = open(os.path.join(renpy.config.commondir, "_dl_silence.ogg"), "rb")  # type: ignore
++        # Player patch: renpy/common is virtual, so read it through the loader.
++        rv = renpy.loader.load_core("_dl_silence.ogg")
+     return rv
+ 
+ 
+diff --git a/renpy/display/controller.py b/renpy/display/controller.py
+index e0a5719..87e82d6 100644
+--- a/renpy/display/controller.py
++++ b/renpy/display/controller.py
+@@ -48,12 +48,6 @@ def load_mappings():
+     except Exception:
+         pass
+ 
+-    try:
+-        with open(os.path.join(renpy.config.renpy_base, "gamecontrollerdb.txt"), "rb") as f:
+-            pygame.controller.add_mappings(f)
+-    except Exception:
+-        pass
+-
+ 
+ def init():
+     """

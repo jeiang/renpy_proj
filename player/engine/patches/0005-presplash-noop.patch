@@ -1,0 +1,16 @@
+# Reason: the player has one window, created by the draw backend. The presplash must not open another.
+
+diff --git a/renpy/display/presplash.py b/renpy/display/presplash.py
+index be35d80..56e3720 100644
+--- a/renpy/display/presplash.py
++++ b/renpy/display/presplash.py
+@@ -85,6 +85,9 @@ def start(basedir, gamedir):
+     Called to display the presplash when necessary.
+     """
+ 
++    # The player has one window, created by the draw backend; never open a second one here.
++    return
++
+     if "RENPY_LESS_UPDATES" in os.environ:
+         return
+ 

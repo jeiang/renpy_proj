@@ -1,0 +1,74 @@
+# Reason: renpysound.read_video returns a PyVideoFrame (YUV planes). The draw backend turns it into a
+# texture with load_video_frame, and the result follows the web branch (side mask, alpha mask).
+
+diff --git a/renpy/display/video.py b/renpy/display/video.py
+index d6301c0..b99e272 100644
+--- a/renpy/display/video.py
++++ b/renpy/display/video.py
+@@ -167,6 +167,12 @@ def get_movie_texture(channel, mask_channel=None, side_mask=False, mipmap=None):
+     c = renpy.audio.music.get_channel(channel)
+     surf = c.read_video()
+ 
++    if is_video_frame(surf):
++        # The player's media backend returned a decoded YUV frame. The draw backend uploads it and
++        # returns a texture, which follows the same path as the web branch.
++        tex = renpy.display.draw.load_video_frame(surf, mipmap)
++        return get_movie_texture_gpu(channel, tex, mask_channel, side_mask, mipmap)
++
+     if side_mask:
+         if surf is not None:
+             w, h = surf.get_size()
+@@ -203,6 +209,38 @@ def get_movie_texture(channel, mask_channel=None, side_mask=False, mipmap=None):
+     return tex, new
+ 
+ 
++def is_video_frame(obj):
++    """
++    True if `obj` is a decoded video frame from the player's media backend
++    (renpy.audio.renpysound.read_video returns a PyVideoFrame).
++    """
++
++    return type(obj).__name__ == "PyVideoFrame"
++
++
++def get_movie_texture_gpu(channel, tex, mask_channel, side_mask, mipmap):
++    """
++    Like get_movie_texture_web, for a texture made from a PyVideoFrame.
++    """
++
++    mask_tex = None
++
++    if side_mask:
++        w, h = tex.get_size()
++        w //= 2
++
++        mask_tex = tex.subsurface((w, 0, w, h))
++        tex = tex.subsurface((0, 0, w, h))
++
++    elif mask_channel:
++        mask_frame = renpy.audio.music.get_channel(mask_channel).read_video()
++
++        if is_video_frame(mask_frame):
++            mask_tex = renpy.display.draw.load_video_frame(mask_frame, mipmap)
++
++    return get_movie_texture_tail(channel, tex, mask_tex)
++
++
+ def get_movie_texture_web(channel, mask_channel, side_mask, mipmap):
+     """
+     This method returns either a GLTexture or a Render.
+@@ -228,6 +266,14 @@ def get_movie_texture_web(channel, mask_channel, side_mask, mipmap):
+     else:
+         mask_tex = None
+ 
++    return get_movie_texture_tail(channel, tex, mask_tex)
++
++
++def get_movie_texture_tail(channel, tex, mask_tex):
++    """
++    Applies the side mask or mask channel to `tex`, and remembers the result for `channel`.
++    """
++
+     if mask_tex is not None:
+         # Something went wrong with the mask video.
+         if tex:

@@ -1,0 +1,27 @@
+# Reason: gl2texture.GLTexture does not exist in the player. GL2Model.load() only preloaded GL
+# uniform textures; wgpu textures are ready when created.
+
+diff --git a/renpy/gl2/gl2model.pyx b/renpy/gl2/gl2model.pyx
+index 93032c6..6c05b57 100644
+--- a/renpy/gl2/gl2model.pyx
++++ b/renpy/gl2/gl2model.pyx
+@@ -22,7 +22,6 @@
+ from renpy.display.render import IDENTITY
+ from renpy.display.matrix import Matrix
+ from renpy.gl2.gl2polygon cimport Polygon
+-from renpy.gl2.gl2texture cimport GLTexture
+ 
+ from libc.math cimport ceil
+ 
+@@ -78,11 +77,6 @@ cdef class GL2Model:
+         if self.tex3 is not None:
+             self.tex3.load()
+ 
+-        if self.uniforms:
+-            for i in self.uniforms.values():
+-                if isinstance(i, GLTexture):
+-                    i.load()
+-
+     def get_size(self):
+         """
+         Returns the size of this GL2Model.

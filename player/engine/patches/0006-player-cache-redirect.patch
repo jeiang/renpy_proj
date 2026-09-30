@@ -1,0 +1,352 @@
+# Reason: never write into the game folder and never read game/cache. Compiled .rpyc, the bytecode
+# cache and all other cache/ files go to config.player_cache_dir. The player cache is read first, then
+# the game's own .rpyc (only when its source digest matches). renpy/common sources are read through
+# renpy.vfs (virtual renpy_base). Also drops renpy_base/lock.txt.
+
+diff --git a/renpy/config.py b/renpy/config.py
+index 3d8e544..3d4fab5 100644
+--- a/renpy/config.py
++++ b/renpy/config.py
+@@ -417,6 +417,10 @@ renpy_base = ""
+ commondir = None  # type: Optional[str]
+ logdir = None  # type: Optional[str] # Where log and error files go.
+ 
++# Player patch: the directory for compiled output (.rpyc files, bytecode and other cache/ files). When set,
++# nothing is written into the game directory and cache/ files of the game are never read.
++player_cache_dir = None  # type: Optional[str]
++
+ # Should we enable OpenGL mode?
+ gl_enable = True
+ 
+diff --git a/renpy/error.py b/renpy/error.py
+index 2ac3571..a0807bc 100644
+--- a/renpy/error.py
++++ b/renpy/error.py
+@@ -41,6 +41,7 @@ import contextlib
+ import collections.abc
+ 
+ import renpy
++import renpy.vfs  # Player patch: virtual renpy/common files.
+ 
+ 
+ class HasReportTraceback(Protocol):
+@@ -459,7 +460,7 @@ def normalize_renpy_line_offset(filename: str, linenumber: int, offset: int, lin
+         from renpy.lexer import ren_py_to_rpy_offsets, unelide_filename
+ 
+         try:
+-            with open(unelide_filename(filename), "r", encoding="utf-8") as f:
++            with renpy.vfs.open(unelide_filename(filename), "r", encoding="utf-8") as f:
+                 lines = f.readlines()  # TODO: optimize this block?
+         except Exception:
+             lines = []
+diff --git a/renpy/lexer.py b/renpy/lexer.py
+index 6bf6051..ac6ef3c 100644
+--- a/renpy/lexer.py
++++ b/renpy/lexer.py
+@@ -31,6 +31,7 @@ import functools
+ import linecache
+ 
+ import renpy
++import renpy.vfs  # Player patch: virtual renpy/common files.
+ 
+ 
+ def match_logical_word(s: str, pos: int) -> tuple[str, bool, int]: ...
+@@ -222,7 +223,7 @@ def unelide_filename(fn: str) -> str:
+         return fn1
+ 
+     fn2 = os.path.join(renpy.config.renpy_base, fn)
+-    if os.path.exists(fn2):
++    if renpy.vfs.exists(fn2):
+         return fn2
+ 
+     return fn
+@@ -343,7 +344,7 @@ def list_logical_lines(
+     if filedata is not None:
+         data_io = io.StringIO(filedata, None)
+     else:
+-        data_io = open(original_filename, "r", encoding="utf-8")
++        data_io = renpy.vfs.open(original_filename, "r", encoding="utf-8")
+ 
+     with data_io:
+         data = data_io.read()
+diff --git a/renpy/loader.py b/renpy/loader.py
+index 3bbdb7d..2650847 100644
+--- a/renpy/loader.py
++++ b/renpy/loader.py
+@@ -22,6 +22,7 @@
+ from typing import Iterable, Literal, NamedTuple
+ 
+ import renpy
++import renpy.vfs  # Player patch: virtual renpy/common files.
+ import os
+ import os.path
+ import sys
+@@ -53,7 +54,12 @@ def get_path(fn):
+     This always returns a path, but the path may or may not be writable.
+     """
+ 
+-    fn = os.path.join(renpy.config.gamedir, fn)
++    if renpy.config.player_cache_dir and fn.startswith("cache/"):
++        # Player patch: cache files live in the player's per-game cache, never in the game directory.
++        fn = os.path.join(renpy.config.player_cache_dir, fn[len("cache/"):])
++    else:
++        fn = os.path.join(renpy.config.gamedir, fn)
++
+     dn = os.path.dirname(fn)
+ 
+     try:
+@@ -770,6 +776,12 @@ def transpath(path: str) -> str|None:
+     """
+ 
+     path = path.lstrip("/")
++
++    if renpy.config.player_cache_dir and path.startswith("cache/"):
++        # Player patch: only the player's cache is read, never game/cache.
++        fn = os.path.join(renpy.config.player_cache_dir, path[len("cache/"):])
++        return fn if os.path.isfile(fn) else None
++
+     path = lower_map.get(unicodedata.normalize("NFC", path.lower()), path)
+ 
+     for d in renpy.config.searchpath:
+diff --git a/renpy/script.py b/renpy/script.py
+index 0133ccf..2b46fb2 100644
+--- a/renpy/script.py
++++ b/renpy/script.py
+@@ -36,6 +36,7 @@ import sys
+ import shutil
+ 
+ import renpy
++import renpy.vfs  # Player patch: virtual renpy/common files.
+ 
+ from renpy.compat.pickle import loads, dumps
+ 
+@@ -92,6 +93,46 @@ class LabelNotFound(ScriptError, LookupError):
+             return f" Did you mean: '{suggestion}'?"
+ 
+ 
++def player_rpyc_path(dir, name):
++    """
++    Player patch. Returns the path in the player's cache for the compiled file `name` of the source
++    directory `dir`, or None if no cache directory is configured.
++    """
++
++    cache = renpy.config.player_cache_dir
++
++    if not cache:
++        return None
++
++    if dir == renpy.config.commondir:
++        slot = "common"
++    elif dir == renpy.config.gamedir:
++        slot = "game"
++    else:
++        slot = hashlib.md5(dir.encode("utf-8")).hexdigest()[:8]
++
++    return os.path.join(cache, "rpyc", slot, name)
++
++
++def read_rpyc_digest(fn):
++    """
++    Player patch. Returns the md5 digest stored at the end of the compiled file `fn`, or None.
++    """
++
++    if fn is None:
++        return None
++
++    try:
++        if not os.path.exists(fn):
++            return None
++
++        with open(fn, "rb") as f:
++            f.seek(-hashlib.md5().digest_size, 2)
++            return f.read(hashlib.md5().digest_size)
++    except Exception:
++        return None
++
++
+ def collapse_stmts(stmts):
+     """
+     Returns a flat list containing every statement in the tree
+@@ -138,11 +179,8 @@ class Script(object):
+         # we're loading.
+         renpy.game.script = self
+ 
+-        if os.path.exists(renpy.config.renpy_base + "/lock.txt"):
+-            with open(renpy.config.renpy_base + "/lock.txt", "rb") as f:
+-                self.key = f.read()
+-        else:
+-            self.key = None
++        # Player patch: renpy_base is virtual, so there is no lock.txt.
++        self.key = None
+ 
+         self.namemap = {}
+         self.all_stmts = []
+@@ -829,7 +867,7 @@ class Script(object):
+         # Generate translate nodes.
+         renpy.translation.restructure(stmts)
+ 
+-    def load_file(self, dir, fn):
++    def load_file(self, dir, fn, rpyc_path=None):
+         # Used to only find the deferred parse errors from this file.
+         old_deferred_parse_errors = renpy.parser.deferred_parse_errors
+         renpy.parser.deferred_parse_errors = collections.defaultdict(list)
+@@ -844,12 +882,15 @@ class Script(object):
+ 
+                 fullfn = dir + "/" + fn
+ 
++                # Player patch: the game's own compiled file is only read; output goes to the player cache.
+                 if fn.endswith("_ren.py"):
+-                    rpycfn = fullfn[:-7] + ".rpyc"
++                    game_rpycfn = fullfn[:-7] + ".rpyc"
+                     oldrpycfn = olddir + "/" + fn[:-7] + ".rpyc"
++                    rpycfn = player_rpyc_path(dir, fn[:-7] + ".rpyc")
+                 else:
+-                    rpycfn = fullfn + "c"
++                    game_rpycfn = fullfn + "c"
+                     oldrpycfn = olddir + "/" + fn + "c"
++                    rpycfn = player_rpyc_path(dir, fn + "c")
+ 
+                 stmts = renpy.parser.parse(fullfn)
+ 
+@@ -863,7 +904,10 @@ class Script(object):
+ 
+                 used_names = set()
+ 
+-                for mergefn in [oldrpycfn, rpycfn]:
++                for mergefn in [oldrpycfn, game_rpycfn, rpycfn]:
++                    if mergefn is None:
++                        continue
++
+                     old_all_pyexpr = self.all_pyexpr
+                     self.record_pycode = False
+                     self.all_pyexpr = None
+@@ -900,14 +944,16 @@ class Script(object):
+                     bad_reduction_name=f"<{fn} transformed rpyc data>",
+                 )
+ 
+-                if not renpy.macapp:
++                if not renpy.macapp and rpycfn is not None:
+                     try:
++                        os.makedirs(os.path.dirname(rpycfn), exist_ok=True)
++
+                         with open(rpycfn, "wb") as f:
+                             self.write_rpyc_header(f)
+                             self.write_rpyc_data(f, 1, pickle_data_before_static_transforms)
+                             self.write_rpyc_data(f, 2, pickle_data_after_static_transforms)
+ 
+-                            with open(fullfn, "rb") as fullf:
++                            with renpy.vfs.open(fullfn, "rb") as fullf:
+                                 rpydigest = hashlib.md5(fullf.read() + RPYC_MAGIC).digest()
+ 
+                             self.write_rpyc_md5(f, rpydigest)
+@@ -922,7 +968,12 @@ class Script(object):
+                 data = None
+                 stmts = None
+ 
+-                with renpy.loader.load(fn, tl=False) as f:
++                if rpyc_path is not None:
++                    f = open(rpyc_path, "rb")
++                else:
++                    f = renpy.loader.load(fn, tl=False)
++
++                with f:
+                     for slot in [2, 1]:
+                         try:
+                             bindata = self.read_rpyc_data(f, slot)
+@@ -1011,7 +1062,7 @@ class Script(object):
+ 
+                 renpy.loader.add_auto(rpyfn)
+ 
+-                if os.path.exists(rpyfn):
++                if renpy.vfs.exists(rpyfn):
+                     rpyfns.append((source, rpyfn))
+ 
+             if len(rpyfns) > 1:
+@@ -1021,25 +1072,21 @@ class Script(object):
+             elif rpyfns:
+                 source, rpyfn = rpyfns[0]
+ 
+-                with open(rpyfn, "rb") as f:
++                with renpy.vfs.open(rpyfn, "rb") as f:
+                     rpydigest = hashlib.md5(f.read() + RPYC_MAGIC).digest()
+             else:
+                 source = source_extensions[-1]
+                 rpyfn = dir + "/" + fn + source_extensions[-1]
+ 
+-            try:
+-                if os.path.exists(rpycfn):
+-                    with open(rpycfn, "rb") as f:
+-                        f.seek(-hashlib.md5().digest_size, 2)
+-                        rpycdigest = f.read(hashlib.md5().digest_size)
+-                else:
+-                    rpycdigest = None
+-            except Exception:
+-                rpycdigest = None
++            # Player patch: read the player cache first, then the game's own .rpyc. Compiled output
++            # goes to the player cache (see load_file), never into the game directory.
++            cachefn = player_rpyc_path(dir, fn + compiled)
++            rpycdigest = read_rpyc_digest(rpycfn)
++            cachedigest = read_rpyc_digest(cachefn)
+ 
+             digest = None
+ 
+-            if os.path.exists(rpyfn) and os.path.exists(rpycfn):
++            if renpy.vfs.exists(rpyfn):
+                 # Are we forcing a compile?
+                 force_compile = renpy.game.args.compile  # type: ignore
+ 
+@@ -1048,20 +1095,30 @@ class Script(object):
+ 
+                 data, stmts = None, None
+ 
+-                try:
+-                    if rpydigest == rpycdigest and not force_compile:
+-                        data, stmts = self.load_file(dir, fn + compiled)
++                if not force_compile:
++                    for candidate, candidate_digest, candidate_path in (
++                        (cachefn, cachedigest, cachefn),
++                        (rpycfn, rpycdigest, None),
++                    ):
++                        if candidate_digest is None or candidate_digest != rpydigest:
++                            continue
+ 
+-                        if data is None:
+-                            print("Could not load " + rpycfn)
++                        try:
++                            data, stmts = self.load_file(dir, fn + compiled, candidate_path)
++
++                            if data is None:
++                                print("Could not load " + candidate)
++
++                        except Exception:
++                            renpy.display.log.write("While loading %r", candidate)
++                            renpy.display.log.exception()
+ 
+-                except Exception:
+-                    renpy.display.log.write("While loading %r", rpycfn)
+-                    renpy.display.log.exception()
++                            if "RENPY_RPYC_EXCEPTIONS" in os.environ:
++                                print("While loading", candidate)
++                                raise
+ 
+-                    if "RENPY_RPYC_EXCEPTIONS" in os.environ:
+-                        print("While loading", rpycfn)
+-                        raise
++                        if data is not None:
++                            break
+ 
+                 if data is None:
+                     data, stmts = self.load_file(dir, fn + source)
+@@ -1074,12 +1131,6 @@ class Script(object):
+ 
+                 digest = rpycdigest
+ 
+-            elif os.path.exists(rpyfn):
+-                lastfn = rpyfn
+-                data, stmts = self.load_file(dir, fn + source)
+-
+-                digest = rpydigest
+-
+             if digest is not None:
+                 self.backup_list.append((rpyfn, digest))
+ 
