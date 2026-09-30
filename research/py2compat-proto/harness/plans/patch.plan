@@ -1,0 +1,12 @@
+cmd auto on
+cmd clicky on
+wait menu True 180
+sleep 2
+cmd start
+sleep 2
+cmd auto on
+cmd clicky on
+wait patch node ran 150
+sleep 6
+shot 1-patched-name
+quit

@@ -1,0 +1,5 @@
+cmd auto on
+wait menu True 180
+sleep 3
+shot 1-menu
+quit

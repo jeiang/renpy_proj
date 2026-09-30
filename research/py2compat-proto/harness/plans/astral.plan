@@ -1,0 +1,27 @@
+cmd auto on
+cmd clicky on
+wait menu True 180
+sleep 3
+shot 1-menu
+cmd start
+sleep 2
+cmd auto on
+cmd clicky on
+sleep 30
+shot 2-prologue
+wait label room_hotel_player 420
+sleep 6
+shot 3-hub
+cmd auto off
+cmd clicky off
+sleep 1
+cmd jump room_hotel_lobby
+sleep 10
+shot 4-lobby
+cmd jump room_hotel_f2
+sleep 10
+shot 5-f2
+cmd jump room_hotel_bath
+sleep 10
+shot 6-bath
+quit

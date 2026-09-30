@@ -1,0 +1,26 @@
+cmd auto on
+cmd clicky on
+wait tags bg_idioma 120
+sleep 2
+shot 0-language
+wait menu True 60
+shot 1-menu
+cmd pick 1
+sleep 2
+cmd auto on
+cmd clicky on
+sleep 25
+shot 2-dialogue-a
+sleep 25
+shot 3-dialogue-b
+cmd exec config.developer = True; config.raise_image_exceptions = False
+sleep 1
+cmd warp christmas.rpy:3024
+sleep 8
+cmd auto on
+cmd clicky on
+sleep 12
+shot 4-video-a
+sleep 6
+shot 5-video-b
+quit

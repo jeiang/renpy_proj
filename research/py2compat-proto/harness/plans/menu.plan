@@ -1,0 +1,6 @@
+cmd auto on
+cmd clicky on
+wait menu True 120
+sleep 3
+shot 1-menu
+quit

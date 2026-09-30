@@ -1,0 +1,15 @@
+cmd auto on
+cmd clicky on
+wait menu True 120
+sleep 2
+cmd start
+sleep 3
+cmd auto on
+cmd clicky on
+sleep 20
+cmd auto off
+cmd clicky off
+cmd jump test_inv
+sleep 8
+shot 1-inventory
+quit
