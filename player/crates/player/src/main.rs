@@ -130,6 +130,7 @@ fn run_game(args: Vec<String>) -> Result<i32> {
     inittab.extend(gfx::inittab());
     inittab.extend(saves::inittab());
     inittab.extend(vfs::inittab());
+    inittab.extend(text::inittab());
 
     let cfg = pyhost::Config {
         inittab,

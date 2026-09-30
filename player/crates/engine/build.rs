@@ -1,5 +1,5 @@
 //! Builds the Ren'Py engine layer by running `player/engine/build.py` (needs the player dev shell:
-//! python3.12, cython, cc, ar, pkg-config with freetype2, harfbuzz and sdl2), then links the static
+//! python3.12, cython, cc, ar, pkg-config with sdl2), then links the static
 //! library and generates the Rust tables. See player/CONTRACTS.md, section `engine`.
 
 use std::env;
@@ -64,14 +64,7 @@ fn main() {
     .unwrap();
     fs::write(out_dir.join("engine_generated.rs"), code).unwrap();
 
-    // Link the archive and the native libraries it needs (freetype and harfbuzz for the text modules).
+    // Link the archive. The text modules are Rust (`text`), so no native library is needed.
     println!("cargo:rustc-link-search=native={}", built.display());
     println!("cargo:rustc-link-lib=static=engine_cy");
-    for line in fs::read_to_string(built.join("link.txt")).unwrap().lines() {
-        match line.split_once(' ') {
-            Some(("search", dir)) => println!("cargo:rustc-link-search=native={dir}"),
-            Some(("lib", name)) => println!("cargo:rustc-link-lib={name}"),
-            _ => {}
-        }
-    }
 }

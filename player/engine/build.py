@@ -5,7 +5,6 @@ Inputs : player/upstream/renpy-8.5.3 (engine/fetch.sh), engine/patches, engine/p
 Outputs: player/build-out/engine/
     libengine_cy.a   all Cython modules plus their C helpers (one static library)
     inittab.txt      "<dotted module> <PyInit symbol>" per line
-    link.txt         "search <dir>" / "lib <name>" lines for the native libraries the archive needs
     layer.zip        renpy/**/*.py (patched) + engine/python as unchecked-hash .pyc
     common.zip       renpy/common (sources and assets)
     fingerprint.txt  BUILD_FINGERPRINT
@@ -13,7 +12,7 @@ Outputs: player/build-out/engine/
 
 Usage: build.py [--py-include DIR]
 Needs on PATH: python3.12, cython (3.x), cc, ar, pkg-config, git, and the devshell pkg-config path
-(freetype2, harfbuzz, sdl2).
+(sdl2, for the pygame.locals constant probe).
 """
 
 import argparse
@@ -39,7 +38,7 @@ TAG = "8.5.3.26051504"
 VERSION_NAME = "We Can Go to the Moon"
 
 # Cython modules that stay (research/boundary section 2.1, with the accelerator and gl2model patches),
-# plus the bring-up text modules. Value: extra C sources compiled into the archive once.
+# Value: extra C sources compiled into the archive once.
 KEPT = {
     "renpy.astsupport": [],
     "renpy.cslots": [],
@@ -62,8 +61,6 @@ KEPT = {
     "renpy.gl2.gl2model": [],
     "renpy.text.textsupport": [],
     "renpy.text.texwrap": [],
-    "renpy.text.ftfont": ["src/ftsupport.c", "src/ttgsubtable.c"],
-    "renpy.text.hbfont": ["src/ftsupport.c", "src/ttgsubtable.c"],
 }
 
 # Python files that are data for the common zip, not importable layer modules.
@@ -269,7 +266,6 @@ def compile_all(tree: Path, cdir: Path, odir: Path, mods, py_include: str):
     cflags = [
         "-O2", "-DNDEBUG", "-std=gnu99", "-fno-strict-aliasing", "-w",
         "-I" + py_include, "-I" + str(tree / "src"), "-I" + str(tree / "tmp" / "gen3"),
-        *pkg_config("--cflags", "freetype2", "harfbuzz", "sdl2"),
     ]
     jobs = []  # (source, object, extra flags)
     helper_seen = set()
@@ -410,17 +406,6 @@ def build_common_zip(tree: Path, dest: Path, rpyc_dir: Path):
 # ----------------------------------------------------------------------------------------------
 
 
-def native_link_info():
-    """Native libraries the archive needs at final link time (ftfont and hbfont)."""
-    lines = []
-    for tok in pkg_config("--libs", "freetype2", "harfbuzz"):
-        if tok.startswith("-L"):
-            lines.append("search " + tok[2:])
-        elif tok.startswith("-l"):
-            lines.append("lib " + tok[2:])
-    return lines
-
-
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--py-include", help="Python 3.12 headers (default: pyhost's build, else this python)")
@@ -440,7 +425,7 @@ def main():
     fingerprint, stamp = digest_inputs(inputs)
     stamp += py_include
     stamp_file = OUT / "stamp.txt"
-    needed = ["libengine_cy.a", "layer.zip", "common.zip", "inittab.txt", "fingerprint.txt", "link.txt"]
+    needed = ["libengine_cy.a", "layer.zip", "common.zip", "inittab.txt", "fingerprint.txt"]
     if stamp_file.exists() and stamp_file.read_text() == stamp and all((OUT / n).exists() for n in needed):
         log("up to date, fingerprint", fingerprint)
         return
@@ -469,7 +454,6 @@ def main():
     build_common_zip(tree, OUT / "common.zip", compile_common(tree, cdir, mods))
 
     (OUT / "inittab.txt").write_text("".join(f"{n} {init_symbol(n)}\n" for n in sorted(mods)))
-    (OUT / "link.txt").write_text("\n".join(native_link_info()) + "\n")
     (OUT / "fingerprint.txt").write_text(fingerprint)
     stamp_file.write_text(stamp)
     log("done, fingerprint", fingerprint, f"{len(mods)} modules")

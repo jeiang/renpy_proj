@@ -16,3 +16,4 @@ anyhow = { workspace = true }
 library = { path = "../library" }
 saves = { path = "../saves" }
 vfs = { path = "../vfs" }
+text = { path = "../text" }

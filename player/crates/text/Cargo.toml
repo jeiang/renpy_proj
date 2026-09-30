@@ -1,0 +1,18 @@
+[package]
+name = "text"
+description = "renpy.text.ftfont, renpy.text.hbfont and renpy.text.bidi in Rust."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+pyo3 = { workspace = true }
+pyo3-ffi = { workspace = true }
+read-fonts = "0.44.0"
+rustybuzz = "0.20.1"
+skrifa = "0.47.0"
+surface = { workspace = true }
+unicode-bidi = "0.3.18"
+unicode-bidi-mirroring = "0.4.0"
+zeno = "0.3.3"
+parking_lot = "0.12"
