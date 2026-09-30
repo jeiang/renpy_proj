@@ -492,6 +492,8 @@ pub struct Renderer {
     depth: HashMap<(u32, u32), Texture>,
     bytes_this_frame: usize,
     pub yuv: Option<crate::yuv::Yuv>,
+    /// Frames drawn into the spare target because the window gave no texture (covered or minimized).
+    pub skipped_frames: u64,
 }
 
 fn pad4(v: &mut Vec<u8>) {
@@ -576,6 +578,30 @@ impl Renderer {
             depth: HashMap::new(),
             bytes_this_frame: 0,
             yuv: None,
+            skipped_frames: 0,
+        }
+    }
+
+    /// Selects the present mode. `sync` is Fifo (the display paces the frames); otherwise frames show at once.
+    pub fn set_vsync(&mut self, sync: bool) {
+        if let Screen::Window {
+            surface,
+            config,
+            frame,
+            ..
+        } = &mut self.screen
+        {
+            let mode = if sync {
+                PresentMode::Fifo
+            } else {
+                PresentMode::Immediate
+            };
+            if config.present_mode == mode {
+                return;
+            }
+            *frame = None;
+            config.present_mode = mode;
+            surface.configure(&self.sh.device, config);
         }
     }
 
@@ -773,6 +799,7 @@ impl Renderer {
                 if let Some(f) = frame.as_ref() {
                     return Ok(f.texture.create_view(&TextureViewDescriptor::default()));
                 }
+                self.skipped_frames += 1;
                 let (w, h, fmt) = (config.width, config.height, config.format);
                 if spare.as_ref().map(|t| (t.width(), t.height())) != Some((w, h)) {
                     *spare = Some(self.sh.device.create_texture(&TextureDescriptor {

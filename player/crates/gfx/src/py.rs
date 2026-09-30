@@ -185,6 +185,16 @@ impl Gpu {
         self.r.lock().resize(w, h);
     }
 
+    /// Fifo when `sync`, else Immediate.
+    fn set_vsync(&self, sync: bool) {
+        self.r.lock().set_vsync(sync);
+    }
+
+    /// Number of frames drawn without a window texture to show them in.
+    fn skipped_frames(&self) -> u64 {
+        self.r.lock().skipped_frames
+    }
+
     /// (bytes, count) of live textures.
     fn texture_size(&self) -> (usize, usize) {
         let r = self.r.lock();
