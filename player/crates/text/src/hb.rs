@@ -193,10 +193,10 @@ impl HBFont {
         face: Bound<'_, HBFace>,
         size: f32,
         bold: f32,
-        italic: bool,
+        italic: glue::Bint,
         outline: i32,
-        antialias: bool,
-        vertical: bool,
+        antialias: glue::Bint,
+        vertical: glue::Bint,
         hinting: &Bound<'_, PyAny>,
         instance: &Bound<'_, PyAny>,
         axis: &Bound<'_, PyAny>,
@@ -223,7 +223,7 @@ impl HBFont {
                 instance = Some("italic".into());
             }
         }
-        let antialias = antialias || bold != 0.0;
+        let (italic, antialias, vertical) = (italic.0, antialias.0 || bold != 0.0, vertical.0);
 
         let features = if features.is_truthy()? {
             Some(Features::get(py, features)?)
@@ -398,7 +398,7 @@ impl HBFont {
         color: &Bound<'_, PyAny>,
         glyphs: &Bound<'_, PyList>,
         underline: i32,
-        strikethrough: bool,
+        strikethrough: glue::Bint,
         black_color: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<()> {
         let _ = black_color;
@@ -436,7 +436,7 @@ impl HBFont {
                 let lh = self.underline_height * underline;
                 target.fill(underline_x, underline_end, ly, ly + lh, color);
             }
-            if strikethrough {
+            if strikethrough.0 {
                 let ly = y - self.ascent + self.height / 2;
                 let lh = (self.height / 10).max(1);
                 target.fill(underline_x, underline_end, ly, ly + lh, color);

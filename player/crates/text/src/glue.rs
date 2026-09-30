@@ -196,3 +196,15 @@ pub fn axis_pairs(axis: &Bound<'_, PyAny>) -> PyResult<Vec<(String, f32)>> {
         .map(|(k, v)| Ok((k.extract::<String>()?, v.extract::<f32>()?)))
         .collect()
 }
+
+/// A Cython `bint` argument: any Python object, by truth value.
+#[derive(Clone, Copy)]
+pub struct Bint(pub bool);
+
+impl<'a, 'py> FromPyObject<'a, 'py> for Bint {
+    type Error = PyErr;
+
+    fn extract(obj: pyo3::Borrowed<'a, 'py, PyAny>) -> Result<Self, Self::Error> {
+        Ok(Bint(obj.is_truthy()?))
+    }
+}

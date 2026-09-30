@@ -75,14 +75,14 @@ impl FTFont {
         face: Bound<'_, FTFace>,
         size: f32,
         bold: f32,
-        italic: bool,
+        italic: glue::Bint,
         outline: i32,
-        antialias: bool,
-        vertical: bool,
+        antialias: glue::Bint,
+        vertical: glue::Bint,
         hinting: &Bound<'_, PyAny>,
     ) -> PyResult<Self> {
         let mut size = size.max(1.0);
-        let antialias = antialias || bold != 0.0;
+        let (italic, antialias, vertical) = (italic.0, antialias.0 || bold != 0.0, vertical.0);
         let f = face.borrow();
         size = size * glue::config_scale(py, "ftfont_scale", f.r#fn.bind(py))? * glue::pref_font_size(py)?;
 
@@ -248,7 +248,7 @@ impl FTFont {
         color: &Bound<'_, PyAny>,
         glyphs: &Bound<'_, PyList>,
         underline: i32,
-        strikethrough: bool,
+        strikethrough: glue::Bint,
         black_color: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<()> {
         let _ = black_color;
@@ -287,7 +287,7 @@ impl FTFont {
                 let lh = self.underline_height * underline;
                 target.fill(underline_x, underline_end, ly, ly + lh, color);
             }
-            if strikethrough {
+            if strikethrough.0 {
                 let ly = y - self.ascent + self.height / 2;
                 let lh = (self.height / 10).max(1);
                 target.fill(underline_x, underline_end, ly, ly + lh, color);

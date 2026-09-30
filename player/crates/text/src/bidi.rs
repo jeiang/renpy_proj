@@ -69,7 +69,18 @@ pub fn chars_of(s: &Bound<'_, PyAny>) -> PyResult<Vec<char>> {
 fn resolve(chars: Vec<char>, direction: i32) -> Resolved {
     let classes: Vec<BidiClass> = chars.iter().map(|&c| bidi_class(c)).collect();
     let (base_level, direction) = resolve_direction(&classes, direction);
-    let text: String = chars.iter().collect();
+    // fribidi as Ren'Py ships it has no paired-bracket rule (N0). `unicode-bidi` applies it, so the
+    // brackets are swapped for a plain neutral of the same class while the levels are computed.
+    let text: String = chars
+        .iter()
+        .map(|&c| {
+            if bidi_class(c) == BidiClass::ON && unicode_bidi_mirroring::is_mirroring(c) {
+                '!'
+            } else {
+                c
+            }
+        })
+        .collect();
     let mut levels = Vec::with_capacity(chars.len());
     if !chars.is_empty() {
         let info = BidiInfo::new(&text, Level::new(base_level).ok());
