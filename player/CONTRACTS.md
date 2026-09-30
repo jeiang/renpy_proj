@@ -91,6 +91,9 @@ Each entry is a **dotted** module name (for example `c"renpy.pygame.surface"`) a
 - Shaders: the GLSL that `renpy.gl2.gl2shadercache` assembles is translated with the source rewriter from `research/renderer/translator-probe` and naga's GLSL front end. Uniform arrays are widened to vec4 (Metal otherwise drops draws), and pipelines are cached and precompiled at load.
 - Meshes: the additive `renpy/gl2/gl2meshbridge.pyx` (owned by `gfx`, in `player/engine/extra/`) exposes `Mesh` point, attribute and triangle buffers as memoryviews.
 - The stand-in `gl2draw` exports `GL2Draw` (its `init` returns `False`), `standard_uniforms` (the set from stock `gl2draw.pyx` L1820) and `default_position`.
+- The Rust module `renpy.gl2.wgpudraw` also exports `compile_program(name, vertex, fragment)` (translates GLSL and returns a program handle; `wgpudraw.warm_program(handle)` builds its common pipelines), `create(width, height, title, resizable)` and `create_headless(width, height)` (a device with no window, for tests and tools).
+- `WgpuDraw` uses the platform functions `get_window().get_window_flags/set_position/resize`, `get_drawable_size`, `get_display_bounds`, `get_info` and `display.destroy`.
+- `WgpuDraw.screenshot(None)` returns a transparent surface: there is no readable back buffer. M1 screenshot evidence is `screencapture -l <windowid>` of the player window.
 
 ## `player`
 
@@ -100,5 +103,5 @@ player <game-dir> [--data <dir>] [--logdir <dir>] [--harness-script <file>] [--r
 
 - `<game-dir>` is the project folder, its `game/` subfolder, or a `.app` bundle (the player uses `Contents/Resources/autorun/game`). Arguments the player does not know (for example `lint`) go to Ren'Py.
 - `--data` defaults to `~/Library/Application Support/renpy-player` on macOS. `--logdir` overrides `<data>/logs/<game key>`.
-- It collects the `inittab()` of `engine`, `surface`, `platform`, `media` (and `gfx` once it exports one), mounts `LAYER_ZIP`, `COMMON_ZIP` and `STDLIB_ZIP`, and runs `_player.boot.main`. The exit code is Python's.
-- `--harness-script <file>`: an `.rpy` or `.rpym` file that the test harness injects without writing into the game folder. The loader lists it as the game script `zzz_harness.rpy` (or `.rpym`) in a virtual directory (`<data>/renpy_base/harness`, served through `renpy.vfs` and the loader callbacks). The player compiles it into its cache, and it loads after the game's own scripts of the same directory order. The harness uses it for the probe, route replay and screenshots.
+- It collects the `inittab()` of `engine`, `surface`, `platform`, `media` and `gfx`, mounts `LAYER_ZIP`, `COMMON_ZIP` and `STDLIB_ZIP`, and runs `_player.boot.main`. The exit code is Python's.
+- `--harness-script <file>`: an `.rpy` or `.rpym` file that the test harness injects without writing into the game folder. The loader lists it as the game script `zzz_harness.rpy` (or `.rpym`) in a virtual directory (`<data>/renpy_base/harness`, served through `renpy.vfs` and the loader callbacks). The player compiles it into its cache. The harness uses it for the probe, route replay and screenshots.

@@ -67,6 +67,7 @@ fn main() -> Result<()> {
     inittab.extend(surface::inittab());
     inittab.extend(platform::inittab());
     inittab.extend(media::inittab());
+    inittab.extend(gfx::inittab());
 
     let cfg = pyhost::Config {
         inittab,
