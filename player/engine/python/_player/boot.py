@@ -215,6 +215,13 @@ def path_to_common(renpy_base):
     if settings["harness"]:
         install_harness(settings["harness"], settings["harnessdir"])
 
+    # py2fix slice (begin): the script-parser leniencies (engine patches 0750-0799) are on for a Ren'Py 7 game.
+    import _player.scriptmode
+
+    detection = settings.get("compat")
+    _player.scriptmode.renpy7 = bool(detection and detection.renpy7)
+    # py2fix slice (end)
+
     return commondir
 
 

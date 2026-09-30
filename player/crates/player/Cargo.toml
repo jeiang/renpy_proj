@@ -17,3 +17,4 @@ library = { path = "../library" }
 saves = { path = "../saves" }
 vfs = { path = "../vfs" }
 text = { path = "../text" }
+py2fix = { path = "../py2fix" }
