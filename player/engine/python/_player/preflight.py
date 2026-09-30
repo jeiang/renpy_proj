@@ -205,14 +205,49 @@ def _mods_and_patches(data, key):
 # ---------------------------------------------------------------- stock save import
 
 
-def _sync_verifying_keys(stock_root, token_dir):
-    """Copy the verifying keys of the stock save token, so that signed stock saves and `persistent` verify
-    without the "unknown token" prompt. Only public keys are copied; the stock file is read."""
+def _signature_keys(savedir, outcomes):
+    """Verifying keys named by the signatures of the files that were imported and kept loadable.
+
+    A save carries `signature <verifying key> <signature>` lines; `persistent` carries the same text after its
+    zlib stream. Trusting them is what answering "trust this token" does, for saves the user chose to import."""
+
+    import zipfile
+    import zlib
+    import renpy.savetoken as st
+
+    keys = []
+
+    def add(text):
+        for l in text.splitlines():
+            kind, key, _ = st.decode_line(l)
+            if kind == "signature" and key not in keys:
+                keys.append(key)
+
+    for o in outcomes:
+        if o["action"] != "copied":
+            continue
+
+        path = os.path.join(savedir, o["name"])
+
+        if o["name"] == "persistent":
+            with open(path, "rb") as f:
+                d = zlib.decompressobj()
+                d.decompress(f.read())
+                add(d.unused_data.decode("utf-8", "replace"))
+        else:
+            with zipfile.ZipFile(path) as z:
+                if "signatures" in z.namelist():
+                    add(z.read("signatures").decode("utf-8", "replace"))
+
+    return keys
+
+
+def _sync_verifying_keys(stock_root, token_dir, extra_keys):
+    """Add verifying keys to the player's save token file, so that signed stock saves and `persistent` verify
+    without the "unknown token" prompt: the public halves of the stock save token (read from the stock
+    folder, never written) and the keys that the imported files are signed with."""
 
     src = os.path.join(stock_root, "tokens", "security_keys.txt")
-
-    if not os.path.isfile(src):
-        return 0
 
     import renpy.savetoken as st
 
@@ -227,21 +262,23 @@ def _sync_verifying_keys(stock_root, token_dir):
                 if kind == "verifying-key":
                     have.add(key)
 
-    with open(src, "r") as f:
-        for l in f:
-            kind, a, b = st.decode_line(l)
+    candidates = list(extra_keys)
 
-            # "signing-key <der> <verifying der>": the second field is the public half.
-            if kind == "verifying-key":
-                vk = a
-            elif kind == "signing-key" and b:
-                vk = b
-            else:
-                continue
+    if os.path.isfile(src):
+        with open(src, "r") as f:
+            for l in f:
+                kind, a, b = st.decode_line(l)
 
-            if vk not in have:
-                have.add(vk)
-                lines.append(st.encode_line("verifying-key", vk))
+                # "signing-key <der> <verifying der>": the second field is the public half.
+                if kind == "verifying-key":
+                    candidates.append(a)
+                elif kind == "signing-key" and b:
+                    candidates.append(b)
+
+    for vk in candidates:
+        if vk not in have:
+            have.add(vk)
+            lines.append(st.encode_line("verifying-key", vk))
 
     if lines:
         os.makedirs(token_dir, exist_ok=True)
@@ -281,7 +318,7 @@ def _stock_import(settings, savedir, nodes, errors):
 
         root = os.environ.get("RENPY_PATH_TO_SAVES") or os.path.expanduser("~/Library/RenPy")
         try:
-            rec["verifying_keys_copied"] = _sync_verifying_keys(root, os.path.join(os.path.dirname(savedir), "tokens"))
+            rec["verifying_keys_copied"] = _sync_verifying_keys(root, os.path.join(os.path.dirname(savedir), "tokens"), _signature_keys(savedir, outcomes))
         except Exception:
             errors.append("verifying-key sync failed:\n" + traceback.format_exc())
 
