@@ -1,0 +1,5 @@
+{"label":"decode ","file":"alice10bit.webm","mode":"decode","fmt":"P010LE","dims":"3840x2160","hw":true,"nominal_fps":60.000,"wall_s":8.00,"fps":166.71,"cores":0.109,"load_before":2.69,"load_after":2.58}
+{"label":"decode ","file":"pc444.webm","mode":"decode","fmt":"YUV444P","dims":"3840x2160","hw":false,"nominal_fps":60.000,"wall_s":8.16,"fps":203.91,"cores":1.002,"load_before":2.41,"load_after":2.57}
+{"label":"decode ","file":"av1_4k60_10bit.mkv","mode":"decode","fmt":"YUV420P10LE","dims":"3840x2160","hw":false,"nominal_fps":60.000,"wall_s":8.00,"fps":228.45,"cores":3.495,"load_before":2.57,"load_after":2.87}
+{"label":"decode ","file":"wa_theora.ogv","mode":"decode","fmt":"YUV420P","dims":"2560x1440","hw":false,"nominal_fps":NaN,"wall_s":8.00,"fps":168.94,"cores":1.001,"load_before":2.87,"load_after":3.27}
+{"label":"decode --hw off","file":"alice10bit.webm","mode":"decode","fmt":"YUV420P10LE","dims":"3840x2160","hw":false,"nominal_fps":60.000,"wall_s":8.00,"fps":224.93,"cores":7.908,"load_before":3.14,"load_after":4.50}

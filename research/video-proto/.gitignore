@@ -1,0 +1,5 @@
+scratch/
+target/
+*.png
+*.log
+out/

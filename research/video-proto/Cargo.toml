@@ -1,0 +1,17 @@
+[package]
+name = "video-proto"
+version = "0.0.0"
+edition = "2021"
+# THROWAWAY prototype for ticket #23. LGPL FFmpeg 7.1 only (see flake.nix).
+
+[dependencies]
+ffmpeg-next = { version = "=7.1.0", default-features = false, features = ["codec", "format"] }
+ffmpeg-sys-next = { version = "=7.1.3", default-features = false }
+wgpu = "30"
+winit = "0.30"
+pollster = "0.4"
+bytemuck = "1"
+libc = "0.2"
+
+[profile.release]
+debug = 1
