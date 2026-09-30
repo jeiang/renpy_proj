@@ -8,6 +8,9 @@ publish.workspace = true
 
 [dependencies]
 pyo3 = { workspace = true }
+pyo3-ffi = { workspace = true }
 cpal = { workspace = true }
 ffmpeg-next = { workspace = true }
 ffmpeg-sys-next = { workspace = true }
+parking_lot = { workspace = true }
+log = { workspace = true }
