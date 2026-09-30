@@ -1,0 +1,44 @@
+py_initialize_ms=9.7
+bootstrap_importer_ms=10.4
+OPENSSL OpenSSL 3.6.4 25 Aug 2026
+sha256 2d711642b726b044 md5 impl _hashlib
+ctx 16 default_verify_paths None
+hashlib.new('sha512') 1f40fc92da241694 2d711642b726b044
+    VERSION.dll
+    WS2_32.dll
+    ole32.dll
+    OLEAUT32.dll
+    USER32.dll
+    api-ms-win-core-path-l1-1-0.dll
+    ADVAPI32.dll
+    SHELL32.dll
+    RPCRT4.dll
+    IPHLPAPI.DLL
+    bcrypt.dll
+    COMDLG32.dll
+    CRYPT32.dll
+    api-ms-win-core-synch-l1-2-0.dll
+    KERNEL32.dll
+    ntdll.dll
+    VCRUNTIME140.dll
+    api-ms-win-crt-string-l1-1-0.dll
+    api-ms-win-crt-stdio-l1-1-0.dll
+    api-ms-win-crt-runtime-l1-1-0.dll
+    api-ms-win-crt-convert-l1-1-0.dll
+    api-ms-win-crt-locale-l1-1-0.dll
+    api-ms-win-crt-math-l1-1-0.dll
+    api-ms-win-crt-time-l1-1-0.dll
+    api-ms-win-crt-heap-l1-1-0.dll
+    api-ms-win-crt-environment-l1-1-0.dll
+    api-ms-win-crt-process-l1-1-0.dll
+    api-ms-win-crt-conio-l1-1-0.dll
+    api-ms-win-crt-filesystem-l1-1-0.dll
+    api-ms-win-crt-utility-l1-1-0.dll
+ Volume in drive C has no label.
+ Volume Serial Number is 8CF0-D38E
+
+ Directory of C:\spike\target\c\release
+
+09/30/2026  02:42 AM        24,083,968 win-host.exe
+               1 File(s)     24,083,968 bytes
+               0 Dir(s)  44,279,246,848 bytes free

@@ -1,0 +1,37 @@
+py_initialize_ms=7.0
+bootstrap_importer_ms=6.4
+import renpy: ok 31 ms 8.5.3.26051504+unofficial
+Cannot pickle renpy.loader.RWopsIO = <class 'cy_probe.RWopsIO'>
+renpy.import_all(): FAIL TypeError object.__reduce_ex__() takes exactly one argument (0 given)
+renpy.astsupport                                     ok 0.0 ms
+renpy.audio.filter                                   ok 0.0 ms
+renpy.cslots                                         ok 0.0 ms
+renpy.display.accelerator                            ok 0.0 ms
+renpy.display.matrix                                 ok 0.0 ms
+renpy.display.quaternion                             ok 0.0 ms
+renpy.display.render                                 ok 0.0 ms
+renpy.encryption                                     ok 0.0 ms
+renpy.gl2.gl2mesh                                    ok 0.0 ms
+renpy.gl2.gl2mesh2                                   ok 0.2 ms
+renpy.gl2.gl2mesh3                                   ok 0.1 ms
+renpy.gl2.gl2model                                   ok 0.0 ms
+renpy.gl2.gl2polygon                                 ok 0.0 ms
+renpy.lexersupport                                   ok 0.0 ms
+renpy.pydict                                         ok 0.0 ms
+renpy.style                                          ok 0.0 ms
+renpy.styledata.styleclass                           ok 0.0 ms
+renpy.styledata.stylesets                            ok 0.0 ms
+renpy.styledata.style_activate_functions             ok 0.0 ms
+renpy.styledata.style_functions                      ok 0.0 ms
+renpy.styledata.style_hover_functions                ok 0.0 ms
+renpy.styledata.style_idle_functions                 ok 0.0 ms
+renpy.styledata.style_insensitive_functions          ok 0.0 ms
+renpy.styledata.style_selected_activate_functions    ok 0.0 ms
+renpy.styledata.style_selected_functions             ok 0.0 ms
+renpy.styledata.style_selected_hover_functions       ok 0.0 ms
+renpy.styledata.style_selected_idle_functions        ok 0.0 ms
+renpy.styledata.style_selected_insensitive_functions ok 0.0 ms
+renpy.text.textsupport                               ok 0.0 ms
+renpy.text.texwrap                                   ok 0.0 ms
+renpy.tfd                                            ok 0.0 ms
+builtin renpy modules: 31

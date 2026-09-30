@@ -1,0 +1,8 @@
+1. sign after link:        Valid
+   signed exe runs, exit=  0
+   size unsigned/signed:   18672128 / 18673544
+2. append after signing:   NotSigned
+3. append then sign:       Valid
+   append_before runs, exit= 0
+4. tampered byte inside .text after signing:
+   HashMismatch

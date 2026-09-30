@@ -1,0 +1,8 @@
+upstream/
+host/target/
+host/src/inittab_gen.rs
+out/
+*.exe
+*.obj
+*.lib
+*.zip

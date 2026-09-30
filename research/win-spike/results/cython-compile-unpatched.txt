@@ -1,0 +1,5 @@
+First compile of all 31 generated C files, stock 8.5.3.26051504 sources (vm/b1-compile.bat), MSVC 19.44, /MD /O2:
+29 OK, 2 FAIL:
+FAIL renpy.display.accelerator tmp/gen3-static\renpy.display.accelerator.c(1124): fatal error C1083: Cannot open include file: 'SDL2/SDL.h': No such file or directory
+FAIL renpy.gl2.gl2model src\renpygl.h(4): fatal error C1083: Cannot open include file: 'SDL2/SDL.h': No such file or directory
+Both compile after the two one-line patches from research/boundary section 8 (vm/b2_patch.py): results/cython-compile-patched.json.
