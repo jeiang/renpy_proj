@@ -8,8 +8,14 @@ publish.workspace = true
 
 [dependencies]
 pyo3 = { workspace = true }
-wgpu = { workspace = true }
+wgpu = { workspace = true, features = ["naga-ir"] }
 naga = { workspace = true }
+winit = { workspace = true }
+bytemuck = { workspace = true }
+pollster = { workspace = true }
+parking_lot = { workspace = true }
+log = { workspace = true }
+anyhow = { workspace = true }
 surface = { workspace = true }
 platform = { workspace = true }
 media = { workspace = true }
