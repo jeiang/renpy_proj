@@ -2,6 +2,8 @@
 //! library subcommands `scan`, `list`, `report`, `mods`, `serve`, and the library window (no arguments).
 //! Contract: player/CONTRACTS.md.
 
+mod report_cli;
+
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
@@ -108,15 +110,13 @@ fn cmd_list(args: Vec<String>) -> Result<i32> {
     Ok(0)
 }
 
-// The `mods` and `report` commands belong to the vfs and saves slices (`vfs_cli.rs`, `report_cli.rs`).
-// Their files are not on main yet, so these two functions fail with a clear error until the coordinator
-// replaces them by `mod vfs_cli; mod report_cli;` and calls `vfs_cli::run` / `report_cli::run`.
+// `mods` belongs to the vfs slice (`vfs_cli.rs`); it fails with a clear error until that slice merges.
 fn cmd_mods(_args: &[String], _data: &Path) -> Result<i32> {
     bail!("player mods is not available in this build: vfs_cli.rs (the vfs slice) is not merged yet")
 }
 
-fn cmd_report(_args: &[String], _data: &Path) -> Result<i32> {
-    bail!("player report is not available in this build: report_cli.rs (the saves slice) is not merged yet")
+fn cmd_report(args: &[String], data: &Path) -> Result<i32> {
+    report_cli::run(args, data)
 }
 
 fn run_game(args: Vec<String>) -> Result<i32> {
@@ -128,6 +128,7 @@ fn run_game(args: Vec<String>) -> Result<i32> {
     inittab.extend(platform::inittab());
     inittab.extend(media::inittab());
     inittab.extend(gfx::inittab());
+    inittab.extend(saves::inittab());
 
     let cfg = pyhost::Config {
         inittab,
