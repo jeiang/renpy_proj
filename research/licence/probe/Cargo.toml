@@ -1,0 +1,26 @@
+# Dependency-licence probe: never built, only resolved (cargo metadata) to list transitive licences.
+# Candidate set for the player: wgpu renderer, winit window/input, str0m WebRTC, text (cosmic-text + harfrust + swash),
+# image loading, audio (cpal + symphonia), embedded Python (pyo3), FFmpeg (ffmpeg-next) and dav1d bindings.
+[package]
+name = "licence-probe"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+wgpu = "30"
+naga = { version = "30", features = ["glsl-in", "wgsl-out", "spv-out", "msl-out", "hlsl-out", "wgsl-in"] }
+winit = "0.30"
+str0m = "0.24"
+cosmic-text = "0.19"
+harfrust = "0.13"
+swash = "0.2"
+unicode-bidi = "0.3"
+unicode-linebreak = "0.1"
+image = "0.25"
+symphonia = { version = "0.6", features = ["all"] }
+cpal = "0.18"
+pyo3 = { version = "0.29", features = ["auto-initialize"] }
+ffmpeg-next = "9"
+dav1d = "0.11"
+opus = "0.4"

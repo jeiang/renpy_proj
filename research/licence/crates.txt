@@ -1,0 +1,52 @@
+ab_glyph                   0.2.32         Apache-2.0                               2025-09-28  https://github.com/alexheretic/ab-glyph
+audiopus                   0.3.0-rc.0     ISC                                      2021-04-22  https://github.com/lakelezz/audiopus.git
+aws-lc-rs                  1.18.1         ISC AND (Apache-2.0 OR ISC)              2026-09-01  https://github.com/aws/aws-lc-rs
+cosmic-text                0.19.0         MIT OR Apache-2.0                        2026-04-22  https://github.com/pop-os/cosmic-text
+cpal                       0.18.2         Apache-2.0                               2026-08-16  https://github.com/RustAudio/cpal
+dav1d-sys                  0.8.3          MIT                                      2025-05-28  https://github.com/rust-av/dav1d-rs
+dav1d                      0.11.1         MIT                                      2025-11-25  https://github.com/rust-av/dav1d-rs
+dimpl                      0.7.4          MIT OR Apache-2.0                        2026-09-18  https://github.com/algesten/dimpl
+fdk-aac                    0.8.0          MIT                                      2025-09-25  https://github.com/haileys/fdk-aac-rs
+ffmpeg-next                9.0.0          WTFPL                                    2026-08-05  https://github.com/zmwangx/rust-ffmpeg
+ffmpeg-sys-next            9.0.0          WTFPL                                    2026-08-05  https://github.com/zmwangx/rust-ffmpeg-sys
+fontdb                     0.24.0         MIT                                      2026-07-29  https://github.com/RazrFalcon/fontdb
+fontdue                    0.9.4          MIT OR Apache-2.0 OR Zlib                2026-07-29  https://github.com/mooman219/fontdue
+glsl-lang                  0.8.1          BSD-3-Clause                             2025-09-15  https://github.com/alixinne/glsl-lang
+glslang                    0.8.1          MIT OR Apache-2.0                        2026-05-11  https://github.com/SnowflakePowered/glslang-rs
+gst-plugin-webrtc          0.15.4         MPL-2.0                                  2026-09-22  https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs
+gstreamer-webrtc           0.25.4         MIT OR Apache-2.0                        2026-09-21  https://gitlab.freedesktop.org/gstreamer/gstreamer-rs
+gstreamer                  0.25.4         MIT OR Apache-2.0                        2026-09-21  https://gitlab.freedesktop.org/gstreamer/gstreamer-rs
+harfrust                   0.13.3         MIT                                      2026-08-25  https://github.com/harfbuzz/harfrust
+image                      0.25.10        MIT OR Apache-2.0                        2026-03-10  https://github.com/image-rs/image
+kira                       0.12.5         MIT OR Apache-2.0                        2026-09-26  https://github.com/tesselode/kira
+libvpx-sys                 1.4.2          MPL-2.0                                  2017-11-30  https://github.com/DiamondLovesYou/rust-vpx
+magnetic                   2.5.2          MIT                                      2025-11-02  https://github.com/johnshaw/magnetic
+naga                       30.0.1         MIT OR Apache-2.0                        2026-08-22  https://github.com/gfx-rs/wgpu
+openssl                    0.10.81        Apache-2.0                               2026-06-12  https://github.com/rust-openssl/rust-openssl
+opus                       0.4.0          MIT/Apache-2.0                           2026-08-23  https://github.com/SpaceManiac/opus-rs
+pyo3                       0.29.2         MIT OR Apache-2.0                        2026-08-05  https://github.com/pyo3/pyo3
+rav1d                      1.1.0          BSD-2-Clause                             2025-05-07  https://github.com/memorysafety/rav1d
+rcgen                      0.14.10        MIT OR Apache-2.0                        2026-08-28  https://github.com/rustls/rcgen
+read-fonts                 0.44.0         MIT OR Apache-2.0                        2026-09-08  https://github.com/googlefonts/fontations
+ring                       0.17.14        Apache-2.0 AND ISC                       2025-03-11  https://github.com/briansmith/ring
+rodio                      0.22.2         MIT OR Apache-2.0                        2026-03-05  https://github.com/RustAudio/rodio
+rsmpeg                     0.18.0+ffmpeg.8.0 MIT                                      2025-08-24  https://github.com/larksuite/rsmpeg
+rtc                        0.21.0         MIT/Apache-2.0                           2026-09-19  https://github.com/webrtc-rs/rtc
+rustybuzz                  0.20.1         MIT                                      2024-11-12  https://github.com/harfbuzz/rustybuzz
+sdl2                       0.38.0         MIT                                      2025-07-12  https://github.com/Rust-SDL2/rust-sdl2
+sdl3                       0.20.0         MIT                                      2026-09-07  https://github.com/vhspace/sdl3-rs
+shiguredo_webrtc           0.154.1-canary.2 Apache-2.0                               2026-09-28  https://github.com/shiguredo/webrtc-rs
+skrifa                     0.47.0         MIT OR Apache-2.0                        2026-09-08  https://github.com/googlefonts/fontations
+str0m                      0.24.0         MIT OR Apache-2.0                        2026-09-25  https://github.com/algesten/str0m
+swash                      0.2.10         Apache-2.0 OR MIT                        2026-07-17  https://github.com/dfrg/swash
+symphonia                  0.6.1          MPL-2.0                                  2026-08-13  https://github.com/pdeljanov/Symphonia
+ttf-parser                 0.25.1         MIT OR Apache-2.0                        2024-11-29  https://github.com/harfbuzz/ttf-parser
+unicode-bidi               0.3.18         MIT OR Apache-2.0                        2024-12-16  https://github.com/servo/unicode-bidi
+unicode-linebreak          0.1.5          Apache-2.0                               2023-07-25  https://github.com/axelf4/unicode-linebreak
+unicode-segmentation       1.13.3         MIT OR Apache-2.0                        2026-06-01  https://github.com/unicode-rs/unicode-segmentation
+vk-video                   0.3.1          MIT                                      2026-04-27  https://github.com/software-mansion/smelter
+webrtc-audio-processing    2.1.0          non-standard                             2026-05-13  https://github.com/tonarino/webrtc-audio-processing
+webrtc-rs                  0.0.1          MIT                                      2021-06-01  https://github.com/webrtc-rs/webrtc
+webrtc                     0.21.0         MIT/Apache-2.0                           2026-09-19  https://github.com/webrtc-rs/webrtc
+wgpu                       30.0.1         MIT OR Apache-2.0                        2026-08-22  https://github.com/gfx-rs/wgpu
+winit                      0.31.0-beta.3  Apache-2.0                               2026-09-04  https://github.com/rust-windowing/winit
