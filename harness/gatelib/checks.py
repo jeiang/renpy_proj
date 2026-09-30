@@ -305,7 +305,11 @@ def check_video(ctx):
     if not v:
         return {"check": "video", "status": "fail", "problems": problems + ["no video result written: %s" % r["aborted"]], "launch": _launch_summary(r)}
     # Gate on frames Ren'Py presented in the window (engine_frames). Decoded frames (frames) are the secondary field.
-    ratio = v["engine_frames"] / v["expected_frames"] if v["expected_frames"] else 0
+    # The window redraws at the display rate (60 Hz) whatever the movie rate (30 fps here), so presented/expected can
+    # exceed 1. The gate asks "did the window draw at least once per movie frame interval": cap the ratio at 1 and keep
+    # the raw value. Decoded frames are counted at the movie's own rate, so that ratio compares like with like.
+    raw_ratio = v["engine_frames"] / v["expected_frames"] if v["expected_frames"] else 0
+    ratio = min(1.0, raw_ratio)
     dec_ratio = v["decoded_frames"] / v["expected_frames"] if v["expected_frames"] else 0
     warnings = []
     if ratio < o["video_min_ratio"]:
@@ -314,7 +318,7 @@ def check_video(ctx):
     if dec_ratio < o["video_min_ratio"]:   # the window can redraw while no movie plays: the decoded count proves the movie runs
         problems.append("decoded %d of %.0f expected frames (%.0f%%, min %.0f%%): the movie did not play (channel %s)"
                         % (v["decoded_frames"], v["expected_frames"], 100 * dec_ratio, 100 * o["video_min_ratio"], v.get("channel_playing")))
-    if v["presented_fps"] > 2 * v["fps_nominal"]:
+    if v["presented_fps"] > 2.5 * max(v["fps_nominal"], 60.0):
         warnings.append("presented %.0f fps for a %.0f fps movie: the draw loop is not paced" % (v["presented_fps"], v["fps_nominal"]))
     if o.get("video_zero_drop") and (v["presented_late"] or v["late"]):
         problems.append("zero-drop: %d presented and %d decoded frame intervals beyond 1.5x (presented max %.1f ms, decoded max %.1f ms)"
@@ -322,7 +326,7 @@ def check_video(ctx):
     if r["forced_kill"] and not r["aborted"]:
         problems.append("game did not exit on the quit command")
     launches = [_launch_summary(r)]
-    out = {"check": "video", "presented_fps": v["presented_fps"], "frames_ratio": ratio, "decoded_fps": v["fps"],
+    out = {"check": "video", "presented_fps": v["presented_fps"], "frames_ratio": ratio, "presented_ratio_raw": raw_ratio, "decoded_fps": v["fps"],
            "decoded_ratio": dec_ratio, "shot": next((x["file"] for x in r["shots"] if x["file"]), None), "metrics": v}
     # A/V sync is measured on the synthetic clip (VP9 + Opus, known frame rate, no loop wrap). The corpus movies carry
     # no audio track: their position is the video's own clock, so it cannot show a sync error.
