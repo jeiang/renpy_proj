@@ -13,3 +13,4 @@ platform = { workspace = true }
 gfx = { workspace = true }
 media = { workspace = true }
 anyhow = { workspace = true }
+library = { path = "../library" }
