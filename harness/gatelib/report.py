@@ -56,7 +56,8 @@ def _evidence(n, r):
     if n == "video":
         m = r.get("metrics") or {}
         sm = r.get("sync_metrics") or m
-        return "%s fps (nominal %s), %.0f%% of frames, late %s, A/V offset max %s ms, drift %s ms (%s)" % (
-            _fmt(m.get("fps", 0), 1), m.get("fps_nominal"), 100 * r.get("frames_ratio", 0), m.get("late"),
+        return "presented %s fps (%.0f%% of nominal %s, capped at 100), decoded %s fps (%.0f%%), late %s, A/V offset max %s ms, drift %s ms (%s)" % (
+            _fmt(r.get("presented_fps", 0), 1), 100 * r.get("frames_ratio", 0), m.get("fps_nominal"),
+            _fmt(r.get("decoded_fps", m.get("fps", 0)), 1), 100 * r.get("decoded_ratio", 0), m.get("late"),
             _fmt(sm.get("av_offset_ms_max", "-"), 0), _fmt(sm.get("audio_wall_drift_ms", "-"), 0), r.get("sync_source", "not measured"))
     return ""
