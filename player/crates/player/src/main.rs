@@ -1,6 +1,8 @@
 //! `player <game-dir> [--data <dir>] [--logdir <dir>] [--harness-script <file>] [ren'py args]`.
 //! Contract: player/CONTRACTS.md.
 
+mod vfs_cli;
+
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
@@ -66,6 +68,22 @@ fn build_argv(args: Vec<String>) -> Result<Vec<String>> {
 }
 
 fn main() -> Result<()> {
+    // Temporary dispatch for `player mods` (the Library slice replaces it with its own).
+    let all: Vec<String> = std::env::args().skip(1).collect();
+    if all.first().is_some_and(|a| a == "mods") {
+        let mut rest = Vec::new();
+        let mut data = None;
+        let mut it = all[1..].iter();
+        while let Some(a) = it.next() {
+            if a == "--data" {
+                data = Some(PathBuf::from(absolute(it.next().context("--data needs a value")?)?));
+            } else {
+                rest.push(a.clone());
+            }
+        }
+        let data = data.context("--data is required")?;
+        std::process::exit(vfs_cli::run(&rest, &data)?);
+    }
     let argv = build_argv(std::env::args().skip(1).collect())?;
 
     let mut inittab = Vec::new();
@@ -74,6 +92,7 @@ fn main() -> Result<()> {
     inittab.extend(platform::inittab());
     inittab.extend(media::inittab());
     inittab.extend(gfx::inittab());
+    inittab.extend(vfs::inittab());
 
     let cfg = pyhost::Config {
         inittab,
