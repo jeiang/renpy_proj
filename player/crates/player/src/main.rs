@@ -141,6 +141,7 @@ fn run_game(args: Vec<String>) -> Result<i32> {
     inittab.extend(vfs::inittab());
     inittab.extend(text::inittab());
     inittab.extend(patches::inittab());
+    inittab.extend(py2fix::inittab());
 
     let cfg = pyhost::Config {
         inittab,

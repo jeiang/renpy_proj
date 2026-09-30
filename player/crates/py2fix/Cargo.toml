@@ -1,0 +1,23 @@
+[package]
+name = "py2fix"
+description = "Token-level rewriter of Python 2-only syntax into Python 3, for Ren'Py 7 game code."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[features]
+default = ["python"]
+# The Python builtin `_player_py2fix`.
+python = ["dep:pyo3", "dep:pyo3-ffi"]
+# The `py2fix` command line tool used by tools/census.py (JSON lines on stdin and stdout).
+cli = ["dep:serde_json"]
+
+[dependencies]
+pyo3 = { workspace = true, optional = true }
+pyo3-ffi = { workspace = true, optional = true }
+serde_json = { version = "1", optional = true }
+
+[[bin]]
+name = "py2fix"
+path = "src/bin/py2fix.rs"
+required-features = ["cli"]
