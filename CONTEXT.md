@@ -48,3 +48,7 @@ _Avoid_: patch folder, mods
 **Build fingerprint**:
 A hash of a game's script set that identifies one build of a game, so port patches apply only to the build they were written for.
 _Avoid_: game id, version
+
+**Pre-flight report**:
+The scan the player runs after a game's scripts load and before init runs. It lists the Python 2 constructs handled, the patches applied, and the constructs not handled, and supplies the Ren'Py 7 warning text.
+_Avoid_: lint report, compat report
