@@ -1,0 +1,6 @@
+static   h264_videotoolbox      1.97 s wall     399825 bytes
+mixed    h264_videotoolbox      1.99 s wall    2287179 bytes
+motion   h264_videotoolbox      2.06 s wall    9991396 bytes
+static   hevc_videotoolbox      1.29 s wall     749171 bytes
+mixed    hevc_videotoolbox      1.28 s wall    3066411 bytes
+motion   hevc_videotoolbox      1.28 s wall   10036895 bytes
