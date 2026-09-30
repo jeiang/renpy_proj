@@ -221,12 +221,25 @@ def path_to_common(renpy_base):
 def path_to_saves(gamedir, save_directory=None):
     import renpy
 
+    # saves slice (begin): only the engine's own call, not the token folder lookup, runs the import.
+    own_call = save_directory is None
+    # saves slice (end)
+
     if save_directory is None:
         save_directory = renpy.config.save_directory
 
     key = re.sub(r"[^A-Za-z0-9._ -]+", "_", save_directory) if save_directory else settings["key"]
     rv = os.path.join(settings["data"], "saves", key)
     os.makedirs(rv, exist_ok=True)
+
+    # saves slice (begin): the script is loaded and init has not run. Import stock saves on the first
+    # open, then write the pre-flight report (_player/preflight.py).
+    if own_call:
+        import _player.preflight
+
+        _player.preflight.on_script_loaded(settings, rv)
+    # saves slice (end)
+
     return rv
 
 
