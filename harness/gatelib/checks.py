@@ -202,13 +202,17 @@ def check_route(ctx):
     steps = L.parse_plan(pf.read_text())
     runs = []
     problems = []
+    shot_errors = []
     for i in range(ctx.opts["route_runs"]):
         r = L.launch(ctx, "route-%d" % (i + 1), plan=steps, timeout=ctx.opts["route_timeout"])
         runs.append(r)
         problems += ["run %d: %s" % (i + 1, p) for p in _hygiene(r)]
         if r["aborted"]:
             problems.append("run %d aborted: %s" % (i + 1, r["aborted"]))
-        missing = [s["name"] for s in r["shots"] if not s["file"]]
+        covered = [s for s in r["shots"] if s.get("error")]
+        for s in covered:   # an error of the machine, not a diff
+            shot_errors.append("run %d, shot %s: %s" % (i + 1, s["name"], s["error"]))
+        missing = [s["name"] for s in r["shots"] if not s["file"] and not s.get("error")]
         if missing:
             problems.append("run %d: no screenshot for %s" % (i + 1, ", ".join(missing)))
         if r["forced_kill"]:
@@ -245,6 +249,12 @@ def check_route(ctx):
                 out["baseline_dialogue_equal"] = bs[:k] == seqs[0][:k]
                 if not out["baseline_dialogue_equal"]:
                     problems.append("executed dialogue differs from baseline")
+    if shot_errors:   # no diff is judged for a shot the gate could not take
+        out["status"] = "error"
+        out["error"] = "; ".join(shot_errors)
+        out["problems"] = problems + shot_errors
+        out["shot_errors"] = shot_errors
+        return out
     out["problems"] = problems
     out["status"] = "fail" if problems else "pass"
     return out
@@ -289,7 +299,7 @@ def _video_run(ctx, name, path, fps, extra=None):
                         "wait video-result %d\nshot video volatile\nquit\n" % (fps, o["video_secs"], o["video_warm"], VIDEO_HOLD, path,
                                                                                  o["video_secs"] + o["video_warm"] + 120))
     r = L.launch(ctx, name, plan=plan, timeout=o["video_secs"] + o["video_warm"] + 400, extra_files=extra)
-    if not any(x["file"] for x in r["shots"]) and not r["aborted"]:
+    if not any(x["file"] or x.get("error") for x in r["shots"]) and not r["aborted"]:
         r["aborted"] = "no screenshot of the video window"
     vj = ctx.out / name / "video.json"
     return r, (json.loads(vj.read_text()) if vj.exists() else None)
@@ -356,6 +366,9 @@ def check_video(ctx):
     elif sync:
         warnings.append(sync.get("av_sync", "A/V sync not measured"))
     out.update(status="fail" if problems else "pass", problems=problems, warnings=warnings, launches=launches)
+    shot_err = [x["error"] for x in r["shots"] if x.get("error")]
+    if shot_err:   # the window was covered: a machine error, not a player or engine failure
+        out.update(status="error", error="; ".join(shot_err))
     return out
 
 

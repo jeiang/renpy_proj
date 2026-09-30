@@ -2,23 +2,26 @@
 # --harness-script flag. The gate (gate.py) talks to it through two files in $HARNESS_DIR:
 #   cmd.txt       gate -> game: one command per line, consumed every 0.2 s
 #   progress.txt  game -> gate: one event per line (append only)
-# Runs on every Ren'Py 8.x (py3). Inert unless $HARNESS_DIR is set.
+# Runs on Ren'Py 7 (py2) and 8 (py3): keep it valid in both (no f-strings, no annotations, unicode-safe I/O).
+# Inert unless $HARNESS_DIR is set.
 #
 # Commands: start | load SLOT | save SLOT | auto on|off | click on|off | advance N | advance-to N | jump LABEL | exec CODE | movie FPS SECS WARM HOLD PATH | quit
 #   auto     answer input screens ("Tester") and take the first menu choice
 #   click    end any non-menu interaction every 1 s (splash screens, pauses)
 #   advance  end interactions until N more say statements ran (advance-to: until N in total), then hold:
 #            progress line "advance-done <total>". Use advance-to where two runs must stop at the same line.
-# Events: say N | text N HASH | label NAME | menu True|False | tags a b c | movie-channel NAME | cmd ... | video-result {json}
+# Events: save-directory NAME | say N | text N HASH | label NAME | menu True|False | tags a b c | movie-channel NAME | cmd ... | video-result {json}
 init 999 python:
-    import os, time, json, hashlib, collections
+    import os, io, time, json, hashlib, collections
     _hz_dir = os.environ.get("HARNESS_DIR")
     _hz_st = collections.OrderedDict(say=0, tags=None, menu=None, movie="-", auto=False, click=False, adv=None,
                                      n=0, prefs=False)   # OrderedDict: not a Revertable type, so load/rollback keep it
 
     def _hz_write(s):
-        with open(os.path.join(_hz_dir, "progress.txt"), "a") as f:
-            f.write(s + "\n")
+        if isinstance(s, bytes):   # py2 str holding non-ASCII text
+            s = s.decode("utf-8", "replace")
+        with io.open(os.path.join(_hz_dir, "progress.txt"), "a", encoding="utf-8") as f:
+            f.write(s + u"\n")
 
     def _hz_say(event, interact=True, **kw):
         if event == "begin":
@@ -32,7 +35,8 @@ init 999 python:
         def do_show(self, who, what, *a, **kw):
             if _hz_st.get("text") != _hz_st["say"]:
                 _hz_st["text"] = _hz_st["say"]
-                h = hashlib.sha1(what.encode("utf-8", "replace")).hexdigest()[:8] if what else "-"
+                raw = what if isinstance(what, bytes) else what.encode("utf-8", "replace")
+                h = hashlib.sha1(raw).hexdigest()[:8] if what else "-"
                 _hz_write("text %d %s" % (_hz_st["say"], h))
             return orig(self, who, what, *a, **kw)
 
@@ -54,9 +58,24 @@ init 999 python:
             _hz_old_label_cb(name, abnormal)
 
     if _hz_dir:
+        if config.save_directory:
+            _hz_write("save-directory %s" % config.save_directory)
         config.all_character_callbacks.append(_hz_say)
         config.label_callback = _hz_label
-        config.always_shown_screens.append("_hz_poll_screen")
+        try:
+            config.always_shown_screens.append("_hz_poll_screen")
+        except Exception:
+            # Ren'Py 7 has no always_shown_screens: poll from the event loop's periodic callback (20 Hz), throttled to 0.2 s
+            # so the poll cadence matches the screen timer of Ren'Py 8.
+            _hz_last = [0.0]
+
+            def _hz_periodic():
+                t = time.time()
+                if t - _hz_last[0] >= 0.2:
+                    _hz_last[0] = t
+                    _hz_poll()
+
+            config.periodic_callbacks.append(_hz_periodic)
 
     _hz_ctl = tuple(renpy.game.CONTROL_EXCEPTIONS) + (renpy.display.core.EndInteraction,)
 

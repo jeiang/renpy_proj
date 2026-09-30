@@ -135,10 +135,35 @@ def engine_argv(ctx, engine, clone, base, data_dir, saves, renpy_args):
         return [str(binary), str(game_arg), "--data", str(data_dir), "--logdir", str(data_dir / "logs"),
                 "--harness-script", str(RPY)] + list(renpy_args)
     eng = ctx.corpus["engines"][ctx.stock_engine_id()]
+    # Ren'Py 7 ignores RENPY_PATH_TO_SAVES (added in 8.0) and would write to ~/Library/RenPy: give it --savedir instead.
+    extra = ["--savedir", str(saves / STOCK7_SAVEDIR)] if stock_is_py2(ctx) else []
+    if stock_is_py2(ctx):
+        (saves / STOCK7_SAVEDIR).mkdir(parents=True, exist_ok=True)
     if eng["kind"] == "sdk":
-        return [str(resolve(eng["path"]) / "renpy.sh"), str(base)] + list(renpy_args)
+        return [str(resolve(eng["path"]) / "renpy.sh"), str(base)] + list(renpy_args) + extra
     exe = clone / ctx.game["exe"]
-    return [str(exe), str(base)] + list(renpy_args)
+    return [str(exe), str(base)] + list(renpy_args) + extra
+
+
+STOCK7_SAVEDIR = "_stock7"   # the save dir of a Ren'Py 7 stock run, renamed to <save_directory> after the run
+
+
+def stock_is_py2(ctx):
+    """True when the stock engine of this run is Ren'Py 7 (Python 2)."""
+    eng = ctx.corpus["engines"][ctx.stock_engine_id()]
+    return str(eng.get("version") or ctx.game.get("renpy", "")).startswith("7.")
+
+
+def nest_stock7_saves(ctx, engine, saves, progress):
+    """A Ren'Py 7 stock run wrote to saves/_stock7; Ren'Py 8 (and the player's import) use saves/<save_directory>/."""
+    src = saves / STOCK7_SAVEDIR
+    if engine != "stock" or not stock_is_py2(ctx) or not src.exists():
+        return
+    name = next((ln.split(None, 1)[1] for ln in progress if ln.startswith("save-directory ")), None)
+    if name:
+        dest = saves / re.sub(r"[^A-Za-z0-9._ -]+", "_", name)
+        if not dest.exists():
+            src.rename(dest)
 
 
 def strip_game_cache(ctx, engine):
@@ -177,8 +202,9 @@ def parse_plan(text):
 class Run:
     """State shared by the plan ops of one launch."""
 
-    def __init__(self, proc, hz, base, shots_dir, pattern, log, after_start=()):
+    def __init__(self, proc, hz, base, shots_dir, pattern, log, after_start=(), min_visible=0.8):
         self.proc, self.hz, self.base, self.shots_dir, self.pattern, self.log = proc, hz, base, shots_dir, pattern, log
+        self.min_visible = min_visible
         self.after_start = list(after_start)
         self.mark = 0
         self.t0 = time.time()
@@ -234,16 +260,53 @@ class Run:
         r = subprocess.run(["/usr/bin/sips", "-g", "pixelWidth", "-g", "pixelHeight", str(f)], capture_output=True, text=True).stdout.split()
         return (r[-3], r[-1]) if len(r) >= 4 else None
 
+    def window_state(self, wid):
+        """-> dict from `wintool info`: pid, onscreen (0|1), front (windows in front), visible (0..1), covered_by."""
+        out = subprocess.run([str(ensure_wintool()), "info", str(wid)], capture_output=True, text=True).stdout.split()
+        if len(out) < 2 or out[0] == "gone":
+            return {"onscreen": 0, "visible": 0.0, "covered_by": "", "gone": True}
+        st = dict(zip(out[0::2], out[1::2]))
+        return {"pid": int(st["pid"]), "onscreen": int(st["onscreen"]), "front": int(st["front"]),
+                "visible": float(st["visible"]), "covered_by": st.get("covered_by", "")}
+
+    def window_problem(self, wid):
+        """-> None when the window is on screen and not hidden, else a short reason. The player skips presents while its
+        window is covered, so a capture of a covered window shows an old frame."""
+        st = self.window_state(wid)
+        if not st["onscreen"]:
+            return "window %s is not on screen" % wid
+        if st["visible"] < self.min_visible:
+            return "window %s is %.0f%% visible (min %.0f%%), covered by %s" % (wid, 100 * st["visible"], 100 * self.min_visible, st["covered_by"] or "?")
+        return None
+
+    def raise_window(self, wid):
+        """Bring the game's own process to the front (System Events, by unix id; no input is sent)."""
+        st = self.window_state(wid)
+        if st.get("pid"):
+            subprocess.run(["/usr/bin/osascript", "-e", 'tell application "System Events" to set frontmost of (first process whose unix id is %d) to true' % st["pid"]],
+                           capture_output=True, timeout=20)
+            time.sleep(1.5)
+
     def op_shot(self, arg):
         name, _, flag = arg.partition(" ")
-        rec = {"name": name, "volatile": flag == "volatile", "file": None}
+        rec = {"name": name, "volatile": flag == "volatile", "file": None, "error": None}
         f = self.shots_dir / (name + ".png")
         self.shots_dir.mkdir(parents=True, exist_ok=True)
+        raised = False
         for attempt in range(6):
             wid, pids = self._pick_window()
             if not wid:
                 time.sleep(1)
                 continue
+            why = self.window_problem(wid)
+            if why and not raised:   # retry once, after bringing the game to the front
+                self.log.append("shot %s: %s: bringing the game to the front" % (name, why))
+                raised = True
+                self.raise_window(wid)
+                why = self.window_problem(wid)
+            if why:
+                rec["error"] = "window covered: " + why
+                break
             f.unlink(missing_ok=True)
             subprocess.run(["/usr/sbin/screencapture", "-x", "-o", "-l" + wid, str(f)])
             if not (f.exists() and f.stat().st_size > 0):
@@ -257,7 +320,7 @@ class Run:
             self.log.append("shot %s: window %s is %s, the run's window is %s: retrying" % (name, wid, size, self.size))
             time.sleep(1.5)
         self.shots.append(rec)
-        self.log.append("shot %s: %s" % (name, rec["file"] or "NO WINDOW CAPTURED"))
+        self.log.append("shot %s: %s" % (name, rec["file"] or rec["error"] or "NO WINDOW CAPTURED"))
 
     def op_quit(self):
         send_cmd(self.hz, "quit")
@@ -380,7 +443,7 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
         stdout = open(out / "stdout.log", "w")
         t0 = time.time()
         proc = subprocess.Popen(argv, stdout=stdout, stderr=subprocess.STDOUT, env=env, cwd=str(clone))
-        run = Run(proc, hz, base, out / "shots", pattern, res["plan_log"], g.get("after_start", ()))
+        run = Run(proc, hz, base, out / "shots", pattern, res["plan_log"], g.get("after_start", ()), ctx.opts.get("min_visible", 0.8))
         try:
             if plan:
                 run.run(plan)
@@ -427,6 +490,7 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
         shutil.copy(logs[0], out / "log.txt")
     prog = hz / "progress.txt"
     res["progress"] = prog.read_text(errors="replace").splitlines() if prog.exists() else []
+    nest_stock7_saves(ctx, engine, saves, res["progress"])
     (out / "progress.txt").write_text("\n".join(res["progress"]) + "\n")
     (out / "plan.log").write_text("\n".join(res["plan_log"]) + "\n")
     if (hz / "video.json").exists():

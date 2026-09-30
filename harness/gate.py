@@ -45,6 +45,8 @@ def parse():
     r.add_argument("--diff-pct", type=float, default=0.5, help="max percent of pixels that changed by more than 24/255")
     r.add_argument("--diff-crop-top", type=int, default=80,
                    help="pixel rows cut from the top and bottom of every shot before diffing: the window title bar (macOS 26: about 33 pt at 2x, cut 40 pt)")
+    r.add_argument("--min-visible", type=float, default=0.8,
+                   help="min share of the game window that no other window hides before a shot (else: bring it front once, then report an error)")
     r.add_argument("--save-after", type=int, default=30, help="say count at which the stock save is made")
     r.add_argument("--resume-lines", type=int, default=20)
     r.add_argument("--video-secs", type=float, default=15)
