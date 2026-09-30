@@ -1,0 +1,15 @@
+17737 renpy.styledata.styleclass Style renpy.styledata.styleclass built-in
+17155 renpy.display.matrix Matrix2D renpy.display.matrix built-in
+8637 renpy.ast PyExpr renpy.astsupport built-in
+4276 renpy.display.matrix Matrix renpy.display.matrix built-in
+232 renpy.astsupport PyExpr renpy.astsupport built-in
+95 renpy.display.render Matrix2D renpy.display.matrix built-in
+32 renpy.audio.filter WetDry renpy.audio.filter built-in
+32 renpy.audio.filter Sequence renpy.audio.filter built-in
+32 renpy.audio.filter Null renpy.audio.filter built-in
+32 renpy.audio.filter Mix renpy.audio.filter built-in
+32 renpy.audio.filter Crossfade renpy.audio.filter built-in
+32 renpy.audio.filter Comb renpy.audio.filter built-in
+32 renpy.audio.filter Biquad renpy.audio.filter built-in
+ERR pygame_sdl2.rect Rect No module named 'pygame_sdl2'
+Counter({'py': 150, 'built-in': 13})
