@@ -1,0 +1,258 @@
+{
+ "astral_webp_0.webp": {
+  "w": 3840,
+  "h": 2160,
+  "bytes": 718922,
+  "decode_ms": 55.02,
+  "copy_ms": 2.41,
+  "bounds_ms": 0.0
+ },
+ "astral_webp_1.webp": {
+  "w": 3840,
+  "h": 2160,
+  "bytes": 1064090,
+  "decode_ms": 69.67,
+  "copy_ms": 2.54,
+  "bounds_ms": 0.0
+ },
+ "astral_webp_2.webp": {
+  "w": 3840,
+  "h": 2160,
+  "bytes": 438828,
+  "decode_ms": 44.96,
+  "copy_ms": 2.21,
+  "bounds_ms": 0.0
+ },
+ "astral_webp_3.webp": {
+  "w": 3840,
+  "h": 2160,
+  "bytes": 616464,
+  "decode_ms": 51.46,
+  "copy_ms": 2.25,
+  "bounds_ms": 0.0
+ },
+ "rip_jpg_0.jpg": {
+  "w": 1920,
+  "h": 1080,
+  "bytes": 876694,
+  "decode_ms": 18.74,
+  "copy_ms": 0.58,
+  "bounds_ms": 0.0
+ },
+ "rip_jpg_1.jpg": {
+  "w": 1920,
+  "h": 1080,
+  "bytes": 391165,
+  "decode_ms": 14.66,
+  "copy_ms": 0.46,
+  "bounds_ms": 0.0
+ },
+ "rip_jpg_2.jpg": {
+  "w": 1920,
+  "h": 1080,
+  "bytes": 941016,
+  "decode_ms": 20.14,
+  "copy_ms": 0.48,
+  "bounds_ms": 0.0
+ },
+ "rip_png_0.png": {
+  "w": 1920,
+  "h": 1080,
+  "bytes": 331634,
+  "decode_ms": 19.83,
+  "copy_ms": 0.59,
+  "bounds_ms": 2.5
+ },
+ "rip_png_1.png": {
+  "w": 1920,
+  "h": 1080,
+  "bytes": 1264076,
+  "decode_ms": 40.03,
+  "copy_ms": 0.45,
+  "bounds_ms": 2.45
+ },
+ "rip_png_2.png": {
+  "w": 1920,
+  "h": 1080,
+  "bytes": 1509156,
+  "decode_ms": 44.58,
+  "copy_ms": 0.59,
+  "bounds_ms": 2.46
+ },
+ "rip_webp_0.webp": {
+  "w": 1920,
+  "h": 1080,
+  "bytes": 200778,
+  "decode_ms": 13.22,
+  "copy_ms": 0.51,
+  "bounds_ms": 0.0
+ },
+ "rip_webp_1.webp": {
+  "w": 1920,
+  "h": 1080,
+  "bytes": 481310,
+  "decode_ms": 25.35,
+  "copy_ms": 0.5,
+  "bounds_ms": 0.0
+ },
+ "rip_webp_2.webp": {
+  "w": 1920,
+  "h": 1080,
+  "bytes": 477766,
+  "decode_ms": 25.23,
+  "copy_ms": 0.51,
+  "bounds_ms": 0.0
+ },
+ "rip_webp_3.webp": {
+  "w": 1920,
+  "h": 1080,
+  "bytes": 304206,
+  "decode_ms": 17.97,
+  "copy_ms": 0.6,
+  "bounds_ms": 0.0
+ },
+ "si_png_0.png": {
+  "w": 1920,
+  "h": 1080,
+  "bytes": 415160,
+  "decode_ms": 5.74,
+  "copy_ms": 0.51,
+  "bounds_ms": 0.0
+ },
+ "si_png_1.png": {
+  "w": 1920,
+  "h": 1080,
+  "bytes": 2122566,
+  "decode_ms": 28.11,
+  "copy_ms": 0.53,
+  "bounds_ms": 0.0
+ },
+ "si_png_2.png": {
+  "w": 1920,
+  "h": 1080,
+  "bytes": 368747,
+  "decode_ms": 5.24,
+  "copy_ms": 0.46,
+  "bounds_ms": 0.0
+ },
+ "si_png_3.png": {
+  "w": 1920,
+  "h": 1080,
+  "bytes": 654957,
+  "decode_ms": 7.35,
+  "copy_ms": 0.51,
+  "bounds_ms": 0.0
+ },
+ "si_png_4.png": {
+  "w": 1920,
+  "h": 1080,
+  "bytes": 2526851,
+  "decode_ms": 30.71,
+  "copy_ms": 0.53,
+  "bounds_ms": 0.0
+ },
+ "si_png_5.png": {
+  "w": 1920,
+  "h": 1080,
+  "bytes": 471045,
+  "decode_ms": 6.09,
+  "copy_ms": 0.51,
+  "bounds_ms": 0.0
+ },
+ "si_webp_0.webp": {
+  "w": 1920,
+  "h": 1080,
+  "bytes": 427806,
+  "decode_ms": 10.68,
+  "copy_ms": 0.61,
+  "bounds_ms": 0.0
+ },
+ "si_webp_1.webp": {
+  "w": 1920,
+  "h": 1080,
+  "bytes": 321210,
+  "decode_ms": 7.91,
+  "copy_ms": 0.61,
+  "bounds_ms": 0.0
+ },
+ "si_webp_2.webp": {
+  "w": 1920,
+  "h": 1080,
+  "bytes": 572174,
+  "decode_ms": 13.04,
+  "copy_ms": 0.6,
+  "bounds_ms": 0.0
+ },
+ "si_webp_3.webp": {
+  "w": 1920,
+  "h": 1080,
+  "bytes": 498514,
+  "decode_ms": 11.19,
+  "copy_ms": 0.52,
+  "bounds_ms": 0.0
+ },
+ "wa_jpg_0.jpg": {
+  "w": 1920,
+  "h": 1080,
+  "bytes": 179470,
+  "decode_ms": 12.7,
+  "copy_ms": 0.54,
+  "bounds_ms": 0.0
+ },
+ "wa_jpg_1.jpg": {
+  "w": 1920,
+  "h": 1080,
+  "bytes": 232931,
+  "decode_ms": 10.5,
+  "copy_ms": 0.54,
+  "bounds_ms": 0.0
+ },
+ "wa_jpg_2.jpg": {
+  "w": 1920,
+  "h": 1080,
+  "bytes": 309255,
+  "decode_ms": 15.06,
+  "copy_ms": 0.56,
+  "bounds_ms": 0.0
+ },
+ "wa_jpg_3.jpg": {
+  "w": 1920,
+  "h": 1080,
+  "bytes": 151038,
+  "decode_ms": 10.21,
+  "copy_ms": 0.64,
+  "bounds_ms": 0.0
+ },
+ "wa_jpg_4.jpg": {
+  "w": 1920,
+  "h": 1080,
+  "bytes": 268062,
+  "decode_ms": 15.22,
+  "copy_ms": 0.58,
+  "bounds_ms": 0.0
+ },
+ "wa_png_0.png": {
+  "w": 986,
+  "h": 520,
+  "bytes": 474354,
+  "decode_ms": 6.82,
+  "copy_ms": 0.13,
+  "bounds_ms": 0.63
+ },
+ "wa_png_1.png": {
+  "w": 1920,
+  "h": 1080,
+  "bytes": 2085371,
+  "decode_ms": 29.56,
+  "copy_ms": 0.6,
+  "bounds_ms": 0.0
+ },
+ "wa_png_2.png": {
+  "w": 986,
+  "h": 520,
+  "bytes": 541000,
+  "decode_ms": 7.44,
+  "copy_ms": 0.14,
+  "bounds_ms": 0.61
+ }
+}
