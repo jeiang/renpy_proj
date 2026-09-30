@@ -3,7 +3,6 @@ name = "pyhost"
 description = "Embedded static CPython 3.12: build, blob importer, inittab."
 version.workspace = true
 edition.workspace = true
-license.workspace = true
 publish.workspace = true
 build = "build.rs"
 

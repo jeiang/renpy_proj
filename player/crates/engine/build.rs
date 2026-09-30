@@ -16,7 +16,12 @@ fn main() {
     let built = player.join("build-out").join("engine");
 
     println!("cargo:rerun-if-changed={}", engine_dir.display());
-    println!("cargo:rerun-if-changed={}", player.join("build-out/cpython/include/python3.12").display());
+    println!(
+        "cargo:rerun-if-changed={}",
+        player
+            .join("build-out/cpython/include/python3.12")
+            .display()
+    );
     println!("cargo:rerun-if-env-changed=PYTHON");
 
     let python = env::var("PYTHON").unwrap_or_else(|_| "python3.12".to_string());
@@ -37,13 +42,17 @@ fn main() {
     code.push_str("unsafe extern \"C\" {\n");
     let mut entries = String::new();
     for line in inittab.lines().filter(|l| !l.trim().is_empty()) {
-        let (module, symbol) = line.split_once(' ').expect("inittab line: <module> <symbol>");
+        let (module, symbol) = line
+            .split_once(' ')
+            .expect("inittab line: <module> <symbol>");
         writeln!(code, "    fn {symbol}() -> *mut pyo3_ffi::PyObject;").unwrap();
         writeln!(entries, "        (c\"{module}\", {symbol} as InitFn),").unwrap();
     }
     code.push_str("}\n\n");
     code.push_str("type InitFn = unsafe extern \"C\" fn() -> *mut pyo3_ffi::PyObject;\n\n");
-    code.push_str("/// Every Cython module of the engine layer, as (dotted name, init function).\n");
+    code.push_str(
+        "/// Every Cython module of the engine layer, as (dotted name, init function).\n",
+    );
     code.push_str("pub fn inittab() -> Vec<(&'static std::ffi::CStr, InitFn)> {\n    vec![\n");
     code.push_str(&entries);
     code.push_str("    ]\n}\n\n");

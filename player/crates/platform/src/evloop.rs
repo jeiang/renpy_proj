@@ -13,9 +13,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use winit::application::ApplicationHandler;
 use winit::dpi::{LogicalPosition, LogicalSize};
-use winit::event::{
-    ElementState, Ime, KeyEvent, MouseButton, MouseScrollDelta, WindowEvent,
-};
+use winit::event::{ElementState, Ime, KeyEvent, MouseButton, MouseScrollDelta, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy};
 use winit::keyboard::{Key, ModifiersKeyState, ModifiersState, PhysicalKey};
 use winit::platform::modifier_supplement::KeyEventExtModifierSupplement;
@@ -44,19 +42,19 @@ pub struct Input {
 
 pub static INPUT: LazyLock<Mutex<Input>> = LazyLock::new(|| {
     Mutex::new(Input {
-    mouse_pos: (0, 0),
-    mouse_mask: 0,
-    last_cursor: None,
-    rel_acc: (0, 0),
-    mouse_focus: false,
-    mods: 0,
-    pressed: HashSet::new(),
-    text_input: false,
-    wheel_acc: (0.0, 0.0),
-    mousewheel_buttons: true,
-    grab: false,
-    title: String::new(),
-    icon: None,
+        mouse_pos: (0, 0),
+        mouse_mask: 0,
+        last_cursor: None,
+        rel_acc: (0, 0),
+        mouse_focus: false,
+        mods: 0,
+        pressed: HashSet::new(),
+        text_input: false,
+        wheel_acc: (0.0, 0.0),
+        mousewheel_buttons: true,
+        grab: false,
+        title: String::new(),
+        icon: None,
     })
 });
 
@@ -109,9 +107,9 @@ fn ensure_loop() -> anyhow::Result<()> {
     if LOOP_BUILT.get() {
         return Ok(());
     }
-    let el = EventLoop::<()>::with_user_event()
-        .build()
-        .map_err(|e| anyhow!("cannot create the winit event loop (it must run on the main thread): {e}"))?;
+    let el = EventLoop::<()>::with_user_event().build().map_err(|e| {
+        anyhow!("cannot create the winit event loop (it must run on the main thread): {e}")
+    })?;
     *PROXY.lock() = Some(el.create_proxy());
     EVENT_LOOP.with(|l| *l.borrow_mut() = Some(el));
     LOOP_BUILT.set(true);
@@ -148,9 +146,16 @@ pub fn on_loop<R: 'static>(f: impl FnOnce(&ActiveEventLoop) -> R + 'static) -> a
     ensure_loop()?;
     let slot: Rc<RefCell<Option<R>>> = Rc::new(RefCell::new(None));
     let out = slot.clone();
-    JOBS.with(|j| j.borrow_mut().push_back(Box::new(move |el| *out.borrow_mut() = Some(f(el)))));
+    JOBS.with(|j| {
+        j.borrow_mut()
+            .push_back(Box::new(move |el| *out.borrow_mut() = Some(f(el))))
+    });
     for i in 0..400 {
-        pump(Some(if i < 4 { Duration::ZERO } else { Duration::from_millis(10) }));
+        pump(Some(if i < 4 {
+            Duration::ZERO
+        } else {
+            Duration::from_millis(10)
+        }));
         if let Some(r) = slot.borrow_mut().take() {
             return Ok(r);
         }
@@ -159,7 +164,12 @@ pub fn on_loop<R: 'static>(f: impl FnOnce(&ActiveEventLoop) -> R + 'static) -> a
 }
 
 /// Creates the one window, or resizes and returns the existing one.
-pub fn create_window(width: u32, height: u32, title: &str, resizable: bool) -> anyhow::Result<Arc<Window>> {
+pub fn create_window(
+    width: u32,
+    height: u32,
+    title: &str,
+    resizable: bool,
+) -> anyhow::Result<Arc<Window>> {
     if let Some(w) = window() {
         w.set_title(title);
         w.set_resizable(resizable);
@@ -185,11 +195,10 @@ pub fn create_window(width: u32, height: u32, title: &str, resizable: bool) -> a
         Ok::<_, winit::error::OsError>(w)
     })?
     .context("cannot create the window")?;
-    if let Some((iw, ih, rgba)) = INPUT.lock().icon.clone() {
-        if let Ok(icon) = Icon::from_rgba(rgba, iw, ih) {
+    if let Some((iw, ih, rgba)) = INPUT.lock().icon.clone()
+        && let Ok(icon) = Icon::from_rgba(rgba, iw, ih) {
             w.set_window_icon(Some(icon));
         }
-    }
     pump(Some(Duration::ZERO));
     Ok(w)
 }
@@ -209,11 +218,10 @@ pub fn monitors() -> anyhow::Result<Vec<Monitor>> {
     on_loop(|el| {
         let primary = el.primary_monitor();
         let mut list: Vec<_> = el.available_monitors().collect();
-        if let Some(p) = primary {
-            if let Some(i) = list.iter().position(|m| *m == p) {
+        if let Some(p) = primary
+            && let Some(i) = list.iter().position(|m| *m == p) {
                 list.swap(0, i);
             }
-        }
         list.into_iter()
             .map(|m| {
                 let s = m.scale_factor();
@@ -232,7 +240,9 @@ pub fn monitors() -> anyhow::Result<Vec<Monitor>> {
                     y: pos.y.round() as i32,
                     w: size.width.round() as i32,
                     h: size.height.round() as i32,
-                    refresh: m.refresh_rate_millihertz().map_or(60, |r| (r as f64 / 1000.0).round() as i32),
+                    refresh: m
+                        .refresh_rate_millihertz()
+                        .map_or(60, |r| (r as f64 / 1000.0).round() as i32),
                     modes,
                 }
             })
@@ -241,7 +251,11 @@ pub fn monitors() -> anyhow::Result<Vec<Monitor>> {
 }
 
 pub fn set_fullscreen(w: &Window, on: bool) {
-    w.set_fullscreen(if on { Some(Fullscreen::Borderless(None)) } else { None });
+    w.set_fullscreen(if on {
+        Some(Fullscreen::Borderless(None))
+    } else {
+        None
+    });
 }
 
 fn scale() -> f64 {
@@ -306,34 +320,64 @@ fn button_number(b: MouseButton) -> i64 {
 }
 
 fn button_mask(n: i64) -> u32 {
-    if (1..=32).contains(&n) { 1 << (n - 1) } else { 0 }
+    if (1..=32).contains(&n) {
+        1 << (n - 1)
+    } else {
+        0
+    }
 }
 
 fn buttons_tuple(mask: u32) -> (i64, i64, i64) {
-    (i64::from(mask & 1 != 0), i64::from(mask & 2 != 0), i64::from(mask & 4 != 0))
+    (
+        i64::from(mask & 1 != 0),
+        i64::from(mask & 2 != 0),
+        i64::from(mask & 4 != 0),
+    )
 }
 
 fn mods_from(m: &winit::event::Modifiers) -> u16 {
     let s: ModifiersState = m.state();
-    let pair = |l: ModifiersKeyState, r: ModifiersKeyState, any: bool, lbit: u16, rbit: u16| -> u16 {
-        let lp = l == ModifiersKeyState::Pressed;
-        let rp = r == ModifiersKeyState::Pressed;
-        let mut v = 0;
-        if lp {
-            v |= lbit;
-        }
-        if rp {
-            v |= rbit;
-        }
-        if any && v == 0 {
-            v = lbit;
-        }
-        v
-    };
-    pair(m.lshift_state(), m.rshift_state(), s.shift_key(), keys::KMOD_LSHIFT, keys::KMOD_RSHIFT)
-        | pair(m.lcontrol_state(), m.rcontrol_state(), s.control_key(), keys::KMOD_LCTRL, keys::KMOD_RCTRL)
-        | pair(m.lalt_state(), m.ralt_state(), s.alt_key(), keys::KMOD_LALT, keys::KMOD_RALT)
-        | pair(m.lsuper_state(), m.rsuper_state(), s.super_key(), keys::KMOD_LGUI, keys::KMOD_RGUI)
+    let pair =
+        |l: ModifiersKeyState, r: ModifiersKeyState, any: bool, lbit: u16, rbit: u16| -> u16 {
+            let lp = l == ModifiersKeyState::Pressed;
+            let rp = r == ModifiersKeyState::Pressed;
+            let mut v = 0;
+            if lp {
+                v |= lbit;
+            }
+            if rp {
+                v |= rbit;
+            }
+            if any && v == 0 {
+                v = lbit;
+            }
+            v
+        };
+    pair(
+        m.lshift_state(),
+        m.rshift_state(),
+        s.shift_key(),
+        keys::KMOD_LSHIFT,
+        keys::KMOD_RSHIFT,
+    ) | pair(
+        m.lcontrol_state(),
+        m.rcontrol_state(),
+        s.control_key(),
+        keys::KMOD_LCTRL,
+        keys::KMOD_RCTRL,
+    ) | pair(
+        m.lalt_state(),
+        m.ralt_state(),
+        s.alt_key(),
+        keys::KMOD_LALT,
+        keys::KMOD_RALT,
+    ) | pair(
+        m.lsuper_state(),
+        m.rsuper_state(),
+        s.super_key(),
+        keys::KMOD_LGUI,
+        keys::KMOD_RGUI,
+    )
 }
 
 fn printable(text: &str) -> bool {
@@ -371,8 +415,13 @@ fn key_event(py: Python<'_>, e: &KeyEvent) -> PyResult<()> {
         (inp.mods, inp.text_input)
     };
 
-    let text = if pressed { e.text.as_deref().filter(|t| printable(t)) } else { None };
-    let shortcut = mods & (keys::KMOD_LCTRL | keys::KMOD_RCTRL | keys::KMOD_LGUI | keys::KMOD_RGUI) != 0;
+    let text = if pressed {
+        e.text.as_deref().filter(|t| printable(t))
+    } else {
+        None
+    };
+    let shortcut =
+        mods & (keys::KMOD_LCTRL | keys::KMOD_RCTRL | keys::KMOD_LGUI | keys::KMOD_RGUI) != 0;
 
     let unicode: String = if !pressed || text_input {
         String::new()
@@ -384,7 +433,11 @@ fn key_event(py: Python<'_>, e: &KeyEvent) -> PyResult<()> {
         String::new()
     };
 
-    let typ = if pressed { consts::KEYDOWN } else { consts::KEYUP };
+    let typ = if pressed {
+        consts::KEYDOWN
+    } else {
+        consts::KEYUP
+    };
     event::push_native(py, typ, |d| {
         d.set_item("scancode", sc)?;
         d.set_item("key", sym)?;
@@ -394,12 +447,11 @@ fn key_event(py: Python<'_>, e: &KeyEvent) -> PyResult<()> {
         Ok(())
     })?;
 
-    if pressed && text_input && !shortcut {
-        if let Some(t) = text {
+    if pressed && text_input && !shortcut
+        && let Some(t) = text {
             let t = t.to_string();
             event::push_native(py, consts::TEXTINPUT, |d| d.set_item("text", t))?;
         }
-    }
     Ok(())
 }
 
@@ -433,7 +485,13 @@ fn wheel(py: Python<'_>, delta: MouseScrollDelta) -> PyResult<()> {
         });
     }
     // SDL 1.x style: the wheel is buttons 4 and 5, a press followed by a release.
-    let button = if iy > 0 { 4 } else if iy < 0 { 5 } else { return Ok(()) };
+    let button = if iy > 0 {
+        4
+    } else if iy < 0 {
+        5
+    } else {
+        return Ok(());
+    };
     for _ in 0..iy.unsigned_abs() {
         for typ in [consts::MOUSEBUTTONDOWN, consts::MOUSEBUTTONUP] {
             event::push_native(py, typ, |d| {
@@ -474,11 +532,17 @@ fn translate(py: Python<'_>, ev: WindowEvent) -> PyResult<()> {
                 let mut inp = INPUT.lock();
                 inp.pressed.clear();
             }
-            simple(py, consts::ACTIVEEVENT, &[("state", 2), ("gain", i64::from(gain))])
+            simple(
+                py,
+                consts::ACTIVEEVENT,
+                &[("state", 2), ("gain", i64::from(gain))],
+            )
         }
-        WindowEvent::Occluded(hidden) => {
-            simple(py, consts::ACTIVEEVENT, &[("state", 4), ("gain", i64::from(!hidden))])
-        }
+        WindowEvent::Occluded(hidden) => simple(
+            py,
+            consts::ACTIVEEVENT,
+            &[("state", 4), ("gain", i64::from(!hidden))],
+        ),
         WindowEvent::CursorEntered { .. } => {
             INPUT.lock().mouse_focus = true;
             simple(py, consts::ACTIVEEVENT, &[("state", 1), ("gain", 1)])
@@ -504,7 +568,9 @@ fn translate(py: Python<'_>, ev: WindowEvent) -> PyResult<()> {
             key_event(py, &event)
         }
         WindowEvent::Ime(ime) => match ime {
-            Ime::Commit(text) => event::push_native(py, consts::TEXTINPUT, |d| d.set_item("text", text)),
+            Ime::Commit(text) => {
+                event::push_native(py, consts::TEXTINPUT, |d| d.set_item("text", text))
+            }
             Ime::Preedit(text, cursor) => {
                 let (start, length) = match cursor {
                     Some((a, b)) => {
@@ -557,10 +623,18 @@ fn translate(py: Python<'_>, ev: WindowEvent) -> PyResult<()> {
                 }
                 inp.mouse_pos
             };
-            let reported = if INPUT.lock().mousewheel_buttons && n >= 4 { n + 2 } else { n };
+            let reported = if INPUT.lock().mousewheel_buttons && n >= 4 {
+                n + 2
+            } else {
+                n
+            };
             event::push_native(
                 py,
-                if down { consts::MOUSEBUTTONDOWN } else { consts::MOUSEBUTTONUP },
+                if down {
+                    consts::MOUSEBUTTONDOWN
+                } else {
+                    consts::MOUSEBUTTONUP
+                },
                 |d| {
                     d.set_item("button", reported)?;
                     d.set_item("pos", pos)?;
@@ -591,4 +665,3 @@ pub fn warp_cursor(x: i32, y: i32) -> Result<(), winit::error::ExternalError> {
     inp.last_cursor = Some((f64::from(x), f64::from(y)));
     Ok(())
 }
-

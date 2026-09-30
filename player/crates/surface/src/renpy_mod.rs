@@ -20,7 +20,11 @@ fn surf<'a>(o: &'a Bound<'_, PyAny>, fname: &str, which: &str) -> PyResult<&'a S
 }
 
 fn need(cond: bool, msg: String) -> PyResult<()> {
-    if cond { Ok(()) } else { Err(PyException::new_err(msg)) }
+    if cond {
+        Ok(())
+    } else {
+        Err(PyException::new_err(msg))
+    }
 }
 
 /// Checks shared by the two-surface operations of `_renpy.pyx`.
@@ -31,16 +35,28 @@ fn pair<'a>(
     same_size: bool,
 ) -> PyResult<(&'a Surface, &'a Surface)> {
     let (a, b) = (surf(a, fname, "first")?, surf(b, fname, "second")?);
-    need(matches!(a.format().bits(), 24 | 32), format!("{fname} requires a 24 or 32 bit surface."))?;
-    need(a.format().bits() == b.format().bits(), format!("{fname} requires both surfaces have the same bitsize."))?;
+    need(
+        matches!(a.format().bits(), 24 | 32),
+        format!("{fname} requires a 24 or 32 bit surface."),
+    )?;
+    need(
+        a.format().bits() == b.format().bits(),
+        format!("{fname} requires both surfaces have the same bitsize."),
+    )?;
     if same_size {
-        need(a.size() == b.size(), format!("{fname} requires both surfaces have the same size."))?;
+        need(
+            a.size() == b.size(),
+            format!("{fname} requires both surfaces have the same size."),
+        )?;
     }
     Ok((a, b))
 }
 
 fn tbl(b: &PyBackedBytes, what: &str) -> PyResult<()> {
-    need(b.len() >= 256, format!("{what} must be at least 256 bytes long."))
+    need(
+        b.len() >= 256,
+        format!("{what} must be at least 256 bytes long."),
+    )
 }
 
 #[pyfunction]
@@ -50,10 +66,19 @@ pub fn version() -> (u32, u32, u32) {
 
 #[pyfunction]
 #[pyo3(signature = (surf, file, compress=-1))]
-pub fn save_png(py: Python<'_>, surf: &Bound<'_, PyAny>, file: &Bound<'_, PyAny>, compress: i32) -> PyResult<()> {
+pub fn save_png(
+    py: Python<'_>,
+    surf: &Bound<'_, PyAny>,
+    file: &Bound<'_, PyAny>,
+    compress: i32,
+) -> PyResult<()> {
     let s = match surf.cast::<Surface>() {
         Ok(s) => s.get(),
-        Err(_) => return Err(PyException::new_err("save_png requires a pygame Surface as its first argument.")),
+        Err(_) => {
+            return Err(PyException::new_err(
+                "save_png requires a pygame Surface as its first argument.",
+            ));
+        }
     };
     let bytes = py
         .detach(|| encode_png(s, compress))
@@ -101,7 +126,15 @@ pub fn map_(
 }
 
 #[pyfunction]
-pub fn linmap(py: Python<'_>, pysrc: &Bound<'_, PyAny>, pydst: &Bound<'_, PyAny>, r: i32, g: i32, b: i32, a: i32) -> PyResult<()> {
+pub fn linmap(
+    py: Python<'_>,
+    pysrc: &Bound<'_, PyAny>,
+    pydst: &Bound<'_, PyAny>,
+    r: i32,
+    g: i32,
+    b: i32,
+    a: i32,
+) -> PyResult<()> {
     let (s, d) = pair("map", pysrc, pydst, true)?;
     let (si, di) = (s.img(), d.img());
     py.detach(|| ops::linmap(&si, &di, [r, g, b, a]));
@@ -122,7 +155,10 @@ pub fn blur(
     let (s, w) = pair("blur", pysrc, pywrk, true)?;
     let (_, d) = pair("blur", pysrc, pydst, true)?;
     let yrad = yrad.unwrap_or(xrad);
-    need(xrad >= 0.0 && yrad >= 0.0, "blur requires a positive radius.".into())?;
+    need(
+        xrad >= 0.0 && yrad >= 0.0,
+        "blur requires a positive radius.".into(),
+    )?;
     let (si, wi, di) = (s.img(), w.img(), d.img());
     py.detach(|| ops::blur(&si, &wi, &di, xrad, yrad));
     w.touch();
@@ -132,7 +168,13 @@ pub fn blur(
 
 #[pyfunction]
 #[pyo3(signature = (pysrc, pydst, radius, vertical=0))]
-pub fn linblur(py: Python<'_>, pysrc: &Bound<'_, PyAny>, pydst: &Bound<'_, PyAny>, radius: i32, vertical: i32) -> PyResult<()> {
+pub fn linblur(
+    py: Python<'_>,
+    pysrc: &Bound<'_, PyAny>,
+    pydst: &Bound<'_, PyAny>,
+    radius: i32,
+    vertical: i32,
+) -> PyResult<()> {
     let (s, d) = pair("linblur", pysrc, pydst, true)?;
     need(radius >= 1, "linblur requires a non-zero radius.".into())?;
     let (si, di) = (s.img(), d.img());
@@ -152,7 +194,10 @@ pub fn alpha_munge(
 ) -> PyResult<()> {
     let (s, d) = pair("alpha_munge", pysrc, pydst, true)?;
     tbl(&amap, "alpha_munge map")?;
-    need((0..4).contains(&srcchan) && (0..4).contains(&dstchan), "alpha_munge channel out of range.".into())?;
+    need(
+        (0..4).contains(&srcchan) && (0..4).contains(&dstchan),
+        "alpha_munge channel out of range.".into(),
+    )?;
     let (si, di) = (s.img(), d.img());
     py.detach(|| ops::alpha_munge(&si, &di, srcchan, dstchan, &amap));
     d.touch();
@@ -187,7 +232,19 @@ pub fn bilinear(
     };
     let (si, di) = (s.img(), d.img());
     py.detach(|| {
-        ops::bilinear(&si, &di, source_xoff, source_yoff, sw, sh, dest_xoff, dest_yoff, dw, dh, precise != 0)
+        ops::bilinear(
+            &si,
+            &di,
+            source_xoff,
+            source_yoff,
+            sw,
+            sh,
+            dest_xoff,
+            dest_yoff,
+            dw,
+            dh,
+            precise != 0,
+        )
     });
     d.touch();
     Ok(())
@@ -220,10 +277,27 @@ pub fn transform(
 ) -> PyResult<()> {
     check(pysrc)?;
     check(pydst)?;
-    let (s, d) = (surf(pysrc, "transform", "first")?, surf(pydst, "transform", "second")?);
+    let (s, d) = (
+        surf(pysrc, "transform", "first")?,
+        surf(pydst, "transform", "second")?,
+    );
     let (si, di) = (s.img(), d.img());
     let ashift = s.format().shifts[3] as u32;
-    py.detach(|| ops::transform(&si, &di, corner_x, corner_y, xdx, ydx, xdy, ydy, ashift, a, precise != 0));
+    py.detach(|| {
+        ops::transform(
+            &si,
+            &di,
+            corner_x,
+            corner_y,
+            xdx,
+            ydx,
+            xdy,
+            ydy,
+            ashift,
+            a,
+            precise != 0,
+        )
+    });
     d.touch();
     Ok(())
 }
@@ -236,7 +310,11 @@ fn three(
     for s in [a, b, c] {
         check(s)?;
     }
-    Ok((surf(a, "blend", "")?.img(), surf(b, "blend", "")?.img(), surf(c, "blend", "")?.img()))
+    Ok((
+        surf(a, "blend", "")?.img(),
+        surf(b, "blend", "")?.img(),
+        surf(c, "blend", "")?.img(),
+    ))
 }
 
 #[pyfunction]
@@ -279,14 +357,33 @@ pub fn colormatrix(
     py: Python<'_>,
     pysrc: &Bound<'_, PyAny>,
     pydst: &Bound<'_, PyAny>,
-    c00: f32, c01: f32, c02: f32, c03: f32, c04: f32,
-    c10: f32, c11: f32, c12: f32, c13: f32, c14: f32,
-    c20: f32, c21: f32, c22: f32, c23: f32, c24: f32,
-    c30: f32, c31: f32, c32: f32, c33: f32, c34: f32,
+    c00: f32,
+    c01: f32,
+    c02: f32,
+    c03: f32,
+    c04: f32,
+    c10: f32,
+    c11: f32,
+    c12: f32,
+    c13: f32,
+    c14: f32,
+    c20: f32,
+    c21: f32,
+    c22: f32,
+    c23: f32,
+    c24: f32,
+    c30: f32,
+    c31: f32,
+    c32: f32,
+    c33: f32,
+    c34: f32,
 ) -> PyResult<()> {
     check(pysrc)?;
     check(pydst)?;
-    let (s, d) = (surf(pysrc, "colormatrix", "")?, surf(pydst, "colormatrix", "")?);
+    let (s, d) = (
+        surf(pysrc, "colormatrix", "")?,
+        surf(pydst, "colormatrix", "")?,
+    );
     let m = [
         [c00, c01, c02, c03, c04],
         [c10, c11, c12, c13, c14],
@@ -312,7 +409,10 @@ pub fn staticgray(
     shift: u32,
     vmap: PyBackedBytes,
 ) -> PyResult<()> {
-    let (s, d) = (surf(pysrc, "staticgray", "first")?, surf(pydst, "staticgray", "second")?);
+    let (s, d) = (
+        surf(pysrc, "staticgray", "first")?,
+        surf(pydst, "staticgray", "second")?,
+    );
     let (si, di) = (s.img(), d.img());
     py.detach(|| ops::staticgray(&si, &di, [rmul, gmul, bmul, amul], shift.min(31), &vmap));
     d.touch();
@@ -333,10 +433,17 @@ pub fn subpixel(
 }
 
 #[pyfunction]
-pub fn premultiply_alpha(py: Python<'_>, pysrc: &Bound<'_, PyAny>, pydst: &Bound<'_, PyAny>) -> PyResult<()> {
+pub fn premultiply_alpha(
+    py: Python<'_>,
+    pysrc: &Bound<'_, PyAny>,
+    pydst: &Bound<'_, PyAny>,
+) -> PyResult<()> {
     check(pysrc)?;
     check(pydst)?;
-    let (s, d) = (surf(pysrc, "premultiply_alpha", "")?, surf(pydst, "premultiply_alpha", "")?);
+    let (s, d) = (
+        surf(pysrc, "premultiply_alpha", "")?,
+        surf(pydst, "premultiply_alpha", "")?,
+    );
     let (si, di) = (s.img(), d.img());
     py.detach(|| ops::premultiply_alpha(&si, &di));
     d.touch();

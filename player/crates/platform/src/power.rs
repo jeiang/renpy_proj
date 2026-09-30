@@ -24,13 +24,20 @@ impl PowerInfo {
             4 => "POWERSTATE_CHARGED",
             _ => "INVALID",
         };
-        format!("<PowerInfo state={name} seconds={} percent={}>", self.seconds, self.percent)
+        format!(
+            "<PowerInfo state={name} seconds={} percent={}>",
+            self.seconds, self.percent
+        )
     }
 }
 
 #[pyfunction]
 fn get_power_info() -> PowerInfo {
-    PowerInfo { state: POWERSTATE_UNKNOWN, seconds: -1, percent: -1 }
+    PowerInfo {
+        state: POWERSTATE_UNKNOWN,
+        seconds: -1,
+        percent: -1,
+    }
 }
 
 #[pymodule(gil_used = false)]

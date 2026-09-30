@@ -38,7 +38,9 @@ fn get_focused() -> bool {
 
 #[pyfunction]
 fn get_pressed() -> KeyboardState {
-    KeyboardState { pressed: evloop::INPUT.lock().pressed.clone() }
+    KeyboardState {
+        pressed: evloop::INPUT.lock().pressed.clone(),
+    }
 }
 
 #[pyfunction]
@@ -88,7 +90,12 @@ fn rect_of(r: &Bound<'_, PyAny>) -> PyResult<(f64, f64, f64, f64)> {
     if let Ok(t) = r.extract::<(f64, f64, f64, f64)>() {
         return Ok(t);
     }
-    Ok((r.getattr("x")?.extract()?, r.getattr("y")?.extract()?, r.getattr("w")?.extract()?, r.getattr("h")?.extract()?))
+    Ok((
+        r.getattr("x")?.extract()?,
+        r.getattr("y")?.extract()?,
+        r.getattr("w")?.extract()?,
+        r.getattr("h")?.extract()?,
+    ))
 }
 
 /// Places the IME candidate window. `None` leaves the last area in place.
@@ -121,7 +128,7 @@ pub mod renpy_pygame_key {
     #[pymodule_export]
     use super::{
         get_focused, get_mods, get_pressed, get_repeat, has_screen_keyboard_support,
-        is_screen_keyboard_shown, name, set_mods, set_repeat, set_text_input_rect, start_text_input,
-        stop_text_input,
+        is_screen_keyboard_shown, name, set_mods, set_repeat, set_text_input_rect,
+        start_text_input, stop_text_input,
     };
 }

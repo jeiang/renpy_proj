@@ -32,7 +32,10 @@ pub fn inittab() -> Vec<(&'static CStr, InitFn)> {
     vec![
         (c"renpy.pygame.surface", rp_surface::__pyo3_init as InitFn),
         (c"renpy.pygame.image", rp_image::__pyo3_init as InitFn),
-        (c"renpy.pygame.transform", rp_transform::__pyo3_init as InitFn),
+        (
+            c"renpy.pygame.transform",
+            rp_transform::__pyo3_init as InitFn,
+        ),
         (c"renpy.pygame.draw", rp_draw::__pyo3_init as InitFn),
         (c"_renpy", rp_renpy::__pyo3_init as InitFn),
     ]
@@ -61,7 +64,9 @@ mod rp_surface {
             if ptr.is_null() {
                 return Err(PyErr::fetch(py));
             }
-            Bound::from_owned_ptr(py, ptr).cast_into::<PyCapsule>().map_err(PyErr::from)?
+            Bound::from_owned_ptr(py, ptr)
+                .cast_into::<PyCapsule>()
+                .map_err(PyErr::from)?
         };
         let capi = PyDict::new(py);
         capi.set_item("PySurface_AsSurface", capsule)?;
@@ -115,7 +120,7 @@ mod rp_draw {
 mod rp_renpy {
     #[pymodule_export]
     use crate::renpy_mod::{
-        alpha_munge, bilinear, blend, blur, check, colormatrix, imageblend, linblur, linmap, map_, pixellate,
-        premultiply_alpha, save_png, staticgray, subpixel, transform, version,
+        alpha_munge, bilinear, blend, blur, check, colormatrix, imageblend, linblur, linmap, map_,
+        pixellate, premultiply_alpha, save_png, staticgray, subpixel, transform, version,
     };
 }

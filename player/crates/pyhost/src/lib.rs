@@ -20,7 +20,8 @@ pub type InitFn = unsafe extern "C" fn() -> *mut PyObject;
 pub static STDLIB_ZIP: &[u8] = include_bytes!(concat!(env!("PYHOST_OUT"), "/stdlib.zip"));
 
 static ENC: &[u8] = include_bytes!(concat!(env!("PYHOST_OUT"), "/boot/encodings.bin"));
-static ENC_ALIASES: &[u8] = include_bytes!(concat!(env!("PYHOST_OUT"), "/boot/encodings_aliases.bin"));
+static ENC_ALIASES: &[u8] =
+    include_bytes!(concat!(env!("PYHOST_OUT"), "/boot/encodings_aliases.bin"));
 static ENC_UTF8: &[u8] = include_bytes!(concat!(env!("PYHOST_OUT"), "/boot/encodings_utf_8.bin"));
 static BOOT_PY: &str = include_str!("boot.py");
 
@@ -64,14 +65,26 @@ struct FrozenTable([Frozen; 4]);
 unsafe impl Sync for FrozenTable {}
 
 const fn frozen(name: &'static CStr, code: &'static [u8], is_package: c_int) -> Frozen {
-    Frozen { name: name.as_ptr(), code: code.as_ptr(), size: code.len() as c_int, is_package, get_code: None }
+    Frozen {
+        name: name.as_ptr(),
+        code: code.as_ptr(),
+        size: code.len() as c_int,
+        is_package,
+        get_code: None,
+    }
 }
 
 static FROZEN: FrozenTable = FrozenTable([
     frozen(c"encodings", ENC, 1),
     frozen(c"encodings.aliases", ENC_ALIASES, 0),
     frozen(c"encodings.utf_8", ENC_UTF8, 0),
-    Frozen { name: null(), code: null(), size: 0, is_package: 0, get_code: None },
+    Frozen {
+        name: null(),
+        code: null(),
+        size: 0,
+        is_package: 0,
+        get_code: None,
+    },
 ]);
 
 unsafe extern "C" {
@@ -108,7 +121,11 @@ unsafe extern "C" fn init_blob() -> *mut PyObject {
         }
         for (i, (name, bytes)) in mounts.iter().enumerate() {
             let n = PyUnicode_FromStringAndSize(name.as_ptr().cast(), name.len() as Py_ssize_t);
-            let mv = PyMemoryView_FromMemory(bytes.as_ptr() as *mut c_char, bytes.len() as Py_ssize_t, PyBUF_READ);
+            let mv = PyMemoryView_FromMemory(
+                bytes.as_ptr() as *mut c_char,
+                bytes.len() as Py_ssize_t,
+                PyBUF_READ,
+            );
             let t = PyTuple_New(2);
             if n.is_null() || mv.is_null() || t.is_null() {
                 Py_XDECREF(n);
@@ -154,14 +171,21 @@ pub fn run(cfg: Config, main_module: &str, main_func: &str) -> Result<i32> {
     if STARTED.set(()).is_err() {
         bail!("pyhost::run can be called once per process");
     }
-    let Config { inittab, zips, argv } = cfg;
+    let Config {
+        inittab,
+        zips,
+        argv,
+    } = cfg;
     let mut mounts = zips;
     mounts.dedup_by_key(|z| z.0);
     MOUNTS.set(mounts).ok();
     let main_module = CString::new(main_module)?;
     let main_func = CString::new(main_func)?;
     let boot = CString::new(BOOT_PY)?;
-    let argv: Vec<CString> = argv.into_iter().map(|a| CString::new(a)).collect::<Result<_, _>>()?;
+    let argv: Vec<CString> = argv
+        .into_iter()
+        .map(CString::new)
+        .collect::<Result<_, _>>()?;
 
     unsafe {
         // Frozen `encodings`: the only module the interpreter needs before any importer exists.
@@ -189,7 +213,8 @@ pub fn run(cfg: Config, main_module: &str, main_func: &str) -> Result<i32> {
         config.write_bytecode = 0;
         if !argv.is_empty() {
             let mut ptrs: Vec<*const c_char> = argv.iter().map(|a| a.as_ptr()).collect();
-            let st = PyConfig_SetBytesArgv(&mut config, ptrs.len() as Py_ssize_t, ptrs.as_mut_ptr());
+            let st =
+                PyConfig_SetBytesArgv(&mut config, ptrs.len() as Py_ssize_t, ptrs.as_mut_ptr());
             if PyStatus_Exception(st) != 0 {
                 PyConfig_Clear(&mut config);
                 status_ok(st, "PyConfig_SetBytesArgv")?;
@@ -215,10 +240,18 @@ pub fn run(cfg: Config, main_module: &str, main_func: &str) -> Result<i32> {
             bail!("pyhost boot.py failed");
         }
         let blob = PyImport_ImportModule(c"_blob".as_ptr());
-        let zips = if blob.is_null() { null_mut() } else { PyObject_GetAttrString(blob, c"zips".as_ptr()) };
+        let zips = if blob.is_null() {
+            null_mut()
+        } else {
+            PyObject_GetAttrString(blob, c"zips".as_ptr())
+        };
         Py_XDECREF(blob);
         let install = PyObject_GetAttrString(module, c"install".as_ptr());
-        let r = if zips.is_null() || install.is_null() { null_mut() } else { PyObject_CallOneArg(install, zips) };
+        let r = if zips.is_null() || install.is_null() {
+            null_mut()
+        } else {
+            PyObject_CallOneArg(install, zips)
+        };
         Py_XDECREF(zips);
         Py_XDECREF(install);
         if r.is_null() {
@@ -227,10 +260,15 @@ pub fn run(cfg: Config, main_module: &str, main_func: &str) -> Result<i32> {
         }
         Py_DECREF(r);
         let importer_ms = t1.elapsed().as_secs_f64() * 1000.0;
-        let t = Timings { py_initialize_ms, importer_ms };
+        let t = Timings {
+            py_initialize_ms,
+            importer_ms,
+        };
         TIMINGS.set(t).ok();
         if std::env::var_os("PYHOST_TIMING").is_some() {
-            eprintln!("pyhost: py_initialize_ms={py_initialize_ms:.1} importer_ms={importer_ms:.1}");
+            eprintln!(
+                "pyhost: py_initialize_ms={py_initialize_ms:.1} importer_ms={importer_ms:.1}"
+            );
         }
 
         // module._pyhost_blob.run(main_module, main_func) -> int

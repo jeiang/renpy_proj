@@ -10,7 +10,9 @@ const USAGE: &str = "usage: player <game-dir | game/ | .app> [--data <dir>] [--l
 
 /// The game folder inside a `.app` bundle, or the path itself when it is not a bundle.
 fn resolve_game(path: &Path) -> Result<PathBuf> {
-    let path = path.canonicalize().with_context(|| format!("game path not found: {}", path.display()))?;
+    let path = path
+        .canonicalize()
+        .with_context(|| format!("game path not found: {}", path.display()))?;
     if path.extension().is_some_and(|e| e == "app") {
         let game = path.join("Contents/Resources/autorun/game");
         if !game.is_dir() {
@@ -34,12 +36,16 @@ fn build_argv(args: Vec<String>) -> Result<Vec<String>> {
     while let Some(a) = it.next() {
         match a.as_str() {
             "--data" | "--logdir" | "--renderer" => {
-                let v = it.next().with_context(|| format!("{a} needs a value\n{USAGE}"))?;
+                let v = it
+                    .next()
+                    .with_context(|| format!("{a} needs a value\n{USAGE}"))?;
                 boot.push(a.clone());
                 boot.push(if a == "--renderer" { v } else { absolute(&v)? });
             }
             "--harness-script" => {
-                let v = it.next().with_context(|| format!("{a} needs a value\n{USAGE}"))?;
+                let v = it
+                    .next()
+                    .with_context(|| format!("{a} needs a value\n{USAGE}"))?;
                 let p = Path::new(&v)
                     .canonicalize()
                     .with_context(|| format!("harness script not found: {v}"))?;

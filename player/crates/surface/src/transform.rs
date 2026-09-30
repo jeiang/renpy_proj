@@ -11,7 +11,12 @@ fn new_like(py: Python<'_>, s: &Surface, w: u32, h: u32) -> PyResult<Surface> {
 }
 
 #[pyfunction]
-pub fn flip(py: Python<'_>, surface: &Bound<'_, Surface>, xbool: bool, ybool: bool) -> PyResult<Surface> {
+pub fn flip(
+    py: Python<'_>,
+    surface: &Bound<'_, Surface>,
+    xbool: bool,
+    ybool: bool,
+) -> PyResult<Surface> {
     let s = surface.get();
     let (w, h) = s.size();
     let rv = new_like(py, s, w, h)?;
@@ -37,7 +42,15 @@ fn stretch(src: &Img, dst: &Img) {
         for x in 0..dst.w {
             let sx = x * src.w / dst.w;
             let p = src.px(sx, sy);
-            dst.put(x, y, if same { p } else { dst.fmt.pack(src.fmt.unpack(p)) });
+            dst.put(
+                x,
+                y,
+                if same {
+                    p
+                } else {
+                    dst.fmt.pack(src.fmt.unpack(p))
+                },
+            );
         }
     }
 }
@@ -82,7 +95,12 @@ fn smooth(src: &Img, dst: &Img) {
             let x0 = fx.floor() as usize;
             let x1 = (x0 + 1).min(sw - 1);
             let tx = fx - x0 as f64;
-            let p = [fmt.unpack(src.px(x0, y0)), fmt.unpack(src.px(x1, y0)), fmt.unpack(src.px(x0, y1)), fmt.unpack(src.px(x1, y1))];
+            let p = [
+                fmt.unpack(src.px(x0, y0)),
+                fmt.unpack(src.px(x1, y0)),
+                fmt.unpack(src.px(x0, y1)),
+                fmt.unpack(src.px(x1, y1)),
+            ];
             let mut out = [0u8; 4];
             for c in 0..4 {
                 let top = p[0][c] as f64 * (1.0 - tx) + p[1][c] as f64 * tx;
@@ -118,7 +136,13 @@ pub fn smoothscale(
 
 #[pyfunction]
 #[pyo3(signature = (surface, angle, scale, smooth=1))]
-pub fn rotozoom(py: Python<'_>, surface: &Bound<'_, Surface>, angle: f64, scale: f64, smooth: i32) -> PyResult<Surface> {
+pub fn rotozoom(
+    py: Python<'_>,
+    surface: &Bound<'_, Surface>,
+    angle: f64,
+    scale: f64,
+    smooth: i32,
+) -> PyResult<Surface> {
     let s = surface.get();
     let (w, h) = s.size();
     if scale <= 0.0 {
@@ -127,11 +151,27 @@ pub fn rotozoom(py: Python<'_>, surface: &Bound<'_, Surface>, angle: f64, scale:
     let rad = angle.to_radians();
     let (sn, cs) = (rad.sin(), rad.cos());
     let (x, y) = (w as f64 / 2.0, h as f64 / 2.0);
-    let (cx, cy, sx, sy) = (cs * x * scale, cs * y * scale, sn * x * scale, sn * y * scale);
-    let hw = [cx + sy, cx - sy, -cx + sy, -cx - sy].iter().fold(0.0f64, |m, v| m.max(v.abs())).ceil().max(1.0);
-    let hh = [sx + cy, sx - cy, -sx + cy, -sx - cy].iter().fold(0.0f64, |m, v| m.max(v.abs())).ceil().max(1.0);
+    let (cx, cy, sx, sy) = (
+        cs * x * scale,
+        cs * y * scale,
+        sn * x * scale,
+        sn * y * scale,
+    );
+    let hw = [cx + sy, cx - sy, -cx + sy, -cx - sy]
+        .iter()
+        .fold(0.0f64, |m, v| m.max(v.abs()))
+        .ceil()
+        .max(1.0);
+    let hh = [sx + cy, sx - cy, -sx + cy, -sx - cy]
+        .iter()
+        .fold(0.0f64, |m, v| m.max(v.abs()))
+        .ceil()
+        .max(1.0);
     let (dw, dh) = if angle == 0.0 {
-        (((w as f64 * scale).floor() as u32).max(1), ((h as f64 * scale).floor() as u32).max(1))
+        (
+            ((w as f64 * scale).floor() as u32).max(1),
+            ((h as f64 * scale).floor() as u32).max(1),
+        )
     } else {
         (hw as u32 * 2, hh as u32 * 2)
     };
@@ -158,7 +198,12 @@ pub fn rotozoom(py: Python<'_>, surface: &Bound<'_, Surface>, angle: f64, scale:
                     let (x0, y0) = (cx0.floor() as usize, cy0.floor() as usize);
                     let (x1, y1) = ((x0 + 1).min(w as usize - 1), (y0 + 1).min(h as usize - 1));
                     let (tx, ty) = (cx0 - x0 as f64, cy0 - y0 as f64);
-                    let p = [fmt.unpack(src.px(x0, y0)), fmt.unpack(src.px(x1, y0)), fmt.unpack(src.px(x0, y1)), fmt.unpack(src.px(x1, y1))];
+                    let p = [
+                        fmt.unpack(src.px(x0, y0)),
+                        fmt.unpack(src.px(x1, y0)),
+                        fmt.unpack(src.px(x0, y1)),
+                        fmt.unpack(src.px(x1, y1)),
+                    ];
                     let mut out = [0u8; 4];
                     for c in 0..4 {
                         let top = p[0][c] as f64 * (1.0 - tx) + p[1][c] as f64 * tx;

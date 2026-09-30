@@ -32,14 +32,16 @@ fn decode_png(data: &[u8]) -> Result<Decoded, String> {
     dec.set_transformations(png::Transformations::EXPAND | png::Transformations::STRIP_16);
     let mut reader = dec.read_info().map_err(|e| format!("PNG: {e}"))?;
     let mut buf = vec![0u8; reader.output_buffer_size().ok_or("PNG: image too large")?];
-    let info = reader.next_frame(&mut buf).map_err(|e| format!("PNG: {e}"))?;
+    let info = reader
+        .next_frame(&mut buf)
+        .map_err(|e| format!("PNG: {e}"))?;
     let (w, h) = (info.width as usize, info.height as usize);
     let src = &buf[..info.buffer_size()];
     let mut rgba = Vec::with_capacity(w * h * 4);
     match info.color_type {
         png::ColorType::Rgba => rgba.extend_from_slice(src),
         png::ColorType::Rgb => {
-            for p in src.chunks_exact(3) {
+            for p in src.as_chunks::<3>().0 {
                 rgba.extend_from_slice(&[p[0], p[1], p[2], 255]);
             }
         }
@@ -49,13 +51,17 @@ fn decode_png(data: &[u8]) -> Result<Decoded, String> {
             }
         }
         png::ColorType::GrayscaleAlpha => {
-            for p in src.chunks_exact(2) {
+            for p in src.as_chunks::<2>().0 {
                 rgba.extend_from_slice(&[p[0], p[0], p[0], p[1]]);
             }
         }
         png::ColorType::Indexed => return Err("PNG: palette was not expanded".to_string()),
     }
-    Ok(Decoded { width: info.width, height: info.height, rgba })
+    Ok(Decoded {
+        width: info.width,
+        height: info.height,
+        rgba,
+    })
 }
 
 fn decode_jpeg(data: &[u8]) -> Result<Decoded, String> {
@@ -66,11 +72,16 @@ fn decode_jpeg(data: &[u8]) -> Result<Decoded, String> {
     let mut dec = zune_jpeg::JpegDecoder::new_with_options(ZCursor::new(data), opts);
     let rgba = dec.decode().map_err(|e| format!("JPEG: {e:?}"))?;
     let info = dec.info().ok_or("JPEG: no image information")?;
-    Ok(Decoded { width: info.width as u32, height: info.height as u32, rgba })
+    Ok(Decoded {
+        width: info.width as u32,
+        height: info.height as u32,
+        rgba,
+    })
 }
 
 fn decode_webp(data: &[u8]) -> Result<Decoded, String> {
-    let mut dec = image_webp::WebPDecoder::new(Cursor::new(data)).map_err(|e| format!("WebP: {e}"))?;
+    let mut dec =
+        image_webp::WebPDecoder::new(Cursor::new(data)).map_err(|e| format!("WebP: {e}"))?;
     let (w, h) = dec.dimensions();
     let alpha = dec.has_alpha();
     let size = dec.output_buffer_size().ok_or("WebP: image too large")?;
@@ -84,12 +95,16 @@ fn decode_webp(data: &[u8]) -> Result<Decoded, String> {
         buf
     } else {
         let mut v = Vec::with_capacity(w as usize * h as usize * 4);
-        for p in buf.chunks_exact(3) {
+        for p in buf.as_chunks::<3>().0 {
             v.extend_from_slice(&[p[0], p[1], p[2], 255]);
         }
         v
     };
-    Ok(Decoded { width: w, height: h, rgba })
+    Ok(Decoded {
+        width: w,
+        height: h,
+        rgba,
+    })
 }
 
 /// Decodes by content, not by file name.
@@ -151,7 +166,8 @@ pub fn load(
             let b = fi.extract::<Vec<u8>>()?;
             String::from_utf8_lossy(&b).into_owned().into()
         };
-        std::fs::read(&path).map_err(|e| pygame_error(py, format!("Couldn't open {}: {e}", path.display())))?
+        std::fs::read(&path)
+            .map_err(|e| pygame_error(py, format!("Couldn't open {}: {e}", path.display())))?
     } else if fi.hasattr("read")? {
         let r = fi.call_method0("read")?;
         r.extract::<PyBackedBytes>()?.to_vec()
@@ -194,7 +210,9 @@ pub fn encode_png(s: &Surface, compress: i32) -> Result<Vec<u8>, String> {
         rgba
     } else {
         enc.set_color(png::ColorType::Rgb);
-        rgba.chunks_exact(4).flat_map(|p| [p[0], p[1], p[2]]).collect()
+        rgba.as_chunks::<4>().0.iter()
+            .flat_map(|p| [p[0], p[1], p[2]])
+            .collect()
     };
     let mut wr = enc.write_header().map_err(|e| e.to_string())?;
     wr.write_image_data(&raw).map_err(|e| e.to_string())?;
@@ -204,11 +222,17 @@ pub fn encode_png(s: &Surface, compress: i32) -> Result<Vec<u8>, String> {
 
 fn encode_jpeg(s: &Surface, quality: i32) -> Result<Vec<u8>, String> {
     let (w, h, rgba, _) = rgba_rows(s);
-    let rgb: Vec<u8> = rgba.chunks_exact(4).flat_map(|p| [p[0], p[1], p[2]]).collect();
+    let rgb: Vec<u8> = rgba
+        .as_chunks::<4>().0.iter()
+        .flat_map(|p| [p[0], p[1], p[2]])
+        .collect();
     let q = if quality < 1 { 90 } else { quality.min(100) } as u8;
     let mut out = Vec::new();
     let enc = jpeg_encoder::Encoder::new(&mut out, q);
-    let (w16, h16) = (u16::try_from(w).map_err(|e| e.to_string())?, u16::try_from(h).map_err(|e| e.to_string())?);
+    let (w16, h16) = (
+        u16::try_from(w).map_err(|e| e.to_string())?,
+        u16::try_from(h).map_err(|e| e.to_string())?,
+    );
     enc.encode(&rgb, w16, h16, jpeg_encoder::ColorType::Rgb)
         .map_err(|e| e.to_string())?;
     Ok(out)
@@ -265,6 +289,7 @@ pub fn save(
         _ => return Err(PyValueError::new_err(format!("Unsupported format: .{ext}"))),
     }
     .map_err(|e| pygame_error(py, e))?;
-    std::fs::write(&name, bytes).map_err(|e| pygame_error(py, format!("Couldn't write {name}: {e}")))?;
+    std::fs::write(&name, bytes)
+        .map_err(|e| pygame_error(py, format!("Couldn't write {name}: {e}")))?;
     Ok(())
 }

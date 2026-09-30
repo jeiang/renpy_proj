@@ -84,7 +84,11 @@ pub fn scancode(code: KeyCode) -> u32 {
 }
 
 fn keycode_of(row: &Row) -> u32 {
-    if row.2 != 0 { row.2 } else { row.1 | SCANCODE_MASK }
+    if row.2 != 0 {
+        row.2
+    } else {
+        row.1 | SCANCODE_MASK
+    }
 }
 
 /// SDL keycode of a physical key on a US layout (used when the layout gives no character).
@@ -106,7 +110,10 @@ pub fn scancode_from_keycode(keycode: u32) -> u32 {
     if keycode & SCANCODE_MASK != 0 {
         return keycode & !SCANCODE_MASK;
     }
-    TABLE.iter().find(|r| keycode_of(r) == keycode).map_or(0, |r| r.1)
+    TABLE
+        .iter()
+        .find(|r| keycode_of(r) == keycode)
+        .map_or(0, |r| r.1)
 }
 
 /// `SDL_GetKeyName`.

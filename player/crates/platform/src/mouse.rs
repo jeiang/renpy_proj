@@ -28,7 +28,11 @@ fn reset() {
 #[pyfunction]
 fn get_pressed() -> (u8, u8, u8) {
     let m = evloop::INPUT.lock().mouse_mask;
-    (u8::from(m & 1 != 0), u8::from(m & 2 != 0), u8::from(m & 4 != 0))
+    (
+        u8::from(m & 1 != 0),
+        u8::from(m & 2 != 0),
+        u8::from(m & 4 != 0),
+    )
 }
 
 #[pyfunction]
@@ -43,7 +47,8 @@ fn get_rel() -> (i32, i32) {
 
 #[pyfunction]
 fn set_pos(py: Python<'_>, pos: (i32, i32)) -> PyResult<()> {
-    evloop::warp_cursor(pos.0, pos.1).map_err(|e| util::pg_error(py, &format!("cannot move the cursor: {e}")))
+    evloop::warp_cursor(pos.0, pos.1)
+        .map_err(|e| util::pg_error(py, &format!("cannot move the cursor: {e}")))
 }
 
 #[pyfunction]
@@ -60,9 +65,18 @@ fn get_focused() -> bool {
 
 /// SDL1 bitmap cursors are not supported. `ColorCursor` covers the Ren'Py use.
 #[pyfunction]
-fn set_cursor(py: Python<'_>, size: Py<PyAny>, hotspot: Py<PyAny>, xormasks: Py<PyAny>, andmasks: Py<PyAny>) -> PyResult<()> {
+fn set_cursor(
+    py: Python<'_>,
+    size: Py<PyAny>,
+    hotspot: Py<PyAny>,
+    xormasks: Py<PyAny>,
+    andmasks: Py<PyAny>,
+) -> PyResult<()> {
     let _ = (size, hotspot, xormasks, andmasks);
-    Err(util::pg_error(py, "Bitmap cursors are not supported; use mouse.ColorCursor."))
+    Err(util::pg_error(
+        py,
+        "Bitmap cursors are not supported; use mouse.ColorCursor.",
+    ))
 }
 
 #[pyfunction]
@@ -91,7 +105,10 @@ impl ColorCursor {
             .map_err(|e| util::pg_error(py, &format!("bad cursor image: {e}")))?;
         let cursor = evloop::on_loop(move |el| el.create_custom_cursor(source))
             .map_err(|e| util::pg_error(py, &format!("cannot create the cursor: {e}")))?;
-        Ok(Self { cursor, id: NEXT_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed) })
+        Ok(Self {
+            cursor,
+            id: NEXT_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+        })
     }
 
     fn activate(&self) {
@@ -111,7 +128,7 @@ pub mod renpy_pygame_mouse {
     use super::ColorCursor;
     #[pymodule_export]
     use super::{
-        get_cursor, get_focused, get_pos, get_pressed, get_rel, init, quit, reset, set_cursor, set_pos,
-        set_visible,
+        get_cursor, get_focused, get_pos, get_pressed, get_rel, init, quit, reset, set_cursor,
+        set_pos, set_visible,
     };
 }

@@ -105,7 +105,8 @@ fn blur_filters(sigma: f32, n: i32) -> (i32, i32, i32) {
     }
     let wu = wl + 2;
     let wlf = wl as f32;
-    let m = ((12.0 * sigma * sigma - nf * wlf * wlf - 4.0 * nf * wlf - 3.0 * nf) / (-4.0 * wlf - 4.0))
+    let m = ((12.0 * sigma * sigma - nf * wlf * wlf - 4.0 * nf * wlf - 3.0 * nf)
+        / (-4.0 * wlf - 4.0))
         .round() as i32;
     (wl, wu, m)
 }
@@ -114,15 +115,18 @@ fn blur_filters(sigma: f32, n: i32) -> (i32, i32, i32) {
 pub fn linblur(src: &Img, dst: &Img, radius: i32, vertical: bool) {
     let (src, dst) = (*src, *dst);
     let radius = radius.max(0) as i64;
-    let (lines, cols) = if vertical { (dst.w, dst.h) } else { (dst.h, dst.w) };
+    let (lines, cols) = if vertical {
+        (dst.w, dst.h)
+    } else {
+        (dst.h, dst.w)
+    };
     if cols == 0 {
         return;
     }
     let divisor = (radius * 2 + 1) as i32;
     par::lines(lines, cols, move |r| {
-        let at = |img: &Img, c: usize| -> isize {
-            if vertical { img.at(r, c) } else { img.at(c, r) }
-        };
+        let at =
+            |img: &Img, c: usize| -> isize { if vertical { img.at(r, c) } else { img.at(c, r) } };
         let get = |k: i64| -> [i32; 4] {
             let c = k.clamp(0, cols as i64 - 1) as usize;
             let p = src.rd32(at(&src, c)).to_le_bytes();
@@ -155,7 +159,11 @@ pub fn linblur(src: &Img, dst: &Img, radius: i32, vertical: bool) {
 pub fn blur(src: &Img, wrk: &Img, dst: &Img, xrad: f32, yrad: f32) {
     let n = 3;
     let (xl, xu, xm) = blur_filters(xrad, n);
-    let (yl, yu, ym) = if xrad != yrad { blur_filters(yrad, n) } else { (xl, xu, xm) };
+    let (yl, yu, ym) = if xrad != yrad {
+        blur_filters(yrad, n)
+    } else {
+        (xl, xu, xm)
+    };
     let mut cur = *src;
     for i in 0..n {
         let xr = if i < xm { xl } else { xu };
@@ -195,15 +203,26 @@ pub fn bilinear(
     let (src, dst) = (*src, *dst);
     let (xdelta, ydelta) = if precise {
         (
-            if dwidth > 1.0 { 256.0 * (swidth - 1.0) / (dwidth - 1.0) } else { 0.0 },
-            if dheight > 1.0 { 256.0 * (sheight - 1.0) / (dheight - 1.0) } else { 0.0 },
+            if dwidth > 1.0 {
+                256.0 * (swidth - 1.0) / (dwidth - 1.0)
+            } else {
+                0.0
+            },
+            if dheight > 1.0 {
+                256.0 * (sheight - 1.0) / (dheight - 1.0)
+            } else {
+                0.0
+            },
         )
     } else {
-        (255.0 * (swidth - 1.0) / dwidth, 255.0 * (sheight - 1.0) / dheight)
+        (
+            255.0 * (swidth - 1.0) / dwidth,
+            255.0 * (sheight - 1.0) / dheight,
+        )
     };
     par::rows(dst.w, dst.h, move |y| {
         let sline = (syoff * 256.0 + (y as f32 + dyoff) * ydelta) as i32;
-        let s1frac = (sline & 255) as i32;
+        let s1frac = (sline & 255);
         let s0frac = 256 - s1frac;
         let row_off = (sline >> 8) as isize * src.pitch as isize;
         let mut scol = sxoff * 256.0 + dxoff * xdelta;
@@ -214,8 +233,12 @@ pub fn bilinear(
             let s1 = s0 + src.pitch as isize;
             let mut out = [0u8; 4];
             for c in 0..4isize {
-                let left = (((src.rd8(s0 + c) as i32 * s0frac) + (src.rd8(s1 + c) as i32 * s1frac)) >> 8) * xfrac;
-                let right = (((src.rd8(s0 + 4 + c) as i32 * s0frac) + (src.rd8(s1 + 4 + c) as i32 * s1frac)) >> 8)
+                let left =
+                    (((src.rd8(s0 + c) as i32 * s0frac) + (src.rd8(s1 + c) as i32 * s1frac)) >> 8)
+                        * xfrac;
+                let right = (((src.rd8(s0 + 4 + c) as i32 * s0frac)
+                    + (src.rd8(s1 + 4 + c) as i32 * s1frac))
+                    >> 8)
                     * (256 - xfrac);
                 out[c as usize] = (((left + right) as u32 & 0xffff) >> 8) as u8;
             }
@@ -318,9 +341,22 @@ pub fn transform(
                 (pcl >> 8) & 0x00ff_00ff,
                 (pdl >> 8) & 0x00ff_00ff,
             );
-            let (pal, pbl, pcl, pdl) = (pal & 0x00ff_00ff, pbl & 0x00ff_00ff, pcl & 0x00ff_00ff, pdl & 0x00ff_00ff);
-            let rh = lerp_packed(lerp_packed(pah, pch, yfrac), lerp_packed(pbh, pdh, yfrac), xfrac);
-            let rl = lerp_packed(lerp_packed(pal, pcl, yfrac), lerp_packed(pbl, pdl, yfrac), xfrac);
+            let (pal, pbl, pcl, pdl) = (
+                pal & 0x00ff_00ff,
+                pbl & 0x00ff_00ff,
+                pcl & 0x00ff_00ff,
+                pdl & 0x00ff_00ff,
+            );
+            let rh = lerp_packed(
+                lerp_packed(pah, pch, yfrac),
+                lerp_packed(pbh, pdh, yfrac),
+                xfrac,
+            );
+            let rl = lerp_packed(
+                lerp_packed(pal, pcl, yfrac),
+                lerp_packed(pbl, pdl, yfrac),
+                xfrac,
+            );
             let mut alpha = (((rh << 8) | rl) >> ashift) & 0xff;
             alpha = (alpha * amul) >> 8;
             let o = dst.at(x as usize, y);
@@ -399,7 +435,10 @@ pub fn staticgray(src: &Img, dst: &Img, mul: [i32; 4], shift: u32, vmap: &[u8]) 
                 sum += p[c] as i32 * mul[c];
             }
             let idx = (sum >> shift) as usize;
-            dst.wr8((y * dst.pitch + x) as isize, vmap.get(idx).copied().unwrap_or(0));
+            dst.wr8(
+                (y * dst.pitch + x) as isize,
+                vmap.get(idx).copied().unwrap_or(0),
+            );
         }
     });
 }
@@ -414,7 +453,12 @@ pub fn premultiply_alpha(src: &Img, dst: &Img) {
             dst.put(
                 x,
                 y,
-                u32::from_le_bytes([a as u8, ((b * a) / 255) as u8, ((g * a) / 255) as u8, ((r * a) / 255) as u8]),
+                u32::from_le_bytes([
+                    a as u8,
+                    ((b * a) / 255) as u8,
+                    ((g * a) / 255) as u8,
+                    ((r * a) / 255) as u8,
+                ]),
             );
         }
     });

@@ -7,10 +7,10 @@
 //! against the clock that `advance_time` sets.
 
 use std::collections::VecDeque;
-use std::ffi::{c_int, c_void, CString};
+use std::ffi::{CString, c_int, c_void};
 use std::ptr;
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::thread::JoinHandle;
 
 use ffmpeg_sys_next as ffi;
@@ -165,7 +165,9 @@ impl Shared {
             return Ok(None);
         }
         let offset_time = offset_time_of(st);
-        let Some(first) = st.vq.front() else { return Ok(None) };
+        let Some(first) = st.vq.front() else {
+            return Ok(None);
+        };
         let off = match st.video_pts_offset {
             Some(o) => o,
             None => {
@@ -198,7 +200,11 @@ impl Media {
         reap(false);
         let rate = sample_rate() as f64;
         let audio_duration = if end > 0.0 {
-            if end < start { 0 } else { ((end - start) * rate) as i64 }
+            if end < start {
+                0
+            } else {
+                ((end - start) * rate) as i64
+            }
         } else {
             -1
         };
@@ -234,7 +240,10 @@ impl Media {
             .name(format!("decode: {}", sh.name))
             .spawn(move || decode_thread(t_sh, src))
             .expect("could not start the decode thread");
-        Media { sh, thread: Some(thread) }
+        Media {
+            sh,
+            thread: Some(thread),
+        }
     }
 
     /// A handle for `video_ready` and `read_video`, which the caller uses without holding other locks.
@@ -273,7 +282,9 @@ impl Media {
 
         let mut done = 0usize;
         while done < want {
-            let Some(front) = st.audio_q.front() else { break };
+            let Some(front) = st.audio_q.front() else {
+                break;
+            };
             let idx = st.audio_out_index;
             let avail = front.len() / 2 - idx;
             let n = avail.min(want - done);
@@ -381,7 +392,15 @@ impl Io {
                 drop(Box::from_raw(opaque));
                 return None;
             }
-            let pb = ffi::avio_alloc_context(buffer, IO_BUFFER as c_int, 0, opaque as *mut c_void, Some(io_read), None, Some(io_seek));
+            let pb = ffi::avio_alloc_context(
+                buffer,
+                IO_BUFFER as c_int,
+                0,
+                opaque as *mut c_void,
+                Some(io_read),
+                None,
+                Some(io_seek),
+            );
             if pb.is_null() {
                 ffi::av_free(buffer as *mut c_void);
                 drop(Box::from_raw(opaque));
@@ -421,7 +440,10 @@ impl Pkt {
 
 // ---------------------------------------------------------------- decoder
 
-unsafe extern "C" fn get_fmt_vt(_: *mut ffi::AVCodecContext, mut f: *const ffi::AVPixelFormat) -> ffi::AVPixelFormat {
+unsafe extern "C" fn get_fmt_vt(
+    _: *mut ffi::AVCodecContext,
+    mut f: *const ffi::AVPixelFormat,
+) -> ffi::AVPixelFormat {
     // Hardware formats come first and software fallbacks last: take VideoToolbox if offered, else the last entry.
     let mut last = ffi::AVPixelFormat::AV_PIX_FMT_NONE;
     unsafe {
@@ -522,7 +544,8 @@ impl Decoder {
             (*d.fmt).pb = d.io.as_ref().unwrap().pb;
             (*d.fmt).flags |= ffi::AVFMT_FLAG_CUSTOM_IO as c_int;
             let cname = CString::new(sh.name.as_str()).unwrap_or_default();
-            let r = ffi::avformat_open_input(&mut d.fmt, cname.as_ptr(), ptr::null(), ptr::null_mut());
+            let r =
+                ffi::avformat_open_input(&mut d.fmt, cname.as_ptr(), ptr::null(), ptr::null_mut());
             if r < 0 {
                 // avformat_open_input frees the context on failure.
                 d.fmt = ptr::null_mut();
@@ -533,10 +556,13 @@ impl Decoder {
                 return Err(format!("avformat_find_stream_info failed ({})", av_err(r)));
             }
 
-            let streams = std::slice::from_raw_parts((*d.fmt).streams, (*d.fmt).nb_streams as usize);
+            let streams =
+                std::slice::from_raw_parts((*d.fmt).streams, (*d.fmt).nb_streams as usize);
             for (i, s) in streams.iter().enumerate() {
                 match (*(**s).codecpar).codec_type {
-                    ffi::AVMediaType::AVMEDIA_TYPE_VIDEO if sh.want_video && d.vstream < 0 => d.vstream = i as c_int,
+                    ffi::AVMediaType::AVMEDIA_TYPE_VIDEO if sh.want_video && d.vstream < 0 => {
+                        d.vstream = i as c_int
+                    }
                     ffi::AVMediaType::AVMEDIA_TYPE_AUDIO if d.astream < 0 => d.astream = i as c_int,
                     _ => {}
                 }
@@ -575,11 +601,13 @@ impl Decoder {
             {
                 let mut st = sh.st.lock();
                 if st.audio_duration < 0
-                    && ffi::av_fmt_ctx_get_duration_estimation_method(d.fmt) != ffi::AVDurationEstimationMethod::AVFMT_DURATION_FROM_BITRATE
+                    && ffi::av_fmt_ctx_get_duration_estimation_method(d.fmt)
+                        != ffi::AVDurationEstimationMethod::AVFMT_DURATION_FROM_BITRATE
                 {
                     let dur = (*d.fmt).duration;
                     if dur != ffi::AV_NOPTS_VALUE && dur > 0 {
-                        let mut ad = (dur as i128 * rate as i128 / ffi::AV_TIME_BASE as i128) as i64;
+                        let mut ad =
+                            (dur as i128 * rate as i128 / ffi::AV_TIME_BASE as i128) as i64;
                         st.total_duration = dur as f64 / ffi::AV_TIME_BASE as f64;
                         // Reject durations outside 0s to 3600s.
                         if ad < 0 || ad > 3600 * rate as i64 {
@@ -601,16 +629,24 @@ impl Decoder {
             }
 
             if sh.skip != 0.0 {
-                ffi::av_seek_frame(d.fmt, -1, (sh.skip * ffi::AV_TIME_BASE as f64) as i64, ffi::AVSEEK_FLAG_BACKWARD as c_int);
+                ffi::av_seek_frame(
+                    d.fmt,
+                    -1,
+                    (sh.skip * ffi::AV_TIME_BASE as f64) as i64,
+                    ffi::AVSEEK_FLAG_BACKWARD as c_int,
+                );
             }
         }
         Ok(d)
     }
 
-    unsafe fn open_video_context(&mut self, stream: *mut ffi::AVStream) -> *mut ffi::AVCodecContext {
+    unsafe fn open_video_context(
+        &mut self,
+        stream: *mut ffi::AVStream,
+    ) -> *mut ffi::AVCodecContext {
         unsafe {
-            let ctx = open_codec(stream, Some(self));
-            ctx
+            
+            open_codec(stream, Some(self))
         }
     }
 
@@ -789,7 +825,11 @@ impl Decoder {
                 return;
             }
             let have = self.fill(true);
-            let pkt = if have { self.apq.front().unwrap().0 } else { ptr::null_mut() };
+            let pkt = if have {
+                self.apq.front().unwrap().0
+            } else {
+                ptr::null_mut()
+            };
             let ret = unsafe { ffi::avcodec_send_packet(self.actx, pkt) };
             if ret == 0 {
                 if have {
@@ -808,12 +848,11 @@ impl Decoder {
                 }
                 if ret < 0 {
                     // End of stream: flush what the resampler holds back.
-                    if !self.swr.is_null() {
-                        if let Some(d) = self.convert(ptr::null()) {
+                    if !self.swr.is_null()
+                        && let Some(d) = self.convert(ptr::null()) {
                             let start = self.audio_next_pts;
                             self.push_audio(d, start);
                         }
-                    }
                     self.set_audio_finished();
                     return;
                 }
@@ -823,7 +862,11 @@ impl Decoder {
                 }
                 let start = unsafe {
                     let bt = (*self.aframe).best_effort_timestamp;
-                    if bt == ffi::AV_NOPTS_VALUE { self.audio_next_pts } else { bt as f64 * tb }
+                    if bt == ffi::AV_NOPTS_VALUE {
+                        self.audio_next_pts
+                    } else {
+                        bt as f64 * tb
+                    }
                 };
                 let input = self.aframe;
                 if let Some(d) = self.convert(input) {
@@ -850,7 +893,10 @@ impl Decoder {
         if !self.hw_on || self.got_video_frame || !self.replay_ok {
             return false;
         }
-        log::warn!("{}: hardware decode failed before the first frame; using software", self.sh.name);
+        log::warn!(
+            "{}: hardware decode failed before the first frame; using software",
+            self.sh.name
+        );
         unsafe {
             ffi::avcodec_free_context(&mut self.vctx);
             ffi::av_buffer_unref(&mut self.hw_dev);
@@ -897,7 +943,11 @@ impl Decoder {
         };
         loop {
             let have = self.fill(false);
-            let pkt = if have { self.vpq.front().unwrap().0 } else { ptr::null_mut() };
+            let pkt = if have {
+                self.vpq.front().unwrap().0
+            } else {
+                ptr::null_mut()
+            };
             let sret = unsafe { ffi::avcodec_send_packet(self.vctx, pkt) };
             if sret == 0 {
                 if have {
@@ -930,7 +980,11 @@ impl Decoder {
                 if rret != ffi::AVERROR_EOF && self.fall_back_to_software() {
                     continue;
                 }
-                self.set_video_finished(if rret == ffi::AVERROR_EOF { None } else { Some(format!("video decode failed ({})", av_err(rret))) });
+                self.set_video_finished(if rret == ffi::AVERROR_EOF {
+                    None
+                } else {
+                    Some(format!("video decode failed ({})", av_err(rret)))
+                });
                 return None;
             }
             break;
@@ -941,7 +995,11 @@ impl Decoder {
 
         let pts = unsafe {
             let bt = (*self.vframe).best_effort_timestamp;
-            if bt == ffi::AV_NOPTS_VALUE { self.video_next_pts } else { bt as f64 * tb }
+            if bt == ffi::AV_NOPTS_VALUE {
+                self.video_next_pts
+            } else {
+                bt as f64 * tb
+            }
         };
         self.video_next_pts = pts + self.frame_dur;
 
@@ -952,8 +1010,8 @@ impl Decoder {
         // If decoding is behind the clock, drop the frame.
         {
             let st = self.sh.st.lock();
-            if let Some(off) = st.video_pts_offset {
-                if off + pts < st.video_read_time {
+            if let Some(off) = st.video_pts_offset
+                && off + pts < st.video_read_time {
                     drop(st);
                     // Five seconds behind: give up on video so memory stays bounded.
                     if off + pts < self.sh.st.lock().video_read_time - 5.0 {
@@ -963,7 +1021,6 @@ impl Decoder {
                         return None;
                     }
                 }
-            }
         }
 
         // Bring a hardware frame to system memory.
@@ -972,7 +1029,10 @@ impl Decoder {
                 ffi::av_frame_unref(self.sw_frame);
                 let r = ffi::av_hwframe_transfer_data(self.sw_frame, self.vframe, 0);
                 if r < 0 {
-                    self.set_video_finished(Some(format!("hardware frame transfer failed ({})", av_err(r))));
+                    self.set_video_finished(Some(format!(
+                        "hardware frame transfer failed ({})",
+                        av_err(r)
+                    )));
                     return None;
                 }
                 ffi::av_frame_copy_props(self.sw_frame, self.vframe);
@@ -1025,13 +1085,18 @@ fn av_err(code: c_int) -> String {
     let mut buf = [0 as std::ffi::c_char; 128];
     unsafe {
         ffi::av_strerror(code, buf.as_mut_ptr(), buf.len());
-        std::ffi::CStr::from_ptr(buf.as_ptr()).to_string_lossy().into_owned()
+        std::ffi::CStr::from_ptr(buf.as_ptr())
+            .to_string_lossy()
+            .into_owned()
     }
 }
 
 /// Opens the decoder of `stream`. Pass the decoder state for video, which
 /// enables VideoToolbox when the device can be created.
-unsafe fn open_codec(stream: *mut ffi::AVStream, video: Option<&mut Decoder>) -> *mut ffi::AVCodecContext {
+unsafe fn open_codec(
+    stream: *mut ffi::AVStream,
+    video: Option<&mut Decoder>,
+) -> *mut ffi::AVCodecContext {
     unsafe {
         let mut ctx = ffi::avcodec_alloc_context3(ptr::null());
         if ctx.is_null() {
@@ -1054,7 +1119,13 @@ unsafe fn open_codec(stream: *mut ffi::AVStream, video: Option<&mut Decoder>) ->
                 let mut hw = false;
                 if std::env::var_os("RENPY_PLAYER_NO_HWDEC").is_none() {
                     let mut dev: *mut ffi::AVBufferRef = ptr::null_mut();
-                    let r = ffi::av_hwdevice_ctx_create(&mut dev, ffi::AVHWDeviceType::AV_HWDEVICE_TYPE_VIDEOTOOLBOX, ptr::null(), ptr::null_mut(), 0);
+                    let r = ffi::av_hwdevice_ctx_create(
+                        &mut dev,
+                        ffi::AVHWDeviceType::AV_HWDEVICE_TYPE_VIDEOTOOLBOX,
+                        ptr::null(),
+                        ptr::null_mut(),
+                        0,
+                    );
                     if r >= 0 {
                         (*ctx).hw_device_ctx = ffi::av_buffer_ref(dev);
                         (*ctx).get_format = Some(get_fmt_vt);
@@ -1099,7 +1170,16 @@ struct LayoutInfo {
 
 fn layout_of(fmt: c_int) -> Option<LayoutInfo> {
     use ffi::AVPixelFormat as P;
-    let l = |layout, semi, wide, csx, csy, full| Some(LayoutInfo { layout, semi, wide, csx, csy, full });
+    let l = |layout, semi, wide, csx, csy, full| {
+        Some(LayoutInfo {
+            layout,
+            semi,
+            wide,
+            csx,
+            csy,
+            full,
+        })
+    };
     let is = |p: P| fmt == p as c_int;
     if is(P::AV_PIX_FMT_NV12) {
         l(PlaneLayout::Nv12, true, false, 1, 1, false)
@@ -1133,8 +1213,15 @@ unsafe fn build_frame(f: *const ffi::AVFrame, pts: f64) -> Result<VideoFrame, St
     unsafe {
         let fmt = (*f).format;
         let li = layout_of(fmt).ok_or_else(|| {
-            let name = ffi::av_get_pix_fmt_name(std::mem::transmute::<c_int, ffi::AVPixelFormat>(fmt));
-            let name = if name.is_null() { "unknown".into() } else { std::ffi::CStr::from_ptr(name).to_string_lossy().into_owned() };
+            let name =
+                ffi::av_get_pix_fmt_name(std::mem::transmute::<c_int, ffi::AVPixelFormat>(fmt));
+            let name = if name.is_null() {
+                "unknown".into()
+            } else {
+                std::ffi::CStr::from_ptr(name)
+                    .to_string_lossy()
+                    .into_owned()
+            };
             format!("unsupported video pixel format {name}; the player has no swscale")
         })?;
         let (w, h) = ((*f).width as u32, (*f).height as u32);
@@ -1156,20 +1243,44 @@ unsafe fn build_frame(f: *const ffi::AVFrame, pts: f64) -> Result<VideoFrame, St
             let row = pw as usize * bpt;
             let mut data = vec![0u8; row * ph as usize];
             for y in 0..ph as usize {
-                ptr::copy_nonoverlapping(src.add(y * ls as usize), data.as_mut_ptr().add(y * row), row);
+                ptr::copy_nonoverlapping(
+                    src.add(y * ls as usize),
+                    data.as_mut_ptr().add(y * row),
+                    row,
+                );
             }
-            planes.push(Plane { data, stride: row, width: pw, height: ph });
+            planes.push(Plane {
+                data,
+                stride: row,
+                width: pw,
+                height: ph,
+            });
         }
 
         let full_range = li.full || (*f).color_range == ffi::AVColorRange::AVCOL_RANGE_JPEG;
         let matrix = match (*f).colorspace {
             ffi::AVColorSpace::AVCOL_SPC_BT709 => Matrix::Bt709,
-            ffi::AVColorSpace::AVCOL_SPC_BT2020_NCL | ffi::AVColorSpace::AVCOL_SPC_BT2020_CL => Matrix::Bt2020,
-            ffi::AVColorSpace::AVCOL_SPC_BT470BG | ffi::AVColorSpace::AVCOL_SPC_SMPTE170M => Matrix::Bt601,
+            ffi::AVColorSpace::AVCOL_SPC_BT2020_NCL | ffi::AVColorSpace::AVCOL_SPC_BT2020_CL => {
+                Matrix::Bt2020
+            }
+            ffi::AVColorSpace::AVCOL_SPC_BT470BG | ffi::AVColorSpace::AVCOL_SPC_SMPTE170M => {
+                Matrix::Bt601
+            }
             _ => {
-                if h >= 720 { Matrix::Bt709 } else { Matrix::Bt601 }
+                if h >= 720 {
+                    Matrix::Bt709
+                } else {
+                    Matrix::Bt601
+                }
             }
         };
-        Ok(VideoFrame { width: w, height: h, layout: li.layout, color: ColorInfo { full_range, matrix }, planes, pts })
+        Ok(VideoFrame {
+            width: w,
+            height: h,
+            layout: li.layout,
+            color: ColorInfo { full_range, matrix },
+            planes,
+            pts,
+        })
     }
 }

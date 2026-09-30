@@ -38,7 +38,11 @@ static GL_ATTRIBUTES: std::sync::LazyLock<Mutex<HashMap<i64, i64>>> =
 
 fn title_or_default() -> String {
     let t = evloop::INPUT.lock().title.clone();
-    if t.is_empty() { DEFAULT_TITLE.to_string() } else { t }
+    if t.is_empty() {
+        DEFAULT_TITLE.to_string()
+    } else {
+        t
+    }
 }
 
 fn os_err(py: Python<'_>, what: &str, e: impl std::fmt::Display) -> PyErr {
@@ -46,7 +50,8 @@ fn os_err(py: Python<'_>, what: &str, e: impl std::fmt::Display) -> PyErr {
 }
 
 fn need_window(py: Python<'_>) -> PyResult<std::sync::Arc<WinitWindow>> {
-    evloop::window().ok_or_else(|| util::pg_error(py, "No window exists. Call display.set_mode first."))
+    evloop::window()
+        .ok_or_else(|| util::pg_error(py, "No window exists. Call display.set_mode first."))
 }
 
 fn logical_size(w: &WinitWindow) -> (i64, i64) {
@@ -65,7 +70,10 @@ fn apply_pos(w: &WinitWindow, pos: (i64, i64)) {
             let mp = m.position().to_logical::<f64>(s);
             let ms = m.size().to_logical::<f64>(s);
             let os = w.outer_size().to_logical::<f64>(w.scale_factor());
-            w.set_outer_position(LogicalPosition::new(mp.x + (ms.width - os.width) / 2.0, mp.y + (ms.height - os.height) / 2.0));
+            w.set_outer_position(LogicalPosition::new(
+                mp.x + (ms.width - os.width) / 2.0,
+                mp.y + (ms.height - os.height) / 2.0,
+            ));
         }
         return;
     }
@@ -74,7 +82,9 @@ fn apply_pos(w: &WinitWindow, pos: (i64, i64)) {
 
 fn monitor_size(py: Python<'_>) -> PyResult<(i64, i64)> {
     let m = evloop::monitors().map_err(|e| os_err(py, "cannot query monitors", e))?;
-    let m = m.first().ok_or_else(|| util::pg_error(py, "no video display found"))?;
+    let m = m
+        .first()
+        .ok_or_else(|| util::pg_error(py, "no video display found"))?;
     Ok((i64::from(m.w), i64::from(m.h)))
 }
 
@@ -85,7 +95,13 @@ pub struct PyWindow {
     surface: Mutex<Option<Py<PyAny>>>,
 }
 
-fn open(py: Python<'_>, title: &str, resolution: (i64, i64), flags: i64, pos: (i64, i64)) -> PyResult<PyWindow> {
+fn open(
+    py: Python<'_>,
+    title: &str,
+    resolution: (i64, i64),
+    flags: i64,
+    pos: (i64, i64),
+) -> PyResult<PyWindow> {
     let (mut w, mut h) = resolution;
     if w <= 0 || h <= 0 {
         (w, h) = monitor_size(py)?;
@@ -102,7 +118,10 @@ fn open(py: Python<'_>, title: &str, resolution: (i64, i64), flags: i64, pos: (i
         apply_pos(&win, pos);
     }
     evloop::pump(Some(Duration::ZERO));
-    Ok(PyWindow { create_flags: flags, surface: Mutex::new(None) })
+    Ok(PyWindow {
+        create_flags: flags,
+        surface: Mutex::new(None),
+    })
 }
 
 #[pymethods]
@@ -316,7 +335,10 @@ impl PyWindow {
 }
 
 fn software_present_error(py: Python<'_>) -> PyErr {
-    util::pg_error(py, "The window surface cannot be presented: this player draws with the wgpu renderer only.")
+    util::pg_error(
+        py,
+        "The window surface cannot be presented: this player draws with the wgpu renderer only.",
+    )
 }
 
 /// Accepts `str` or UTF-8 `bytes`, as Ren'Py passes either.
@@ -363,7 +385,9 @@ fn do_toggle_fullscreen() -> bool {
 
 fn position(py: Python<'_>) -> PyResult<(i64, i64)> {
     let w = need_window(py)?;
-    let p = w.outer_position().map_err(|e| os_err(py, "cannot read the window position", e))?;
+    let p = w
+        .outer_position()
+        .map_err(|e| os_err(py, "cannot read the window position", e))?;
     let l = p.to_logical::<f64>(w.scale_factor());
     Ok((l.x.round() as i64, l.y.round() as i64))
 }
@@ -398,24 +422,43 @@ fn hint(hint: &Bound<'_, PyAny>, value: &Bound<'_, PyAny>, priority: i64) -> PyR
 #[pyfunction]
 fn _get_hint(hint: &str, default: Py<PyAny>, py: Python<'_>) -> Py<PyAny> {
     if let Some(v) = HINTS.lock().get(hint) {
-        return v.clone().into_pyobject(py).map_or_else(|_| default, |o| o.into_any().unbind());
+        return v
+            .clone()
+            .into_pyobject(py)
+            .map_or_else(|_| default, |o| o.into_any().unbind());
     }
     if let Ok(v) = std::env::var(hint) {
-        return v.into_pyobject(py).map_or_else(|_| default, |o| o.into_any().unbind());
+        return v
+            .into_pyobject(py)
+            .map_or_else(|_| default, |o| o.into_any().unbind());
     }
     default
 }
 
 #[pyfunction]
 #[pyo3(signature = (resolution=(0, 0), flags=0, depth=0, pos=(WINDOWPOS_UNDEFINED, WINDOWPOS_UNDEFINED)))]
-fn set_mode(py: Python<'_>, resolution: (i64, i64), flags: i64, depth: i64, pos: (i64, i64)) -> PyResult<Py<PyAny>> {
+fn set_mode(
+    py: Python<'_>,
+    resolution: (i64, i64),
+    flags: i64,
+    depth: i64,
+    pos: (i64, i64),
+) -> PyResult<Py<PyAny>> {
     let _ = depth;
     let resize_flags = WINDOW_OPENGL | WINDOW_FULLSCREEN_DESKTOP;
     let existing = MAIN_WINDOW.lock().as_ref().map(|w| w.clone_ref(py));
     if let Some(win) = existing {
         let win = win.bind(py);
-        if (flags & !resize_flags) == (win.borrow().create_flags & !resize_flags) && evloop::window().is_some() {
-            win.borrow().resize(py, resolution, flags & WINDOW_OPENGL != 0, Some(flags & WINDOW_FULLSCREEN != 0), None)?;
+        if (flags & !resize_flags) == (win.borrow().create_flags & !resize_flags)
+            && evloop::window().is_some()
+        {
+            win.borrow().resize(
+                py,
+                resolution,
+                flags & WINDOW_OPENGL != 0,
+                Some(flags & WINDOW_FULLSCREEN != 0),
+                None,
+            )?;
             return win.borrow().get_surface(py);
         }
         win.borrow().destroy();
@@ -447,7 +490,11 @@ fn get_window(py: Python<'_>) -> Option<Py<PyWindow>> {
 
 #[pyfunction]
 fn flip(py: Python<'_>) -> PyResult<()> {
-    if MAIN_WINDOW.lock().is_some() { Err(software_present_error(py)) } else { Ok(()) }
+    if MAIN_WINDOW.lock().is_some() {
+        Err(software_present_error(py))
+    } else {
+        Ok(())
+    }
 }
 
 #[pyfunction]
@@ -480,14 +527,18 @@ fn get_wm_info(py: Python<'_>) -> Bound<'_, PyDict> {
 
 #[pyfunction]
 fn get_num_video_displays(py: Python<'_>) -> PyResult<usize> {
-    Ok(evloop::monitors().map_err(|e| os_err(py, "cannot query monitors", e))?.len())
+    Ok(evloop::monitors()
+        .map_err(|e| os_err(py, "cannot query monitors", e))?
+        .len())
 }
 
 #[pyfunction]
 #[pyo3(signature = (index))]
 fn get_display_bounds(py: Python<'_>, index: usize) -> PyResult<(i32, i32, i32, i32)> {
     let m = evloop::monitors().map_err(|e| os_err(py, "cannot query monitors", e))?;
-    let m = m.get(index).ok_or_else(|| util::pg_error(py, "Display index out of range."))?;
+    let m = m
+        .get(index)
+        .ok_or_else(|| util::pg_error(py, "Display index out of range."))?;
     Ok((m.x, m.y, m.w, m.h))
 }
 
@@ -496,7 +547,9 @@ fn get_display_bounds(py: Python<'_>, index: usize) -> PyResult<(i32, i32, i32, 
 fn list_modes(py: Python<'_>, depth: i64, flags: i64, display: usize) -> PyResult<Vec<(i32, i32)>> {
     let _ = (depth, flags);
     let m = evloop::monitors().map_err(|e| os_err(py, "cannot query monitors", e))?;
-    let m = m.get(display).ok_or_else(|| util::pg_error(py, "Display index out of range."))?;
+    let m = m
+        .get(display)
+        .ok_or_else(|| util::pg_error(py, "Display index out of range."))?;
     Ok(m.modes.clone())
 }
 
@@ -509,11 +562,21 @@ fn mode_ok(py: Python<'_>, size: (i32, i32), flags: i64, depth: i64) -> PyResult
 #[pyfunction]
 fn _info(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
     let monitors = evloop::monitors().map_err(|e| os_err(py, "cannot query monitors", e))?;
-    let m = monitors.first().ok_or_else(|| util::pg_error(py, "no video display found"))?;
+    let m = monitors
+        .first()
+        .ok_or_else(|| util::pg_error(py, "no video display found"))?;
     let d = PyDict::new(py);
     d.set_item("bitsize", 32)?;
     d.set_item("bytesize", 4)?;
-    d.set_item("masks", (0x00ff_0000u32, 0x0000_ff00u32, 0x0000_00ffu32, 0xff00_0000u32))?;
+    d.set_item(
+        "masks",
+        (
+            0x00ff_0000u32,
+            0x0000_ff00u32,
+            0x0000_00ffu32,
+            0xff00_0000u32,
+        ),
+    )?;
     d.set_item("shifts", (16, 8, 0, 24))?;
     d.set_item("losses", (0, 0, 0, 0))?;
     let (cw, ch) = match evloop::window() {
@@ -526,7 +589,14 @@ fn _info(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
     d.set_item("hw", false)?;
     d.set_item("wm", true)?;
     d.set_item("video_mem", 256 * 1024 * 1024)?;
-    for k in ["blit_hw", "blit_hw_CC", "blit_hw_A", "blit_sw", "blit_sw_CC", "blit_sw_A"] {
+    for k in [
+        "blit_hw",
+        "blit_hw_CC",
+        "blit_hw_A",
+        "blit_sw",
+        "blit_sw_CC",
+        "blit_sw_A",
+    ] {
         d.set_item(k, false)?;
     }
     Ok(d)
@@ -544,11 +614,12 @@ fn gl_set_attribute(flag: i64, value: i64) {
 
 #[pyfunction]
 fn gl_get_attribute(py: Python<'_>, flag: i64) -> PyResult<i64> {
-    GL_ATTRIBUTES
-        .lock()
-        .get(&flag)
-        .copied()
-        .ok_or_else(|| util::pg_error(py, "OpenGL attribute was not set: this player has no OpenGL context."))
+    GL_ATTRIBUTES.lock().get(&flag).copied().ok_or_else(|| {
+        util::pg_error(
+            py,
+            "OpenGL attribute was not set: this player has no OpenGL context.",
+        )
+    })
 }
 
 #[pyfunction]
@@ -672,11 +743,11 @@ pub mod renpy_pygame_display {
     use super::PyWindow as Window;
     #[pymodule_export]
     use super::{
-        _get_hint, _info, destroy, flip, get_caption, get_driver, get_init, get_platform, get_surface,
-        get_window, get_wm_info, gl_get_attribute, gl_load_library, gl_reset_attributes, gl_set_attribute,
-        gl_unload_library, hint, init, list_modes, mode_ok, quit, sdl_main_init, set_caption, set_gamma,
-        set_gamma_ramp, set_icon, set_mode, set_screensaver, update, get_num_video_displays,
-        get_display_bounds, get_active, get_drawable_size, get_position, get_size, iconify, set_position,
-        toggle_fullscreen,
+        _get_hint, _info, destroy, flip, get_active, get_caption, get_display_bounds,
+        get_drawable_size, get_driver, get_init, get_num_video_displays, get_platform,
+        get_position, get_size, get_surface, get_window, get_wm_info, gl_get_attribute,
+        gl_load_library, gl_reset_attributes, gl_set_attribute, gl_unload_library, hint, iconify,
+        init, list_modes, mode_ok, quit, sdl_main_init, set_caption, set_gamma, set_gamma_ramp,
+        set_icon, set_mode, set_position, set_screensaver, toggle_fullscreen, update,
     };
 }

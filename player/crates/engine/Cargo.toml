@@ -3,7 +3,6 @@ name = "engine"
 description = "Ren'Py 8.5.3 layer: patched source, rebuilt Cython modules, embedded zips."
 version.workspace = true
 edition.workspace = true
-license.workspace = true
 publish.workspace = true
 
 [dependencies]

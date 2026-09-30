@@ -29,7 +29,13 @@ pub fn pygame_error(py: Python<'_>, msg: impl Into<String>) -> PyErr {
     }
 }
 
-pub fn make_rect<'py>(py: Python<'py>, x: i32, y: i32, w: i32, h: i32) -> PyResult<Bound<'py, PyAny>> {
+pub fn make_rect<'py>(
+    py: Python<'py>,
+    x: i32,
+    y: i32,
+    w: i32,
+    h: i32,
+) -> PyResult<Bound<'py, PyAny>> {
     let cls = RECT_CLASS.get_or_try_init(py, || -> PyResult<Py<PyAny>> {
         Ok(py.import("renpy.pygame.rect")?.getattr("Rect")?.unbind())
     })?;
@@ -107,7 +113,9 @@ pub fn parse_size(obj: &Bound<'_, PyAny>) -> PyResult<(u32, u32)> {
             "size must not be negative",
         ));
     }
-    let w = u32::try_from(w).map_err(|_| pyo3::exceptions::PyOverflowError::new_err("width too large"))?;
-    let h = u32::try_from(h).map_err(|_| pyo3::exceptions::PyOverflowError::new_err("height too large"))?;
+    let w = u32::try_from(w)
+        .map_err(|_| pyo3::exceptions::PyOverflowError::new_err("width too large"))?;
+    let h = u32::try_from(h)
+        .map_err(|_| pyo3::exceptions::PyOverflowError::new_err("height too large"))?;
     Ok((w, h))
 }

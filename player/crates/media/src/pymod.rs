@@ -10,7 +10,7 @@ use pyo3::exceptions::{PyException, PyValueError};
 use pyo3::prelude::*;
 
 use crate::device::{self, Device, PAUSED};
-use crate::mixer::{Filter, Track, APPLY_FILTER, GENERATE, MIXER};
+use crate::mixer::{APPLY_FILTER, Filter, GENERATE, MIXER, Track};
 use crate::source;
 use crate::stream::{self, Media};
 use crate::types::PyVideoFrame;
@@ -44,20 +44,21 @@ fn ensure_filter_ptr(py: Python<'_>) -> PyResult<()> {
     let m = py.import("renpy.audio.filter_ptr")?;
     let addr: usize = m.call_method0("get_apply_audio_filter_ptr")?.extract()?;
     if addr == 0 {
-        return Err(err("renpy.audio.filter_ptr returned a null function pointer."));
+        return Err(err(
+            "renpy.audio.filter_ptr returned a null function pointer.",
+        ));
     }
     APPLY_FILTER.store(addr, Ordering::Release);
     Ok(())
 }
 
 fn prepare_filter(py: Python<'_>, f: &Option<Bound<'_, PyAny>>) -> PyResult<()> {
-    if let Some(f) = f {
-        if !f.is_none() {
+    if let Some(f) = f
+        && !f.is_none() {
             ensure_filter_ptr(py)?;
             let rate = MIXER.lock().rate;
             f.call_method1("prepare", (rate,))?;
         }
-    }
     Ok(())
 }
 
@@ -144,7 +145,20 @@ fn play(
     audio_filter: Option<Bound<'_, PyAny>>,
 ) -> PyResult<()> {
     let (s, t) = (truthy(&synchro_start)?, truthy(&tight)?);
-    start_track(py, channel, file, name, s, fadein, t, start, end, relative_volume, audio_filter, false)
+    start_track(
+        py,
+        channel,
+        file,
+        name,
+        s,
+        fadein,
+        t,
+        start,
+        end,
+        relative_volume,
+        audio_filter,
+        false,
+    )
 }
 
 #[pyfunction]
@@ -164,7 +178,20 @@ fn queue(
     audio_filter: Option<Bound<'_, PyAny>>,
 ) -> PyResult<()> {
     let (s, t) = (truthy(&synchro_start)?, truthy(&tight)?);
-    start_track(py, channel, file, name, s, fadein, t, start, end, relative_volume, audio_filter, true)
+    start_track(
+        py,
+        channel,
+        file,
+        name,
+        s,
+        fadein,
+        t,
+        start,
+        end,
+        relative_volume,
+        audio_filter,
+        true,
+    )
 }
 
 #[pyfunction]
@@ -308,25 +335,27 @@ fn set_secondary_volume(channel: i32, volume: f64, delay: f64) -> PyResult<()> {
 }
 
 #[pyfunction]
-fn replace_audio_filter(py: Python<'_>, channel: i32, audio_filter: Option<Bound<'_, PyAny>>, playing: &Bound<'_, PyAny>) -> PyResult<()> {
+fn replace_audio_filter(
+    py: Python<'_>,
+    channel: i32,
+    audio_filter: Option<Bound<'_, PyAny>>,
+    playing: &Bound<'_, PyAny>,
+) -> PyResult<()> {
     let primary = playing.is_truthy()?;
     prepare_filter(py, &audio_filter)?;
     let mut old = Vec::new();
     {
         let mut m = MIXER.lock();
         let c = m.channel(channel).map_err(err)?;
-        if primary {
-            if let Some(t) = c.playing.as_mut() {
-                if t.filter.is_some() {
+        if primary
+            && let Some(t) = c.playing.as_mut()
+                && t.filter.is_some() {
                     old.extend(t.filter.replace(make_filter(py, audio_filter.clone())));
                 }
-            }
-        }
-        if let Some(q) = c.queued.as_mut() {
-            if q.filter.is_some() {
+        if let Some(q) = c.queued.as_mut()
+            && q.filter.is_some() {
                 old.extend(q.filter.replace(make_filter(py, audio_filter)));
             }
-        }
     }
     drop(old);
     Ok(())
@@ -364,7 +393,11 @@ fn read_video(py: Python<'_>, channel: i32) -> PyResult<Option<Py<PyVideoFrame>>
 
 #[pyfunction]
 #[pyo3(signature = (channel, video, r#loop=None))]
-fn set_video(channel: i32, video: &Bound<'_, PyAny>, r#loop: Option<Bound<'_, PyAny>>) -> PyResult<()> {
+fn set_video(
+    channel: i32,
+    video: &Bound<'_, PyAny>,
+    r#loop: Option<Bound<'_, PyAny>>,
+) -> PyResult<()> {
     let _ = r#loop;
     let v = if video.eq(1)? {
         1
@@ -393,21 +426,33 @@ fn init(
     if DEVICE.lock().is_some() {
         return Ok(());
     }
-    let (status, equal_mono, linear_fades) = (truthy(&status)?, truthy(&equal_mono)?, truthy(&linear_fades)?);
+    let (status, equal_mono, linear_fades) = (
+        truthy(&status)?,
+        truthy(&equal_mono)?,
+        truthy(&linear_fades)?,
+    );
     if freq == 0 {
         return Err(PyValueError::new_err("The sample rate must not be 0."));
     }
     unsafe {
-        ffmpeg_sys_next::av_log_set_level(if status { ffmpeg_sys_next::AV_LOG_INFO } else { ffmpeg_sys_next::AV_LOG_ERROR } as i32);
+        ffmpeg_sys_next::av_log_set_level(if status {
+            ffmpeg_sys_next::AV_LOG_INFO
+        } else {
+            ffmpeg_sys_next::AV_LOG_ERROR
+        });
     }
-    let dev = py.detach(|| device::start(freq, samples, equal_mono, linear_fades)).map_err(err)?;
+    let dev = py
+        .detach(|| device::start(freq, samples, equal_mono, linear_fades))
+        .map_err(err)?;
     *DEVICE.lock() = Some(dev);
     Ok(())
 }
 
 #[pyfunction]
 fn quit(py: Python<'_>) {
-    let Some(dev) = DEVICE.lock().take() else { return };
+    let Some(dev) = DEVICE.lock().take() else {
+        return;
+    };
     let tracks = {
         let mut m = MIXER.lock();
         let mut v = m.take_dying();
@@ -465,7 +510,9 @@ fn set_generate_audio_c_function(py: Python<'_>, r#fn: &Bound<'_, PyAny>) -> PyR
         r#fn.extract()?
     } else {
         let ctypes = py.import("ctypes")?;
-        let p = ctypes.getattr("cast")?.call1((r#fn, ctypes.getattr("c_void_p")?))?;
+        let p = ctypes
+            .getattr("cast")?
+            .call1((r#fn, ctypes.getattr("c_void_p")?))?;
         p.getattr("value")?.extract::<Option<usize>>()?.unwrap_or(0)
     };
     GENERATE.store(addr, Ordering::Release);
@@ -482,10 +529,11 @@ fn sample_surfaces(_rgb: &Bound<'_, PyAny>, _rgba: &Bound<'_, PyAny>) {}
 pub mod renpysound {
     #[pymodule_export]
     use super::{
-        advance_time, busy, check_error, deallocate_audio_filter, dequeue, fadeout, get_duration, get_pos, get_sample_rate,
-        get_volume, global_pause, init, pause, periodic, play, playing_name, queue, queue_depth, quit, read_video,
-        replace_audio_filter, sample_surfaces, set_channel_count, set_generate_audio_c_function, set_pan,
-        set_secondary_volume, set_video, set_volume, stop, unpause, video_ready,
+        advance_time, busy, check_error, deallocate_audio_filter, dequeue, fadeout, get_duration,
+        get_pos, get_sample_rate, get_volume, global_pause, init, pause, periodic, play,
+        playing_name, queue, queue_depth, quit, read_video, replace_audio_filter, sample_surfaces,
+        set_channel_count, set_generate_audio_c_function, set_pan, set_secondary_volume, set_video,
+        set_volume, stop, unpause, video_ready,
     };
 
     #[pymodule_export]

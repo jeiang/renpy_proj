@@ -16,7 +16,10 @@ fn main() {
     }
     println!("cargo:rerun-if-changed=src/boot.py");
     println!("cargo:rerun-if-changed={}", out.join("stamp").display());
-    println!("cargo:rerun-if-changed={}", out.join("pyo3-config.txt").display());
+    println!(
+        "cargo:rerun-if-changed={}",
+        out.join("pyo3-config.txt").display()
+    );
 
     if !out.join("stamp").exists() {
         let status = Command::new("sh")
@@ -28,9 +31,18 @@ fn main() {
             panic!("cpython/build.sh failed ({status}); see player/upstream/cpython-build/*.log");
         }
     }
-    println!("cargo:rustc-link-search=native={}", out.join("sysdeps").display());
-    println!("cargo:rustc-link-search=native={}", out.join("lib").display());
-    println!("cargo:rustc-link-search=native={}", out.join("deps").display());
+    println!(
+        "cargo:rustc-link-search=native={}",
+        out.join("sysdeps").display()
+    );
+    println!(
+        "cargo:rustc-link-search=native={}",
+        out.join("lib").display()
+    );
+    println!(
+        "cargo:rustc-link-search=native={}",
+        out.join("deps").display()
+    );
     println!("cargo:rustc-link-lib=static=python3.12");
     for lib in ["ffi", "bz2", "lzma", "expat", "z", "ssl", "crypto"] {
         println!("cargo:rustc-link-lib=static={lib}");

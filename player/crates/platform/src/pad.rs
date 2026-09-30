@@ -14,7 +14,12 @@ static JOY_INIT: AtomicBool = AtomicBool::new(false);
 static PAD_INIT: AtomicBool = AtomicBool::new(false);
 
 fn no_device(py: Python<'_>, index: i64) -> PyErr {
-    util::pg_error(py, &format!("Invalid joystick device number {index}: this player has no joystick or controller support yet."))
+    util::pg_error(
+        py,
+        &format!(
+            "Invalid joystick device number {index}: this player has no joystick or controller support yet."
+        ),
+    )
 }
 
 fn not_init(py: Python<'_>) -> PyErr {
@@ -131,11 +136,36 @@ pub mod joystick {
 pub mod controller {
     use super::*;
 
-    const AXES: [&str; 6] = ["leftx", "lefty", "rightx", "righty", "lefttrigger", "righttrigger"];
+    const AXES: [&str; 6] = [
+        "leftx",
+        "lefty",
+        "rightx",
+        "righty",
+        "lefttrigger",
+        "righttrigger",
+    ];
     const BUTTONS: [&str; 21] = [
-        "a", "b", "x", "y", "back", "guide", "start", "leftstick", "rightstick", "leftshoulder",
-        "rightshoulder", "dpup", "dpdown", "dpleft", "dpright", "misc1", "paddle1", "paddle2",
-        "paddle3", "paddle4", "touchpad",
+        "a",
+        "b",
+        "x",
+        "y",
+        "back",
+        "guide",
+        "start",
+        "leftstick",
+        "rightstick",
+        "leftshoulder",
+        "rightshoulder",
+        "dpup",
+        "dpdown",
+        "dpleft",
+        "dpright",
+        "misc1",
+        "paddle1",
+        "paddle2",
+        "paddle3",
+        "paddle4",
+        "touchpad",
     ];
 
     #[pyfunction]
@@ -186,17 +216,24 @@ pub mod controller {
     #[pyfunction]
     fn get_button_from_string(name: &Bound<'_, PyAny>) -> PyResult<i64> {
         let n = name_bytes(name)?;
-        Ok(BUTTONS.iter().position(|a| *a == n).map_or(-1, |i| i as i64))
+        Ok(BUTTONS
+            .iter()
+            .position(|a| *a == n)
+            .map_or(-1, |i| i as i64))
     }
 
     #[pyfunction]
     fn get_string_for_axis(axis: i64) -> Option<&'static str> {
-        usize::try_from(axis).ok().and_then(|i| AXES.get(i).copied())
+        usize::try_from(axis)
+            .ok()
+            .and_then(|i| AXES.get(i).copied())
     }
 
     #[pyfunction]
     fn get_string_for_button(button: i64) -> Option<&'static str> {
-        usize::try_from(button).ok().and_then(|i| BUTTONS.get(i).copied())
+        usize::try_from(button)
+            .ok()
+            .and_then(|i| BUTTONS.get(i).copied())
     }
 
     /// A game controller handle. No device can be opened.
@@ -215,7 +252,10 @@ pub mod controller {
     impl Controller {
         #[new]
         fn new(index: i64) -> Self {
-            Self { index, instance_id: 0 }
+            Self {
+                index,
+                instance_id: 0,
+            }
         }
 
         fn init(&self, py: Python<'_>) -> PyResult<()> {

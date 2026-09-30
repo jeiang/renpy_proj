@@ -7,7 +7,10 @@ use pyo3::types::PyTuple;
 /// Builds a `renpy.pygame.error` exception. Falls back to `RuntimeError` when the
 /// package is not importable (for example in a bare embedding).
 pub fn pg_error(py: Python<'_>, msg: &str) -> PyErr {
-    match py.import("renpy.pygame.error").and_then(|m| m.getattr("error")) {
+    match py
+        .import("renpy.pygame.error")
+        .and_then(|m| m.getattr("error"))
+    {
         Ok(cls) => match cls.call1((msg,)) {
             Ok(v) => PyErr::from_value(v),
             Err(e) => e,
@@ -20,8 +23,12 @@ pub fn pg_error(py: Python<'_>, msg: &str) -> PyErr {
 /// modules do with decorators. Skipped when the package is not importable.
 pub fn register_hook(m: &Bound<'_, PyModule>, hook: &str, f: &str) -> PyResult<()> {
     let py = m.py();
-    let Ok(pkg) = py.import("renpy.pygame") else { return Ok(()) };
-    let Ok(reg) = pkg.getattr(hook) else { return Ok(()) };
+    let Ok(pkg) = py.import("renpy.pygame") else {
+        return Ok(());
+    };
+    let Ok(reg) = pkg.getattr(hook) else {
+        return Ok(());
+    };
     reg.call1((m.getattr(f)?,))?;
     Ok(())
 }

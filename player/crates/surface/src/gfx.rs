@@ -208,13 +208,21 @@ impl Pen {
             return;
         }
         for dy in -ry..=ry {
-            let t = if ry == 0 { 0.0 } else { 1.0 - (dy as f64 / ry as f64).powi(2) };
+            let t = if ry == 0 {
+                0.0
+            } else {
+                1.0 - (dy as f64 / ry as f64).powi(2)
+            };
             let dx = (rx as f64 * t.max(0.0).sqrt()).round() as i32;
             self.plot(cx - dx, cy + dy, 255);
             self.plot(cx + dx, cy + dy, 255);
         }
         for dx in -rx..=rx {
-            let t = if rx == 0 { 0.0 } else { 1.0 - (dx as f64 / rx as f64).powi(2) };
+            let t = if rx == 0 {
+                0.0
+            } else {
+                1.0 - (dx as f64 / rx as f64).powi(2)
+            };
             let dy = (ry as f64 * t.max(0.0).sqrt()).round() as i32;
             self.plot(cx + dx, cy - dy, 255);
             self.plot(cx + dx, cy + dy, 255);

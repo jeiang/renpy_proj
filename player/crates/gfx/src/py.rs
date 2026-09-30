@@ -15,7 +15,7 @@ use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyList, PyTuple};
 use surface::Surface;
 
-use crate::gpu::{mip_count, Renderer, SamplerKey, TexInner, Target};
+use crate::gpu::{Renderer, SamplerKey, Target, TexInner, mip_count};
 use crate::program::{PipeKey, ProgramInner, VLayout};
 
 const PY_SOURCE: &str = include_str!("wgpudraw.py");
@@ -27,7 +27,7 @@ fn rt(e: impl std::fmt::Display) -> PyErr {
 /// Flattens numbers, nested sequences and float32 byte strings into one list of numbers.
 fn flatten(obj: &Bound<'_, PyAny>, out: &mut Vec<f64>) -> PyResult<()> {
     if let Ok(b) = obj.cast::<PyBytes>() {
-        for c in b.as_bytes().chunks_exact(4) {
+        for c in b.as_bytes().as_chunks::<4>().0 {
             out.push(f32::from_ne_bytes([c[0], c[1], c[2], c[3]]) as f64);
         }
         return Ok(());
@@ -56,7 +56,11 @@ impl GpuProgram {
 
     /// (name, type, array length or None) of every live non-sampler uniform, in packing order.
     fn uniforms(&self) -> Vec<(String, String, Option<u32>)> {
-        self.inner.slots.iter().map(|s| (s.name.clone(), s.ty.clone(), s.array)).collect()
+        self.inner
+            .slots
+            .iter()
+            .map(|s| (s.name.clone(), s.ty.clone(), s.array))
+            .collect()
     }
 
     /// Names of the live `sampler2D` uniforms, in binding order.
@@ -65,7 +69,12 @@ impl GpuProgram {
     }
 
     fn attributes(&self) -> Vec<(String, String)> {
-        self.inner.tr.attributes.iter().map(|(n, d, _)| (n.clone(), d.ty.clone())).collect()
+        self.inner
+            .tr
+            .attributes
+            .iter()
+            .map(|(n, d, _)| (n.clone(), d.ty.clone()))
+            .collect()
     }
 
     /// Builds the common pipelines on a worker thread, so the first draw does not stall.
@@ -76,22 +85,38 @@ impl GpuProgram {
             let r = gpu.r.lock();
             vec![crate::gpu::COLOR_FORMAT, r.screen_format]
         };
-        let _ = std::thread::Builder::new().name("gfx-warm".into()).spawn(move || {
-            let text = prog.tr.attributes.iter().any(|(n, _, _)| n.starts_with("a_text_"));
-            for (stride, offs, is_text) in crate::gpu::standard_layouts() {
-                if is_text && !text {
-                    continue;
-                }
-                let offs: HashMap<String, u32> = offs.into_iter().map(|(n, o)| (n.to_string(), o)).collect();
-                let Ok(vl) = prog.resolve(2, stride, &offs) else { continue };
-                for f in formats.iter().copied() {
-                    let key = PipeKey { format: f, blend: None, mask: 15, cull: 0, depth: false, vlayout: vl.clone() };
-                    if let Err(e) = prog.pipeline(&sh, &key) {
-                        log::warn!("pipeline warm-up failed: {e}");
+        let _ = std::thread::Builder::new()
+            .name("gfx-warm".into())
+            .spawn(move || {
+                let text = prog
+                    .tr
+                    .attributes
+                    .iter()
+                    .any(|(n, _, _)| n.starts_with("a_text_"));
+                for (stride, offs, is_text) in crate::gpu::standard_layouts() {
+                    if is_text && !text {
+                        continue;
+                    }
+                    let offs: HashMap<String, u32> =
+                        offs.into_iter().map(|(n, o)| (n.to_string(), o)).collect();
+                    let Ok(vl) = prog.resolve(2, stride, &offs) else {
+                        continue;
+                    };
+                    for f in formats.iter().copied() {
+                        let key = PipeKey {
+                            format: f,
+                            blend: None,
+                            mask: 15,
+                            cull: 0,
+                            depth: false,
+                            vlayout: vl.clone(),
+                        };
+                        if let Err(e) = prog.pipeline(&sh, &key) {
+                            log::warn!("pipeline warm-up failed: {e}");
+                        }
                     }
                 }
-            }
-        });
+            });
     }
 }
 
@@ -130,7 +155,7 @@ pub struct Gpu {
 fn premultiply_rows(bytes: &[u8], pitch: usize, w: usize, h: usize) -> Vec<u8> {
     let mut out = Vec::with_capacity(w * h * 4);
     for y in 0..h {
-        for p in bytes[y * pitch..y * pitch + w * 4].chunks_exact(4) {
+        for p in bytes[y * pitch..y * pitch + w * 4].as_chunks::<4>().0 {
             let a = p[3] as u32;
             out.push(((p[0] as u32 * a + 127) / 255) as u8);
             out.push(((p[1] as u32 * a + 127) / 255) as u8);
@@ -173,11 +198,18 @@ impl Gpu {
     fn new_texture(&self, w: u32, h: u32, mipmap: bool) -> PyResult<GpuTexture> {
         let r = self.r.lock();
         let mips = if mipmap { mip_count(w, h) } else { 1 };
-        Ok(GpuTexture { inner: Mutex::new(r.sh.new_texture(w, h, mips).map_err(rt)?) })
+        Ok(GpuTexture {
+            inner: Mutex::new(r.sh.new_texture(w, h, mips).map_err(rt)?),
+        })
     }
 
     /// Uploads an RGBA surface. Non-premultiplied pixels are premultiplied on the way in.
-    fn texture_from_surface(&self, surf: PyRef<'_, Surface>, premultiplied: bool, mipmap: bool) -> PyResult<GpuTexture> {
+    fn texture_from_surface(
+        &self,
+        surf: PyRef<'_, Surface>,
+        premultiplied: bool,
+        mipmap: bool,
+    ) -> PyResult<GpuTexture> {
         let mut r = self.r.lock();
         let (w, h) = surf.with_pixels(|pv| (pv.width, pv.height));
         let mips = if mipmap { mip_count(w, h) } else { 1 };
@@ -186,12 +218,15 @@ impl Gpu {
             if premultiplied {
                 tex.write_level0(pv.bytes, pv.pitch, pv.width, pv.height);
             } else {
-                let px = premultiply_rows(pv.bytes, pv.pitch, pv.width as usize, pv.height as usize);
+                let px =
+                    premultiply_rows(pv.bytes, pv.pitch, pv.width as usize, pv.height as usize);
                 tex.write_level0(&px, pv.width as usize * 4, pv.width, pv.height);
             }
         });
         r.queue_mips(&tex);
-        Ok(GpuTexture { inner: Mutex::new(tex) })
+        Ok(GpuTexture {
+            inner: Mutex::new(tex),
+        })
     }
 
     /// Gives `tex` a full mip chain (a new allocation, since wgpu fixes the level count).
@@ -201,13 +236,29 @@ impl Gpu {
         if old.mips > 1 {
             return Ok(());
         }
-        let new = r.sh.new_texture(old.width, old.height, mip_count(old.width, old.height)).map_err(rt)?;
+        let new =
+            r.sh.new_texture(old.width, old.height, mip_count(old.width, old.height))
+                .map_err(rt)?;
         r.flush().map_err(rt)?;
         let mut enc = r.sh.device.create_command_encoder(&Default::default());
         enc.copy_texture_to_texture(
-            wgpu::TexelCopyTextureInfo { texture: &old.tex, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
-            wgpu::TexelCopyTextureInfo { texture: &new.tex, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
-            wgpu::Extent3d { width: old.width, height: old.height, depth_or_array_layers: 1 },
+            wgpu::TexelCopyTextureInfo {
+                texture: &old.tex,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            wgpu::TexelCopyTextureInfo {
+                texture: &new.tex,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            wgpu::Extent3d {
+                width: old.width,
+                height: old.height,
+                depth_or_array_layers: 1,
+            },
         );
         r.sh.encode_mips(&mut enc, &new);
         r.sh.queue.submit([enc.finish()]);
@@ -215,20 +266,37 @@ impl Gpu {
         Ok(())
     }
 
-    fn load_video_frame(&self, frame: PyRef<'_, PyVideoFrame>, mipmap: bool) -> PyResult<GpuTexture> {
+    fn load_video_frame(
+        &self,
+        frame: PyRef<'_, PyVideoFrame>,
+        mipmap: bool,
+    ) -> PyResult<GpuTexture> {
         let mut guard = self.r.lock();
         let r = &mut *guard;
         let sh = r.sh.clone();
         if r.yuv.is_none() {
             r.yuv = Some(crate::yuv::Yuv::new(&sh));
         }
-        let t = r.yuv.as_mut().unwrap().convert(&sh, &frame.0, mipmap).map_err(rt)?;
-        Ok(GpuTexture { inner: Mutex::new(t) })
+        let t = r
+            .yuv
+            .as_mut()
+            .unwrap()
+            .convert(&sh, &frame.0, mipmap)
+            .map_err(rt)?;
+        Ok(GpuTexture {
+            inner: Mutex::new(t),
+        })
     }
 
     /// Starts a pass. `target` None means the window. `viewport` is (x, y, w, h) in target pixels, top-left origin.
     #[pyo3(signature = (target, viewport, clear, screen_like=false))]
-    fn begin_pass(&self, target: Option<&GpuTexture>, viewport: (f32, f32, f32, f32), clear: Option<(f64, f64, f64, f64)>, screen_like: bool) {
+    fn begin_pass(
+        &self,
+        target: Option<&GpuTexture>,
+        viewport: (f32, f32, f32, f32),
+        clear: Option<(f64, f64, f64, f64)>,
+        screen_like: bool,
+    ) {
         let mut r = self.r.lock();
         let vp = [viewport.0, viewport.1, viewport.2, viewport.3];
         let c = clear.map(|c| [c.0, c.1, c.2, c.3]);
@@ -283,9 +351,16 @@ impl Gpu {
         for (k, v) in offsets.iter() {
             offs.insert(k.extract()?, v.extract()?);
         }
-        let vl: VLayout = p.resolve(point_size, stride, &offs).map_err(|e| PyValueError::new_err(e))?;
+        let vl: VLayout = p
+            .resolve(point_size, stride, &offs)
+            .map_err(PyValueError::new_err)?;
         if values.len() != p.slots.len() {
-            return Err(rt(format!("shader {} takes {} uniforms, got {}", p.name, p.slots.len(), values.len())));
+            return Err(rt(format!(
+                "shader {} takes {} uniforms, got {}",
+                p.name,
+                p.slots.len(),
+                values.len()
+            )));
         }
         let mut flat = Vec::with_capacity(values.len());
         for v in values.iter() {
@@ -310,7 +385,12 @@ impl Gpu {
             texs.push((g.get(), key));
         }
         if texs.len() != p.tr.samplers.len() {
-            return Err(rt(format!("shader {} takes {} textures, got {}", p.name, p.tr.samplers.len(), texs.len())));
+            return Err(rt(format!(
+                "shader {} takes {} textures, got {}",
+                p.name,
+                p.tr.samplers.len(),
+                texs.len()
+            )));
         }
         // SAFETY: the caller passes addresses and lengths of live `Mesh` arrays that outlive this call.
         let (pos, attr, idx) = unsafe {
@@ -327,8 +407,16 @@ impl Gpu {
             true => r.screen_format,
             false => crate::gpu::COLOR_FORMAT,
         };
-        let key = PipeKey { format, blend, mask: mask_bits, cull, depth, vlayout: vl.clone() };
-        r.draw(&prog.inner, &vl, key, pos, attr, idx, ub, texs, clear_depth).map_err(rt)
+        let key = PipeKey {
+            format,
+            blend,
+            mask: mask_bits,
+            cull,
+            depth,
+            vlayout: vl.clone(),
+        };
+        r.draw(&prog.inner, &vl, key, pos, attr, idx, ub, texs, clear_depth)
+            .map_err(rt)
     }
 
     fn flush(&self) -> PyResult<()> {
@@ -341,11 +429,16 @@ impl Gpu {
 
     /// Reads a texture (or the headless screen) into a new `Surface`. Pixels are un-premultiplied when asked.
     #[pyo3(signature = (tex, unpremultiply=false))]
-    fn read_surface(&self, py: Python<'_>, tex: Option<&GpuTexture>, unpremultiply: bool) -> PyResult<Py<Surface>> {
+    fn read_surface(
+        &self,
+        py: Python<'_>,
+        tex: Option<&GpuTexture>,
+        unpremultiply: bool,
+    ) -> PyResult<Py<Surface>> {
         let t = tex.map(|t| t.get());
         let (w, h, mut px, _) = self.r.lock().read_pixels(t.as_ref(), None).map_err(rt)?;
         if unpremultiply {
-            for p in px.chunks_exact_mut(4) {
+            for p in px.as_chunks_mut::<4>().0 {
                 let a = p[3] as u32;
                 if 0 < a && a < 255 {
                     p[0] = (p[0] as u32 * 255 / a).min(255) as u8;
@@ -358,7 +451,11 @@ impl Gpu {
     }
 
     /// Returns the RGBA bytes of a texture, for tests.
-    fn read_bytes<'py>(&self, py: Python<'py>, tex: Option<&GpuTexture>) -> PyResult<Bound<'py, PyBytes>> {
+    fn read_bytes<'py>(
+        &self,
+        py: Python<'py>,
+        tex: Option<&GpuTexture>,
+    ) -> PyResult<Bound<'py, PyBytes>> {
         let t = tex.map(|t| t.get());
         let (_, _, px, _) = self.r.lock().read_pixels(t.as_ref(), None).map_err(rt)?;
         Ok(PyBytes::new(py, &px))
@@ -367,7 +464,11 @@ impl Gpu {
     /// The alpha byte of pixel (0, 0) of a texture.
     fn read_alpha(&self, tex: &GpuTexture) -> PyResult<u8> {
         let t = tex.get();
-        let (_, _, px, _) = self.r.lock().read_pixels(Some(&t), Some([0, 0, 1, 1])).map_err(rt)?;
+        let (_, _, px, _) = self
+            .r
+            .lock()
+            .read_pixels(Some(&t), Some([0, 0, 1, 1]))
+            .map_err(rt)?;
         Ok(px[3])
     }
 }
@@ -376,7 +477,9 @@ impl Gpu {
 #[pyfunction]
 fn compile_program(name: &str, vertex: &str, fragment: &str) -> PyResult<GpuProgram> {
     let inner = ProgramInner::compile(name, vertex, fragment).map_err(PyValueError::new_err)?;
-    Ok(GpuProgram { inner: Arc::new(inner) })
+    Ok(GpuProgram {
+        inner: Arc::new(inner),
+    })
 }
 
 /// Creates the window through `platform` and the wgpu device on it.
@@ -390,7 +493,9 @@ fn create(width: u32, height: u32, title: &str, resizable: bool) -> PyResult<Gpu
 /// A device with no window (tests, screenshots without a display).
 #[pyfunction]
 fn create_headless(width: u32, height: u32) -> PyResult<Gpu> {
-    Ok(Gpu { r: Mutex::new(Renderer::new_headless(width, height).map_err(rt)?) })
+    Ok(Gpu {
+        r: Mutex::new(Renderer::new_headless(width, height).map_err(rt)?),
+    })
 }
 
 /// The physical size of the window, from `platform`.
@@ -416,7 +521,10 @@ pub fn init_module(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(drawable_size, m)?)?;
     let builtins = py.import("builtins")?;
     let src = CString::new(PY_SOURCE).map_err(rt)?;
-    let code = builtins.call_method1("compile", (src.to_str().map_err(rt)?, "<renpy.gl2.wgpudraw>", "exec"))?;
+    let code = builtins.call_method1(
+        "compile",
+        (src.to_str().map_err(rt)?, "<renpy.gl2.wgpudraw>", "exec"),
+    )?;
     builtins.call_method1("exec", (code, m.dict()))?;
     Ok(())
 }

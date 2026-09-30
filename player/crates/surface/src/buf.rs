@@ -88,7 +88,15 @@ impl Img {
         h: usize,
         fmt: Format,
     ) -> Img {
-        Img { root, root_len, off, pitch, w, h, fmt }
+        Img {
+            root,
+            root_len,
+            off,
+            pitch,
+            w,
+            h,
+            fmt,
+        }
     }
 
     #[inline]

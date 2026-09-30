@@ -28,7 +28,10 @@ pub struct SrcState {
 
 impl Default for SrcState {
     fn default() -> Self {
-        SrcState { alpha_mod: 255, colorkey: None }
+        SrcState {
+            alpha_mod: 255,
+            colorkey: None,
+        }
     }
 }
 
@@ -91,7 +94,8 @@ fn special(flags: i32, s: [u8; 4], d: [u8; 4], dst_alpha: bool) -> [u8; 4] {
 #[inline]
 fn premultiplied(s: [u8; 4], d: [u8; 4]) -> [u8; 4] {
     let sa = s[3] as i32;
-    let ch = |sc: u8, dc: u8| -> u8 { (sc as i32 + dc as i32 - ((dc as i32 * sa) >> 8)).min(255) as u8 };
+    let ch =
+        |sc: u8, dc: u8| -> u8 { (sc as i32 + dc as i32 - ((dc as i32 * sa) >> 8)).min(255) as u8 };
     [
         ch(s[0], d[0]),
         ch(s[1], d[1]),
@@ -171,7 +175,14 @@ pub fn clip_blit(
     }
 
     if w > 0 && h > 0 {
-        Some(Clipped { sx, sy, dx, dy, w, h })
+        Some(Clipped {
+            sx,
+            sy,
+            dx,
+            dy,
+            w,
+            h,
+        })
     } else {
         None
     }
@@ -253,7 +264,12 @@ pub fn blit_region(
             unsafe {
                 let spx = (sp.add(x * 4) as *const u32).read_unaligned();
                 let dpx = (dp.add(x * 4) as *const u32).read_unaligned();
-                if flags == 0 && st.colorkey.is_some_and(|k| (k & rgb_mask) == (spx & rgb_mask)) && !src_alpha {
+                if flags == 0
+                    && st
+                        .colorkey
+                        .is_some_and(|k| (k & rgb_mask) == (spx & rgb_mask))
+                    && !src_alpha
+                {
                     continue;
                 }
                 let mut s = sfmt.unpack(spx);
@@ -331,16 +347,30 @@ pub fn copy_all(src: &Img, dst: &Img) {
 
 /// `SDL_FillRect`: writes `pixel` to `rect`, clipped to the surface and `clip`.
 pub fn fill_rect(dst: &Img, clip: SdlRect, rect: Option<SdlRect>, pixel: u32) {
-    let full = SdlRect { x: 0, y: 0, w: dst.w as i32, h: dst.h as i32 };
+    let full = SdlRect {
+        x: 0,
+        y: 0,
+        w: dst.w as i32,
+        h: dst.h as i32,
+    };
     let r = rect.unwrap_or(full);
     let x0 = r.x.max(clip.x).max(0);
     let y0 = r.y.max(clip.y).max(0);
-    let x1 = (r.x.saturating_add(r.w)).min(clip.x.saturating_add(clip.w)).min(dst.w as i32);
-    let y1 = (r.y.saturating_add(r.h)).min(clip.y.saturating_add(clip.h)).min(dst.h as i32);
+    let x1 = (r.x.saturating_add(r.w))
+        .min(clip.x.saturating_add(clip.w))
+        .min(dst.w as i32);
+    let y1 = (r.y.saturating_add(r.h))
+        .min(clip.y.saturating_add(clip.h))
+        .min(dst.h as i32);
     if x1 <= x0 || y1 <= y0 {
         return;
     }
-    let (x0, y0, w, h) = (x0 as usize, y0 as usize, (x1 - x0) as usize, (y1 - y0) as usize);
+    let (x0, y0, w, h) = (
+        x0 as usize,
+        y0 as usize,
+        (x1 - x0) as usize,
+        (y1 - y0) as usize,
+    );
     let dst = *dst;
     par::rows(w, h, move |y| {
         // SAFETY: clipped to the surface.

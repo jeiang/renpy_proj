@@ -1,8 +1,8 @@
 //! The `Surface` class of `renpy.pygame.surface`.
 
 use std::ffi::{c_int, c_void};
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
 use parking_lot::Mutex;
 
@@ -37,7 +37,14 @@ struct State {
     has_alpha: bool,
 }
 
-#[pyclass(frozen, subclass, weakref, dict, module = "renpy.pygame.surface", name = "Surface")]
+#[pyclass(
+    frozen,
+    subclass,
+    weakref,
+    dict,
+    module = "renpy.pygame.surface",
+    name = "Surface"
+)]
 pub struct Surface {
     shared: Arc<Shared>,
     owns: bool,
@@ -101,7 +108,12 @@ impl Surface {
                 userdata: std::ptr::null_mut(),
                 locked: 0,
                 list_blitmap: std::ptr::null_mut(),
-                clip_rect: SdlRect { x: 0, y: 0, w: w as i32, h: h as i32 },
+                clip_rect: SdlRect {
+                    x: 0,
+                    y: 0,
+                    w: w as i32,
+                    h: h as i32,
+                },
                 map: std::ptr::null_mut(),
                 refcount: 1,
             },
@@ -125,7 +137,12 @@ impl Surface {
             offset,
             locks: Mutex::new(Vec::new()),
             state: Mutex::new(State {
-                clip: SdlRect { x: 0, y: 0, w: w as i32, h: h as i32 },
+                clip: SdlRect {
+                    x: 0,
+                    y: 0,
+                    w: w as i32,
+                    h: h as i32,
+                },
                 colorkey: None,
                 alpha_mod: 255,
                 has_alpha: false,
@@ -140,8 +157,22 @@ impl Surface {
         if len > isize::MAX as usize / 2 {
             return Err("Surface too large.".to_string());
         }
-        let shared = Arc::new(Shared { buf: Buf::zeroed(len), generation: AtomicU64::new(0) });
-        Ok(Surface::build(shared, true, 0, pitch, w, h, fmt, None, None, (0, 0)))
+        let shared = Arc::new(Shared {
+            buf: Buf::zeroed(len),
+            generation: AtomicU64::new(0),
+        });
+        Ok(Surface::build(
+            shared,
+            true,
+            0,
+            pitch,
+            w,
+            h,
+            fmt,
+            None,
+            None,
+            (0, 0),
+        ))
     }
 
     /// Rust API: a surface with RGBA masks that takes `rgba` as its pixels.
@@ -153,8 +184,22 @@ impl Surface {
             pitch * height as usize,
             "from_rgba: buffer length does not match width * height * 4"
         );
-        let shared = Arc::new(Shared { buf: Buf::from_vec(rgba), generation: AtomicU64::new(0) });
-        Surface::build(shared, true, 0, pitch, width, height, Format::RGBA, None, None, (0, 0))
+        let shared = Arc::new(Shared {
+            buf: Buf::from_vec(rgba),
+            generation: AtomicU64::new(0),
+        });
+        Surface::build(
+            shared,
+            true,
+            0,
+            pitch,
+            width,
+            height,
+            Format::RGBA,
+            None,
+            None,
+            (0, 0),
+        )
     }
 
     /// A raw view of the pixels, for operations in this crate.
@@ -185,7 +230,12 @@ impl Surface {
         let img = self.img();
         // SAFETY: `span` bytes from the first pixel are inside the allocation.
         let bytes = unsafe { std::slice::from_raw_parts(img.pixels_ptr(), img.span()) };
-        f(PixelView { width: self.w, height: self.h, pitch: self.pitch, bytes })
+        f(PixelView {
+            width: self.w,
+            height: self.h,
+            pitch: self.pitch,
+            bytes,
+        })
     }
 
     /// Changes on every write made through this crate.
@@ -215,7 +265,10 @@ impl Surface {
 
     pub fn src_state(&self) -> SrcState {
         let s = self.state();
-        SrcState { alpha_mod: s.alpha_mod, colorkey: s.colorkey }
+        SrcState {
+            alpha_mod: s.alpha_mod,
+            colorkey: s.colorkey,
+        }
     }
 
     pub fn sdl_ptr(&self) -> *mut SdlSurface {
@@ -271,8 +324,8 @@ impl Surface {
             _ => None,
         };
         let sample = depth.and_then(sample_format);
-        if let Some(d) = depth {
-            if sample.is_none() {
+        if let Some(d) = depth
+            && sample.is_none() {
                 let bits: i64 = d.extract()?;
                 if masks.is_some() && bits != 32 && bits != 24 {
                     return Err(pygame_error(py, "Only 32-bit surfaces are supported."));
@@ -281,7 +334,6 @@ impl Surface {
                     return Err(pygame_error(py, "Only 32-bit surfaces are supported."));
                 }
             }
-        }
         let mut fmt = masks_from(flags, masks, sample);
         if masks.is_none() && sample.is_none() && flags & SRCALPHA == 0 {
             fmt = Format::RGBX;
@@ -294,7 +346,11 @@ impl Surface {
     }
 
     fn __sizeof__(&self) -> usize {
-        if self.owns { self.pitch * self.h as usize } else { 0 }
+        if self.owns {
+            self.pitch * self.h as usize
+        } else {
+            0
+        }
     }
 
     #[pyo3(signature = (source, dest, area=None, special_flags=0))]
@@ -314,7 +370,14 @@ impl Surface {
         };
         let sst = src.src_state();
         let clip = self.clip_rect();
-        let region = blit::clip_blit(src.w as i32, src.h as i32, area_rect, clip, dest_rect.x, dest_rect.y);
+        let region = blit::clip_blit(
+            src.w as i32,
+            src.h as i32,
+            area_rect,
+            clip,
+            dest_rect.x,
+            dest_rect.y,
+        );
         if let Some(c) = region {
             let (s, d) = (src.img(), self.img());
             let (dst_keep, src_keep) = (self.shared.clone(), src.shared.clone());
@@ -336,10 +399,7 @@ impl Surface {
             });
             r.map_err(|e| pygame_error(py, e))?;
             self.touch();
-        } else if !matches!(
-            special_flags,
-            0 | 1..=9 | 0x10 | 0x11
-        ) {
+        } else if !matches!(special_flags, 0 | 1..=9 | 0x10 | 0x11) {
             return Err(pygame_error(py, "Invalid argument passed to blit."));
         }
         // dirty = Rect(dest[0], dest[1], source.w, source.h).clip(self.get_rect())
@@ -379,11 +439,15 @@ impl Surface {
     }
 
     #[pyo3(signature = (surface=None))]
-    fn convert_alpha(&self, py: Python<'_>, surface: Option<&Bound<'_, PyAny>>) -> PyResult<Surface> {
+    fn convert_alpha(
+        &self,
+        py: Python<'_>,
+        surface: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<Surface> {
         let fmt = match surface.and_then(sample_format) {
             Some(f) if f.has_alpha() => f,
             Some(f) => {
-                let a = 0xffff_ffffu32 & !(f.masks[0] | f.masks[1] | f.masks[2]);
+                let a = !(f.masks[0] | f.masks[1] | f.masks[2]);
                 Format::new([f.masks[0], f.masks[1], f.masks[2], a])
             }
             None => Format::RGBA,
@@ -435,13 +499,25 @@ impl Surface {
     #[pyo3(signature = (dx=0, dy=0))]
     fn scroll(&self, dx: i32, dy: i32) {
         let (w, h) = (self.w as i32, self.h as i32);
-        let (sx, ddx, mw) = if dx >= 0 { (0, dx, w - dx) } else { (-dx, 0, w + dx) };
-        let (sy, ddy, mh) = if dy >= 0 { (0, dy, h - dy) } else { (-dy, 0, h + dy) };
+        let (sx, ddx, mw) = if dx >= 0 {
+            (0, dx, w - dx)
+        } else {
+            (-dx, 0, w + dx)
+        };
+        let (sy, ddy, mh) = if dy >= 0 {
+            (0, dy, h - dy)
+        } else {
+            (-dy, 0, h + dy)
+        };
         if mw <= 0 || mh <= 0 {
             return;
         }
         let img = self.img();
-        let rows: Box<dyn Iterator<Item = i32>> = if dy > 0 { Box::new((0..mh).rev()) } else { Box::new(0..mh) };
+        let rows: Box<dyn Iterator<Item = i32>> = if dy > 0 {
+            Box::new((0..mh).rev())
+        } else {
+            Box::new(0..mh)
+        };
         for r in rows {
             // SAFETY: both rows are inside the surface; `copy` handles overlap.
             unsafe {
@@ -489,7 +565,11 @@ impl Surface {
 
     fn get_alpha(&self) -> Option<u8> {
         let st = self.state();
-        if st.has_alpha || self.fmt.has_alpha() { Some(st.alpha_mod) } else { None }
+        if st.has_alpha || self.fmt.has_alpha() {
+            Some(st.alpha_mod)
+        } else {
+            None
+        }
     }
 
     #[pyo3(signature = (lock=None))]
@@ -510,7 +590,9 @@ impl Surface {
         let root = Surface::root_of(slf);
         let item = lock.unwrap_or_else(|| slf.clone().into_any().unbind());
         let mut list = root.get().locks.lock();
-        let pos = list.iter().position(|o| o.bind(py).eq(item.bind(py)).unwrap_or(false));
+        let pos = list
+            .iter()
+            .position(|o| o.bind(py).eq(item.bind(py)).unwrap_or(false));
         match pos {
             Some(i) => {
                 list.remove(i);
@@ -584,7 +666,12 @@ impl Surface {
 
     #[pyo3(signature = (rect))]
     fn set_clip(&self, rect: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
-        let full = SdlRect { x: 0, y: 0, w: self.w as i32, h: self.h as i32 };
+        let full = SdlRect {
+            x: 0,
+            y: 0,
+            w: self.w as i32,
+            h: self.h as i32,
+        };
         let clip = match rect {
             Some(r) if !r.is_none() => {
                 let r = parse_rect(r, None)?;
@@ -593,7 +680,12 @@ impl Surface {
                 let y0 = r.y.max(0);
                 let x1 = r.x.saturating_add(r.w).min(full.w);
                 let y1 = r.y.saturating_add(r.h).min(full.h);
-                SdlRect { x: x0, y: y0, w: (x1 - x0).max(0), h: (y1 - y0).max(0) }
+                SdlRect {
+                    x: x0,
+                    y: y0,
+                    w: (x1 - x0).max(0),
+                    h: (y1 - y0).max(0),
+                }
             }
             _ => full,
         };
@@ -620,8 +712,15 @@ impl Surface {
         if r.w < 0 || r.h < 0 {
             return Err(pygame_error(py, "subsurface size must be non-negative."));
         }
-        if r.x < 0 || r.y < 0 || r.x as i64 + r.w as i64 > this.w as i64 || r.y as i64 + r.h as i64 > this.h as i64 {
-            return Err(pygame_error(py, "subsurface rectangle outside surface area."));
+        if r.x < 0
+            || r.y < 0
+            || r.x as i64 + r.w as i64 > this.w as i64
+            || r.y as i64 + r.h as i64 > this.h as i64
+        {
+            return Err(pygame_error(
+                py,
+                "subsurface rectangle outside surface area.",
+            ));
         }
         let off = this.off + r.y as usize * this.pitch + r.x as usize * 4;
         let root = Surface::root_of(slf).unbind();
@@ -689,7 +788,11 @@ impl Surface {
     }
 
     #[pyo3(signature = (**kwargs))]
-    fn get_rect<'py>(&self, py: Python<'py>, kwargs: Option<&Bound<'py, PyDict>>) -> PyResult<Bound<'py, PyAny>> {
+    fn get_rect<'py>(
+        &self,
+        py: Python<'py>,
+        kwargs: Option<&Bound<'py, PyDict>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
         let rv = make_rect(py, 0, 0, self.w as i32, self.h as i32)?;
         if let Some(kw) = kwargs {
             for (k, v) in kw.iter() {
@@ -708,7 +811,11 @@ impl Surface {
     }
 
     fn get_flags(&self) -> u64 {
-        if self.fmt.has_alpha() || self.state().has_alpha { SRCALPHA } else { 0 }
+        if self.fmt.has_alpha() || self.state().has_alpha {
+            SRCALPHA
+        } else {
+            0
+        }
     }
 
     fn get_pitch(&self) -> usize {
@@ -722,7 +829,8 @@ impl Surface {
 
     fn set_masks(&self, py: Python<'_>, masks: &Bound<'_, PyAny>) -> PyResult<()> {
         let _ = masks;
-        py.import("warnings")?.call_method1("warn", ("Surface.set_masks is not supported.",))?;
+        py.import("warnings")?
+            .call_method1("warn", ("Surface.set_masks is not supported.",))?;
         Ok(())
     }
 
@@ -733,7 +841,8 @@ impl Surface {
 
     fn set_shifts(&self, py: Python<'_>, shifts: &Bound<'_, PyAny>) -> PyResult<()> {
         let _ = shifts;
-        py.import("warnings")?.call_method1("warn", ("Surface.set_shifts is not supported.",))?;
+        py.import("warnings")?
+            .call_method1("warn", ("Surface.set_shifts is not supported.",))?;
         Ok(())
     }
 
@@ -743,7 +852,11 @@ impl Surface {
     }
 
     #[pyo3(signature = (min_alpha=1))]
-    fn get_bounding_rect<'py>(&self, py: Python<'py>, min_alpha: i64) -> PyResult<Bound<'py, PyAny>> {
+    fn get_bounding_rect<'py>(
+        &self,
+        py: Python<'py>,
+        min_alpha: i64,
+    ) -> PyResult<Bound<'py, PyAny>> {
         let (w, h) = (self.w as usize, self.h as usize);
         let amask = self.fmt.masks[3];
         if amask == 0 || w == 0 || h == 0 {
@@ -814,7 +927,11 @@ impl Surface {
 
     /// Buffer protocol: 2-D, shape `(height, width * 4)`, one byte per item
     /// (`B`), strides `(pitch, 1)`. Writable.
-    unsafe fn __getbuffer__(slf: Bound<'_, Self>, view: *mut ffi::Py_buffer, flags: c_int) -> PyResult<()> {
+    unsafe fn __getbuffer__(
+        slf: Bound<'_, Self>,
+        view: *mut ffi::Py_buffer,
+        flags: c_int,
+    ) -> PyResult<()> {
         if view.is_null() {
             return Err(PyBufferError::new_err("View is null"));
         }
@@ -822,12 +939,15 @@ impl Surface {
         let row = this.w as usize * 4;
         let strided = (flags & ffi::PyBUF_STRIDES) == ffi::PyBUF_STRIDES;
         if !strided && this.h > 1 && this.pitch != row {
-            return Err(PyBufferError::new_err("Surface is not contiguous; request strides."));
+            return Err(PyBufferError::new_err(
+                "Surface is not contiguous; request strides.",
+            ));
         }
         if (flags & ffi::PyBUF_WRITABLE) == ffi::PyBUF_WRITABLE {
             this.touch();
         }
-        let dims: Box<[isize; 4]> = Box::new([this.h as isize, row as isize, this.pitch as isize, 1]);
+        let dims: Box<[isize; 4]> =
+            Box::new([this.h as isize, row as isize, this.pitch as isize, 1]);
         let dims = Box::into_raw(dims);
         unsafe {
             (*view).buf = this.img().pixels_ptr() as *mut c_void;
@@ -846,7 +966,11 @@ impl Surface {
             } else {
                 std::ptr::null_mut()
             };
-            (*view).strides = if strided { (dims as *mut isize).add(2) } else { std::ptr::null_mut() };
+            (*view).strides = if strided {
+                (dims as *mut isize).add(2)
+            } else {
+                std::ptr::null_mut()
+            };
             (*view).suboffsets = std::ptr::null_mut();
             (*view).internal = dims as *mut c_void;
         }

@@ -3,7 +3,6 @@ name = "surface"
 description = "renpy.pygame.surface and CPU pixel modules in Rust."
 version.workspace = true
 edition.workspace = true
-license.workspace = true
 publish.workspace = true
 
 [dependencies]

@@ -12,7 +12,11 @@ fn pen(s: &Bound<'_, Surface>, color: &Bound<'_, PyAny>) -> PyResult<Pen> {
         ColorArg::Rgba(c) => c,
         ColorArg::Pixel(p) => surf.format().unpack(p),
     };
-    Ok(Pen { img: surf.img(), clip: surf.clip_rect(), color: c })
+    Ok(Pen {
+        img: surf.img(),
+        clip: surf.clip_rect(),
+        color: c,
+    })
 }
 
 fn point(o: &Bound<'_, PyAny>) -> PyResult<(i32, i32)> {
@@ -25,7 +29,14 @@ fn points(o: &Bound<'_, PyAny>) -> PyResult<Vec<(i32, i32)>> {
 }
 
 /// `Rect(x, y, w, h).clip(surface.get_rect())` as a Python Rect.
-fn dirty<'py>(py: Python<'py>, s: &Surface, x: i32, y: i32, w: i32, h: i32) -> PyResult<Bound<'py, PyAny>> {
+fn dirty<'py>(
+    py: Python<'py>,
+    s: &Surface,
+    x: i32,
+    y: i32,
+    w: i32,
+    h: i32,
+) -> PyResult<Bound<'py, PyAny>> {
     let (sw, sh) = s.size();
     let x0 = x.max(0);
     let y0 = y.max(0);
@@ -73,7 +84,14 @@ pub fn rect<'py>(
         }
     }
     surface.get().touch();
-    dirty(py, surface.get(), x - width, y - width, w + width * 2, h + width * 2)
+    dirty(
+        py,
+        surface.get(),
+        x - width,
+        y - width,
+        w + width * 2,
+        h + width * 2,
+    )
 }
 
 #[pyfunction]
@@ -111,7 +129,14 @@ pub fn circle<'py>(
     if width == 0 {
         p.filled_circle(x, y, radius);
         surface.get().touch();
-        return dirty(py, surface.get(), x - radius, y - radius, radius * 2, radius * 2);
+        return dirty(
+            py,
+            surface.get(),
+            x - radius,
+            y - radius,
+            radius * 2,
+            radius * 2,
+        );
     }
     p.circle(x, y, radius);
     for n in 1..width {
@@ -120,7 +145,14 @@ pub fn circle<'py>(
         p.circle(x - 1, y, radius - n);
     }
     surface.get().touch();
-    dirty(py, surface.get(), x - radius - width, y - radius - width, radius * 2 + width, radius * 2 + width)
+    dirty(
+        py,
+        surface.get(),
+        x - radius - width,
+        y - radius - width,
+        radius * 2 + width,
+        radius * 2 + width,
+    )
 }
 
 #[pyfunction]
@@ -147,7 +179,14 @@ pub fn ellipse<'py>(
         p.ellipse(x - 1, y, rx - n, ry - n);
     }
     surface.get().touch();
-    dirty(py, surface.get(), x - rx - width, y - ry - width, rx * 2 + width, ry * 2 + width)
+    dirty(
+        py,
+        surface.get(),
+        x - rx - width,
+        y - ry - width,
+        rx * 2 + width,
+        ry * 2 + width,
+    )
 }
 
 #[pyfunction]
@@ -203,7 +242,9 @@ pub fn lines<'py>(
     let p = pen(surface, color)?;
     let pts = points(pointlist)?;
     if pts.is_empty() {
-        return Err(pyo3::exceptions::PyIndexError::new_err("list index out of range"));
+        return Err(pyo3::exceptions::PyIndexError::new_err(
+            "list index out of range",
+        ));
     }
     for pair in pts.windows(2) {
         one_line(&p, pair[0], pair[1], width);
@@ -248,7 +289,9 @@ pub fn aalines<'py>(
     let p = pen(surface, color)?;
     let pts = points(pointlist)?;
     if pts.is_empty() {
-        return Err(pyo3::exceptions::PyIndexError::new_err("list index out of range"));
+        return Err(pyo3::exceptions::PyIndexError::new_err(
+            "list index out of range",
+        ));
     }
     for pair in pts.windows(2) {
         p.aaline(pair[0].0, pair[0].1, pair[1].0, pair[1].1);

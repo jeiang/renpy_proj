@@ -8,12 +8,14 @@ use crate::util;
 const SCRAP_TEXT: &str = "text/plain";
 
 fn clipboard(py: Python<'_>) -> PyResult<arboard::Clipboard> {
-    arboard::Clipboard::new().map_err(|e| util::pg_error(py, &format!("cannot open the clipboard: {e}")))
+    arboard::Clipboard::new()
+        .map_err(|e| util::pg_error(py, &format!("cannot open the clipboard: {e}")))
 }
 
 fn data_bytes(py: Python<'_>, data: &Bound<'_, PyAny>) -> PyResult<String> {
     if let Ok(b) = data.cast::<PyBytes>() {
-        return String::from_utf8(b.as_bytes().to_vec()).map_err(|e| util::pg_error(py, &format!("clipboard text is not UTF-8: {e}")));
+        return String::from_utf8(b.as_bytes().to_vec())
+            .map_err(|e| util::pg_error(py, &format!("clipboard text is not UTF-8: {e}")));
     }
     data.extract()
 }
@@ -29,7 +31,12 @@ fn get<'py>(py: Python<'py>, r#type: &str) -> PyResult<Bound<'py, PyBytes>> {
     let text = match clipboard(py)?.get_text() {
         Ok(t) => t,
         Err(arboard::Error::ContentNotAvailable) => String::new(),
-        Err(e) => return Err(util::pg_error(py, &format!("cannot read the clipboard: {e}"))),
+        Err(e) => {
+            return Err(util::pg_error(
+                py,
+                &format!("cannot read the clipboard: {e}"),
+            ));
+        }
     };
     Ok(PyBytes::new(py, text.as_bytes()))
 }

@@ -1,8 +1,8 @@
 //! wgpu device, textures, samplers, mip chains, pass recording and submission. No Python types here.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
 use parking_lot::Mutex;
 use wgpu::*;
@@ -78,7 +78,10 @@ pub struct Shared {
 
 impl Shared {
     /// `surface` is created first so that the adapter is compatible with it.
-    pub fn new(instance: Instance, surface: Option<&Surface<'static>>) -> Result<Arc<Shared>, String> {
+    pub fn new(
+        instance: Instance,
+        surface: Option<&Surface<'static>>,
+    ) -> Result<Arc<Shared>, String> {
         let adapter = pollster::block_on(instance.request_adapter(&RequestAdapterOptions {
             power_preference: PowerPreference::HighPerformance,
             force_fallback_adapter: false,
@@ -88,9 +91,15 @@ impl Shared {
         .map_err(|e| format!("no suitable GPU adapter: {e}"))?;
         let info = adapter.get_info();
         let lim = adapter.limits();
-        let has_16bit = adapter.features().contains(Features::TEXTURE_FORMAT_16BIT_NORM);
+        let has_16bit = adapter
+            .features()
+            .contains(Features::TEXTURE_FORMAT_16BIT_NORM);
         let (device, queue) = pollster::block_on(adapter.request_device(&DeviceDescriptor {
-            required_features: if has_16bit { Features::TEXTURE_FORMAT_16BIT_NORM } else { Features::empty() },
+            required_features: if has_16bit {
+                Features::TEXTURE_FORMAT_16BIT_NORM
+            } else {
+                Features::empty()
+            },
             required_limits: Limits {
                 max_texture_dimension_2d: lim.max_texture_dimension_2d,
                 ..Limits::default()
@@ -132,12 +141,21 @@ impl Shared {
             let pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
                 label: Some("mip blit"),
                 layout: Some(&pl),
-                vertex: VertexState { module: &module, entry_point: Some("vs"), compilation_options: Default::default(), buffers: &[] },
+                vertex: VertexState {
+                    module: &module,
+                    entry_point: Some("vs"),
+                    compilation_options: Default::default(),
+                    buffers: &[],
+                },
                 fragment: Some(FragmentState {
                     module: &module,
                     entry_point: Some("fs"),
                     compilation_options: Default::default(),
-                    targets: &[Some(ColorTargetState { format: COLOR_FORMAT, blend: None, write_mask: ColorWrites::ALL })],
+                    targets: &[Some(ColorTargetState {
+                        format: COLOR_FORMAT,
+                        blend: None,
+                        write_mask: ColorWrites::ALL,
+                    })],
                 }),
                 primitive: PrimitiveState::default(),
                 depth_stencil: None,
@@ -150,7 +168,11 @@ impl Shared {
                 min_filter: FilterMode::Linear,
                 ..Default::default()
             });
-            MipBlit { pipeline, bgl, sampler }
+            MipBlit {
+                pipeline,
+                bgl,
+                sampler,
+            }
         };
         Ok(Arc::new(Shared {
             instance,
@@ -179,13 +201,23 @@ impl Shared {
         if let Some(s) = m.get(&k) {
             return s.clone();
         }
-        let filt = |l: bool| if l { FilterMode::Linear } else { FilterMode::Nearest };
+        let filt = |l: bool| {
+            if l {
+                FilterMode::Linear
+            } else {
+                FilterMode::Nearest
+            }
+        };
         let mipf = match k.mip {
             2 => MipmapFilterMode::Linear,
             _ => MipmapFilterMode::Nearest,
         };
         // wgpu allows anisotropy only with all filters linear.
-        let aniso = if k.mag_linear && k.min_linear && k.mip == 2 { k.aniso.max(1) } else { 1 };
+        let aniso = if k.mag_linear && k.min_linear && k.mip == 2 {
+            k.aniso.max(1)
+        } else {
+            1
+        };
         let s = self.device.create_sampler(&SamplerDescriptor {
             address_mode_u: address_mode(k.wrap_s),
             address_mode_v: address_mode(k.wrap_t),
@@ -202,13 +234,29 @@ impl Shared {
         s
     }
 
-    pub fn new_texture(self: &Arc<Self>, width: u32, height: u32, mips: u32) -> Result<Arc<TexInner>, String> {
-        if width == 0 || height == 0 || width > self.max_texture_size || height > self.max_texture_size {
-            return Err(format!("cannot allocate a {width}x{height} texture (limit {})", self.max_texture_size));
+    pub fn new_texture(
+        self: &Arc<Self>,
+        width: u32,
+        height: u32,
+        mips: u32,
+    ) -> Result<Arc<TexInner>, String> {
+        if width == 0
+            || height == 0
+            || width > self.max_texture_size
+            || height > self.max_texture_size
+        {
+            return Err(format!(
+                "cannot allocate a {width}x{height} texture (limit {})",
+                self.max_texture_size
+            ));
         }
         let tex = self.device.create_texture(&TextureDescriptor {
             label: None,
-            size: Extent3d { width, height, depth_or_array_layers: 1 },
+            size: Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
             mip_level_count: mips,
             sample_count: 1,
             dimension: TextureDimension::D2,
@@ -220,11 +268,24 @@ impl Shared {
             view_formats: &[],
         });
         let view = tex.create_view(&TextureViewDescriptor::default());
-        let rt_view = tex.create_view(&TextureViewDescriptor { mip_level_count: Some(1), ..Default::default() });
+        let rt_view = tex.create_view(&TextureViewDescriptor {
+            mip_level_count: Some(1),
+            ..Default::default()
+        });
         let bytes = mem_size(width, height, mips);
         self.tex_bytes.fetch_add(bytes, Ordering::Relaxed);
         self.tex_count.fetch_add(1, Ordering::Relaxed);
-        Ok(Arc::new(TexInner { shared: self.clone(), tex, view, rt_view, width, height, mips, id: self.next_id(), bytes }))
+        Ok(Arc::new(TexInner {
+            shared: self.clone(),
+            tex,
+            view,
+            rt_view,
+            width,
+            height,
+            mips,
+            id: self.next_id(),
+            bytes,
+        }))
     }
 
     /// Appends the blits that fill mip levels 1.. from level 0.
@@ -244,8 +305,14 @@ impl Shared {
                 label: None,
                 layout: &self.mip.bgl,
                 entries: &[
-                    BindGroupEntry { binding: 0, resource: BindingResource::TextureView(&src) },
-                    BindGroupEntry { binding: 1, resource: BindingResource::Sampler(&self.mip.sampler) },
+                    BindGroupEntry {
+                        binding: 0,
+                        resource: BindingResource::TextureView(&src),
+                    },
+                    BindGroupEntry {
+                        binding: 1,
+                        resource: BindingResource::Sampler(&self.mip.sampler),
+                    },
                 ],
             });
             let mut rp = enc.begin_render_pass(&RenderPassDescriptor {
@@ -254,7 +321,10 @@ impl Shared {
                     view: &dst,
                     depth_slice: None,
                     resolve_target: None,
-                    ops: Operations { load: LoadOp::Clear(Color::TRANSPARENT), store: StoreOp::Store },
+                    ops: Operations {
+                        load: LoadOp::Clear(Color::TRANSPARENT),
+                        store: StoreOp::Store,
+                    },
                 })],
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
@@ -299,7 +369,9 @@ pub struct TexInner {
 
 impl Drop for TexInner {
     fn drop(&mut self) {
-        self.shared.tex_bytes.fetch_sub(self.bytes, Ordering::Relaxed);
+        self.shared
+            .tex_bytes
+            .fetch_sub(self.bytes, Ordering::Relaxed);
         self.shared.tex_count.fetch_sub(1, Ordering::Relaxed);
     }
 }
@@ -308,10 +380,23 @@ impl TexInner {
     /// Uploads tightly or loosely packed RGBA8 rows into level 0.
     pub fn write_level0(&self, rgba: &[u8], pitch: usize, width: u32, height: u32) {
         self.shared.queue.write_texture(
-            TexelCopyTextureInfo { texture: &self.tex, mip_level: 0, origin: Origin3d::ZERO, aspect: TextureAspect::All },
+            TexelCopyTextureInfo {
+                texture: &self.tex,
+                mip_level: 0,
+                origin: Origin3d::ZERO,
+                aspect: TextureAspect::All,
+            },
             rgba,
-            TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(pitch as u32), rows_per_image: Some(height) },
-            Extent3d { width, height, depth_or_array_layers: 1 },
+            TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(pitch as u32),
+                rows_per_image: Some(height),
+            },
+            Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
         );
     }
 }
@@ -356,8 +441,15 @@ pub enum Cmd {
 
 /// The window surface, or a stand-in texture when running headless.
 enum Screen {
-    Window { surface: Surface<'static>, config: SurfaceConfiguration, frame: Option<SurfaceTexture>, spare: Option<Texture> },
-    Headless { tex: Texture },
+    Window {
+        surface: Surface<'static>,
+        config: SurfaceConfiguration,
+        frame: Option<SurfaceTexture>,
+        spare: Option<Texture>,
+    },
+    Headless {
+        tex: Texture,
+    },
 }
 
 pub struct Renderer {
@@ -377,7 +469,7 @@ pub struct Renderer {
 }
 
 fn pad4(v: &mut Vec<u8>) {
-    while v.len() % 4 != 0 {
+    while !v.len().is_multiple_of(4) {
         v.push(0);
     }
 }
@@ -385,14 +477,18 @@ fn pad4(v: &mut Vec<u8>) {
 impl Renderer {
     pub fn new_window(window: Arc<winit::window::Window>) -> Result<Renderer, String> {
         let instance = Instance::new(InstanceDescriptor::new_without_display_handle());
-        let surface = instance.create_surface(window.clone()).map_err(|e| format!("cannot create surface: {e}"))?;
+        let surface = instance
+            .create_surface(window.clone())
+            .map_err(|e| format!("cannot create surface: {e}"))?;
         let sh = Shared::new(instance, Some(&surface))?;
         let caps = surface.get_capabilities(&sh.adapter);
         let format = caps
             .formats
             .iter()
             .copied()
-            .find(|f| !f.is_srgb() && matches!(f, TextureFormat::Bgra8Unorm | TextureFormat::Rgba8Unorm))
+            .find(|f| {
+                !f.is_srgb() && matches!(f, TextureFormat::Bgra8Unorm | TextureFormat::Rgba8Unorm)
+            })
             .or_else(|| caps.formats.iter().copied().find(|f| !f.is_srgb()))
             .unwrap_or(caps.formats[0]);
         let size = window.inner_size();
@@ -409,17 +505,37 @@ impl Renderer {
         };
         surface.configure(&sh.device, &config);
         let screen_size = (config.width, config.height);
-        Ok(Renderer::with_screen(sh, Screen::Window { surface, config, frame: None, spare: None }, format, screen_size))
+        Ok(Renderer::with_screen(
+            sh,
+            Screen::Window {
+                surface,
+                config,
+                frame: None,
+                spare: None,
+            },
+            format,
+            screen_size,
+        ))
     }
 
     pub fn new_headless(width: u32, height: u32) -> Result<Renderer, String> {
         let instance = Instance::new(InstanceDescriptor::new_without_display_handle());
         let sh = Shared::new(instance, None)?;
         let tex = headless_tex(&sh, width, height);
-        Ok(Renderer::with_screen(sh, Screen::Headless { tex }, COLOR_FORMAT, (width, height)))
+        Ok(Renderer::with_screen(
+            sh,
+            Screen::Headless { tex },
+            COLOR_FORMAT,
+            (width, height),
+        ))
     }
 
-    fn with_screen(sh: Arc<Shared>, screen: Screen, screen_format: TextureFormat, screen_size: (u32, u32)) -> Renderer {
+    fn with_screen(
+        sh: Arc<Shared>,
+        screen: Screen,
+        screen_format: TextureFormat,
+        screen_size: (u32, u32),
+    ) -> Renderer {
         Renderer {
             sh,
             screen,
@@ -441,7 +557,12 @@ impl Renderer {
         let (w, h) = (width.max(1), height.max(1));
         self.screen_size = (w, h);
         match &mut self.screen {
-            Screen::Window { surface, config, frame, .. } => {
+            Screen::Window {
+                surface,
+                config,
+                frame,
+                ..
+            } => {
                 *frame = None;
                 config.width = w;
                 config.height = h;
@@ -457,11 +578,24 @@ impl Renderer {
             Target::Screen => (self.screen_size.0, self.screen_size.1, 1.0),
             Target::Tex(t) => (t.width, t.height, -1.0),
         };
-        self.stack.push(PassRec { target, width, height, viewport, clear, flip_y, draws: vec![] });
+        self.stack.push(PassRec {
+            target,
+            width,
+            height,
+            viewport,
+            clear,
+            flip_y,
+            draws: vec![],
+        });
     }
 
     /// Same as `begin_pass` but the pass renders like the screen (no Y flip). Used for screenshots.
-    pub fn begin_screen_like_pass(&mut self, target: Target, viewport: [f32; 4], clear: Option<[f64; 4]>) {
+    pub fn begin_screen_like_pass(
+        &mut self,
+        target: Target,
+        viewport: [f32; 4],
+        clear: Option<[f64; 4]>,
+    ) {
         self.begin_pass(target, viewport, clear);
         self.stack.last_mut().unwrap().flip_y = 1.0;
     }
@@ -501,9 +635,14 @@ impl Renderer {
     ) -> Result<(), String> {
         let pipe = prog.pipeline(&self.sh, &key)?;
         let pass = self.stack.last_mut().ok_or("draw outside of a pass")?;
-        let (flip, size, vp) = (pass.flip_y, [pass.width as f32, pass.height as f32], pass.viewport);
+        let (flip, size, vp) = (
+            pass.flip_y,
+            [pass.width as f32, pass.height as f32],
+            pass.viewport,
+        );
         // Translator-owned members of the uniform block.
-        uniforms[prog.flip_offset as usize..prog.flip_offset as usize + 4].copy_from_slice(&flip.to_ne_bytes());
+        uniforms[prog.flip_offset as usize..prog.flip_offset as usize + 4]
+            .copy_from_slice(&flip.to_ne_bytes());
         for (i, f) in size.iter().enumerate() {
             let o = prog.size_offset as usize + 4 * i;
             uniforms[o..o + 4].copy_from_slice(&f.to_ne_bytes());
@@ -523,12 +662,16 @@ impl Renderer {
             va.extend_from_slice(bytes);
             (s, va.len() as u64)
         };
-        let pos_r = if vl.has_position { Some(rng(pos)) } else { None };
+        let pos_r = if vl.has_position {
+            Some(rng(pos))
+        } else {
+            None
+        };
         let attr_r = if vl.stride > 0 { Some(rng(attr)) } else { None };
         let idx_r = rng(idx);
         let ua = &mut self.uniform_arena;
         let align = self.sh.uniform_align as usize;
-        while ua.len() % align != 0 {
+        while !ua.len().is_multiple_of(align) {
             ua.push(0);
         }
         let uoff = ua.len() as u32;
@@ -555,7 +698,11 @@ impl Renderer {
             .or_insert_with(|| {
                 dev.create_texture(&TextureDescriptor {
                     label: Some("depth"),
-                    size: Extent3d { width: w, height: h, depth_or_array_layers: 1 },
+                    size: Extent3d {
+                        width: w,
+                        height: h,
+                        depth_or_array_layers: 1,
+                    },
                     mip_level_count: 1,
                     sample_count: 1,
                     dimension: TextureDimension::D2,
@@ -570,11 +717,17 @@ impl Renderer {
     fn screen_view(&mut self) -> Result<TextureView, String> {
         match &mut self.screen {
             Screen::Headless { tex } => Ok(tex.create_view(&TextureViewDescriptor::default())),
-            Screen::Window { surface, config, frame, spare } => {
+            Screen::Window {
+                surface,
+                config,
+                frame,
+                spare,
+            } => {
                 if frame.is_none() {
                     for _ in 0..3 {
                         match surface.get_current_texture() {
-                            CurrentSurfaceTexture::Success(t) | CurrentSurfaceTexture::Suboptimal(t) => {
+                            CurrentSurfaceTexture::Success(t)
+                            | CurrentSurfaceTexture::Suboptimal(t) => {
                                 *frame = Some(t);
                                 break;
                             }
@@ -582,8 +735,12 @@ impl Renderer {
                                 surface.configure(&self.sh.device, config);
                             }
                             // The window is covered or minimized: draw into a spare target and do not present.
-                            CurrentSurfaceTexture::Timeout | CurrentSurfaceTexture::Occluded => break,
-                            other => return Err(format!("cannot acquire the window surface: {other:?}")),
+                            CurrentSurfaceTexture::Timeout | CurrentSurfaceTexture::Occluded => {
+                                break;
+                            }
+                            other => {
+                                return Err(format!("cannot acquire the window surface: {other:?}"));
+                            }
                         }
                     }
                 }
@@ -594,7 +751,11 @@ impl Renderer {
                 if spare.as_ref().map(|t| (t.width(), t.height())) != Some((w, h)) {
                     *spare = Some(self.sh.device.create_texture(&TextureDescriptor {
                         label: Some("spare screen"),
-                        size: Extent3d { width: w, height: h, depth_or_array_layers: 1 },
+                        size: Extent3d {
+                            width: w,
+                            height: h,
+                            depth_or_array_layers: 1,
+                        },
                         mip_level_count: 1,
                         sample_count: 1,
                         dimension: TextureDimension::D2,
@@ -603,19 +764,26 @@ impl Renderer {
                         view_formats: &[],
                     }));
                 }
-                Ok(spare.as_ref().unwrap().create_view(&TextureViewDescriptor::default()))
+                Ok(spare
+                    .as_ref()
+                    .unwrap()
+                    .create_view(&TextureViewDescriptor::default()))
             }
         }
     }
 
     fn grow(dev: &Device, slot: &mut Option<Buffer>, need: u64, usage: BufferUsages) -> Buffer {
-        if let Some(b) = slot {
-            if b.size() >= need {
+        if let Some(b) = slot
+            && b.size() >= need {
                 return b.clone();
             }
-        }
         let size = need.max(1 << 20).next_power_of_two();
-        let b = dev.create_buffer(&BufferDescriptor { label: None, size, usage: usage | BufferUsages::COPY_DST, mapped_at_creation: false });
+        let b = dev.create_buffer(&BufferDescriptor {
+            label: None,
+            size,
+            usage: usage | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
         *slot = Some(b.clone());
         b
     }
@@ -630,8 +798,18 @@ impl Renderer {
         }
         let cmds = std::mem::take(&mut self.cmds);
         let sh = self.sh.clone();
-        let vbuf = Self::grow(&sh.device, &mut self.vbuf, self.vertex_arena.len() as u64, BufferUsages::VERTEX | BufferUsages::INDEX);
-        let ubuf = Self::grow(&sh.device, &mut self.ubuf, self.uniform_arena.len() as u64, BufferUsages::UNIFORM);
+        let vbuf = Self::grow(
+            &sh.device,
+            &mut self.vbuf,
+            self.vertex_arena.len() as u64,
+            BufferUsages::VERTEX | BufferUsages::INDEX,
+        );
+        let ubuf = Self::grow(
+            &sh.device,
+            &mut self.ubuf,
+            self.uniform_arena.len() as u64,
+            BufferUsages::UNIFORM,
+        );
         if !self.vertex_arena.is_empty() {
             pad4(&mut self.vertex_arena);
             sh.queue.write_buffer(&vbuf, 0, &self.vertex_arena);
@@ -639,7 +817,9 @@ impl Renderer {
         if !self.uniform_arena.is_empty() {
             sh.queue.write_buffer(&ubuf, 0, &self.uniform_arena);
         }
-        let mut enc = sh.device.create_command_encoder(&CommandEncoderDescriptor { label: Some("renpy frame") });
+        let mut enc = sh.device.create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("renpy frame"),
+        });
         let mut bg0s: HashMap<u64, BindGroup> = HashMap::new();
         let mut bg1s: HashMap<Vec<(u64, SamplerKey)>, BindGroup> = HashMap::new();
         for cmd in &cmds {
@@ -654,9 +834,17 @@ impl Renderer {
                     let mut rp = None;
                     let mut first = true;
                     let empty = p.draws.is_empty();
-                    let start = |enc: &mut CommandEncoder, clear_color: bool, first: bool| -> RenderPass<'static> {
+                    let start = |enc: &mut CommandEncoder,
+                                 clear_color: bool,
+                                 first: bool|
+                     -> RenderPass<'static> {
                         let load = match (&p.clear, clear_color) {
-                            (Some(c), true) => LoadOp::Clear(Color { r: c[0], g: c[1], b: c[2], a: c[3] }),
+                            (Some(c), true) => LoadOp::Clear(Color {
+                                r: c[0],
+                                g: c[1],
+                                b: c[2],
+                                a: c[3],
+                            }),
                             _ => LoadOp::Load,
                         };
                         let _ = first;
@@ -667,11 +855,17 @@ impl Renderer {
                                     view: &view,
                                     depth_slice: None,
                                     resolve_target: None,
-                                    ops: Operations { load, store: StoreOp::Store },
+                                    ops: Operations {
+                                        load,
+                                        store: StoreOp::Store,
+                                    },
                                 })],
                                 depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
                                     view: &dview,
-                                    depth_ops: Some(Operations { load: LoadOp::Clear(1.0), store: StoreOp::Discard }),
+                                    depth_ops: Some(Operations {
+                                        load: LoadOp::Clear(1.0),
+                                        store: StoreOp::Discard,
+                                    }),
                                     stencil_ops: None,
                                 }),
                                 timestamp_writes: None,
@@ -716,25 +910,48 @@ impl Renderer {
                                         resource: BindingResource::Buffer(BufferBinding {
                                             buffer: &ubuf,
                                             offset: 0,
-                                            size: std::num::NonZeroU64::new(d.prog.block_size as u64),
+                                            size: std::num::NonZeroU64::new(
+                                                d.prog.block_size as u64,
+                                            ),
                                         }),
                                     }],
                                 })
                             })
                             .clone();
-                        let key: Vec<(u64, SamplerKey)> = std::iter::once((d.prog.id, SamplerKey { wrap_s: 0, wrap_t: 0, mag_linear: false, min_linear: false, mip: 9, aniso: 0 }))
-                            .chain(d.textures.iter().map(|(t, k)| (t.id, *k)))
-                            .collect();
+                        let key: Vec<(u64, SamplerKey)> = std::iter::once((
+                            d.prog.id,
+                            SamplerKey {
+                                wrap_s: 0,
+                                wrap_t: 0,
+                                mag_linear: false,
+                                min_linear: false,
+                                mip: 9,
+                                aniso: 0,
+                            },
+                        ))
+                        .chain(d.textures.iter().map(|(t, k)| (t.id, *k)))
+                        .collect();
                         let bg1 = bg1s
                             .entry(key)
                             .or_insert_with(|| {
-                                let samplers: Vec<Sampler> = d.textures.iter().map(|(_, k)| sh.sampler(*k)).collect();
+                                let samplers: Vec<Sampler> =
+                                    d.textures.iter().map(|(_, k)| sh.sampler(*k)).collect();
                                 let mut entries = vec![];
                                 for (i, (t, _)) in d.textures.iter().enumerate() {
-                                    entries.push(BindGroupEntry { binding: 2 * i as u32, resource: BindingResource::TextureView(&t.view) });
-                                    entries.push(BindGroupEntry { binding: 2 * i as u32 + 1, resource: BindingResource::Sampler(&samplers[i]) });
+                                    entries.push(BindGroupEntry {
+                                        binding: 2 * i as u32,
+                                        resource: BindingResource::TextureView(&t.view),
+                                    });
+                                    entries.push(BindGroupEntry {
+                                        binding: 2 * i as u32 + 1,
+                                        resource: BindingResource::Sampler(&samplers[i]),
+                                    });
                                 }
-                                sh.device.create_bind_group(&BindGroupDescriptor { label: None, layout: &d.prog.bgl1(&sh), entries: &entries })
+                                sh.device.create_bind_group(&BindGroupDescriptor {
+                                    label: None,
+                                    layout: &d.prog.bgl1(&sh),
+                                    entries: &entries,
+                                })
                             })
                             .clone();
                         pass.set_pipeline(&d.pipe);
@@ -764,11 +981,10 @@ impl Renderer {
     /// Presents the window frame, if one was drawn.
     pub fn present(&mut self) -> Result<(), String> {
         self.flush()?;
-        if let Screen::Window { frame, .. } = &mut self.screen {
-            if let Some(f) = frame.take() {
+        if let Screen::Window { frame, .. } = &mut self.screen
+            && let Some(f) = frame.take() {
                 self.sh.queue.present(f);
             }
-        }
         // Depth targets are cheap to rebuild and can be resized away.
         if self.depth.len() > 8 {
             self.depth.clear();
@@ -778,14 +994,20 @@ impl Renderer {
 
     /// Flushes, then reads level 0 of `t` (or the screen when `None`) as tightly packed RGBA bytes in the target's own
     /// channel order. Returns (width, height, bytes, is_bgra).
-    pub fn read_pixels(&mut self, t: Option<&Arc<TexInner>>, rect: Option<[u32; 4]>) -> Result<(u32, u32, Vec<u8>, bool), String> {
+    pub fn read_pixels(
+        &mut self,
+        t: Option<&Arc<TexInner>>,
+        rect: Option<[u32; 4]>,
+    ) -> Result<(u32, u32, Vec<u8>, bool), String> {
         self.flush()?;
         let (tex, bgra, w, h) = match t {
             Some(t) => (t.tex.clone(), false, t.width, t.height),
             None => {
                 let tex = match &self.screen {
                     Screen::Headless { tex } => tex.clone(),
-                    Screen::Window { .. } => return Err("cannot read back the window surface".into()),
+                    Screen::Window { .. } => {
+                        return Err("cannot read back the window surface".into());
+                    }
                 };
                 (tex, false, self.screen_size.0, self.screen_size.1)
             }
@@ -800,9 +1022,25 @@ impl Renderer {
         });
         let mut enc = self.sh.device.create_command_encoder(&Default::default());
         enc.copy_texture_to_buffer(
-            TexelCopyTextureInfo { texture: &tex, mip_level: 0, origin: Origin3d { x: rx, y: ry, z: 0 }, aspect: TextureAspect::All },
-            TexelCopyBufferInfo { buffer: &buf, layout: TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(bpr), rows_per_image: Some(rh) } },
-            Extent3d { width: rw, height: rh, depth_or_array_layers: 1 },
+            TexelCopyTextureInfo {
+                texture: &tex,
+                mip_level: 0,
+                origin: Origin3d { x: rx, y: ry, z: 0 },
+                aspect: TextureAspect::All,
+            },
+            TexelCopyBufferInfo {
+                buffer: &buf,
+                layout: TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(bpr),
+                    rows_per_image: Some(rh),
+                },
+            },
+            Extent3d {
+                width: rw,
+                height: rh,
+                depth_or_array_layers: 1,
+            },
         );
         self.sh.queue.submit([enc.finish()]);
         let slice = buf.slice(..);
@@ -811,7 +1049,9 @@ impl Renderer {
             .device
             .poll(PollType::wait_indefinitely())
             .map_err(|e| format!("GPU readback failed: {e:?}"))?;
-        let data = slice.get_mapped_range().map_err(|e| format!("GPU readback failed: {e:?}"))?;
+        let data = slice
+            .get_mapped_range()
+            .map_err(|e| format!("GPU readback failed: {e:?}"))?;
         let mut out = Vec::with_capacity((rw * rh * 4) as usize);
         for r in 0..rh as usize {
             out.extend_from_slice(&data[r * bpr as usize..r * bpr as usize + rw as usize * 4]);
@@ -850,12 +1090,18 @@ pub fn standard_layouts() -> Vec<(u32, Vec<(&'static str, u32)>, bool)> {
 fn headless_tex(sh: &Shared, w: u32, h: u32) -> Texture {
     sh.device.create_texture(&TextureDescriptor {
         label: Some("headless screen"),
-        size: Extent3d { width: w, height: h, depth_or_array_layers: 1 },
+        size: Extent3d {
+            width: w,
+            height: h,
+            depth_or_array_layers: 1,
+        },
         mip_level_count: 1,
         sample_count: 1,
         dimension: TextureDimension::D2,
         format: COLOR_FORMAT,
-        usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC | TextureUsages::TEXTURE_BINDING,
+        usage: TextureUsages::RENDER_ATTACHMENT
+            | TextureUsages::COPY_SRC
+            | TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
     })
 }

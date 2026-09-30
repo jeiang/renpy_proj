@@ -53,7 +53,12 @@ pub struct Interp {
 
 impl Interp {
     fn new(v: f32) -> Interp {
-        Interp { done: 0, duration: 0, start: v, end: v }
+        Interp {
+            done: 0,
+            duration: 0,
+            start: v,
+            end: v,
+        }
     }
 
     fn tick(&mut self) {
@@ -154,7 +159,13 @@ fn power_to_magnitude(i: &Interp, linear: bool) -> f32 {
 
 impl Mixer {
     pub const fn new() -> Mixer {
-        Mixer { channels: Vec::new(), rate: 44100, linear_fades: false, channel_count: 2, dying: Vec::new() }
+        Mixer {
+            channels: Vec::new(),
+            rate: 44100,
+            linear_fades: false,
+            channel_count: 2,
+            dying: Vec::new(),
+        }
     }
 
     pub fn ms_to_samples(&self, ms: i32) -> u32 {
@@ -256,11 +267,10 @@ impl Mixer {
         if let Some(q) = c.queued.as_mut() {
             q.tight = false;
         }
-        if c.queued.is_none() {
-            if let Some(t) = c.playing.as_mut() {
+        if c.queued.is_none()
+            && let Some(t) = c.playing.as_mut() {
                 t.tight = false;
             }
-        }
     }
 
     pub fn set_pan(&mut self, ch: usize, pan: f32, delay: f32) {
@@ -278,8 +288,8 @@ impl Mixer {
     pub fn handle_synchro_start(&mut self) {
         let mut ready = true;
         for c in &mut self.channels {
-            if let Some(p) = c.playing.as_mut() {
-                if p.synchro_start {
+            if let Some(p) = c.playing.as_mut()
+                && p.synchro_start {
                     if let Some(q) = c.queued.as_mut() {
                         q.synchro_start = false;
                     }
@@ -287,7 +297,6 @@ impl Mixer {
                         ready = false;
                     }
                 }
-            }
             match c.queued.as_mut() {
                 Some(q) if q.synchro_start => ready = false,
                 Some(q) => q.synchro_start = false,
@@ -318,7 +327,9 @@ impl Mixer {
 
         let generate = GENERATE.load(Ordering::Acquire);
         if generate != 0 {
-            let f = unsafe { std::mem::transmute::<usize, unsafe extern "C" fn(*mut f32, c_int)>(generate) };
+            let f = unsafe {
+                std::mem::transmute::<usize, unsafe extern "C" fn(*mut f32, c_int)>(generate)
+            };
             unsafe { f(out.as_mut_ptr(), length as c_int) };
         }
 
@@ -331,7 +342,10 @@ impl Mixer {
             }
 
             while mixed < length
-                && self.channels[ch].playing.as_ref().is_some_and(|p| !p.synchro_start)
+                && self.channels[ch]
+                    .playing
+                    .as_ref()
+                    .is_some_and(|p| !p.synchro_start)
             {
                 let mixleft = length - mixed;
                 let buf = &mut scratch[..mixleft * 2];
@@ -342,7 +356,11 @@ impl Mixer {
 
                 let c = &mut self.channels[ch];
                 if c.stop_samples == 0 || read_length == 0 {
-                    let filter_active = c.playing.as_ref().and_then(|t| t.filter.as_ref()).is_some_and(|f| f.active);
+                    let filter_active = c
+                        .playing
+                        .as_ref()
+                        .and_then(|t| t.filter.as_ref())
+                        .is_some_and(|f| f.active);
                     if !filter_active || c.queued.is_some() {
                         c.playing_pad = 0;
                     }
@@ -368,11 +386,19 @@ impl Mixer {
                 }
 
                 let c = &mut self.channels[ch];
-                if let (Some(f), Some(apply)) = (c.playing.as_ref().and_then(|t| t.filter.as_ref()), apply) {
-                    if f.active {
-                        unsafe { apply(f.obj.as_ptr(), buf.as_mut_ptr(), 2, read_length as c_int, rate as c_int) };
+                if let (Some(f), Some(apply)) =
+                    (c.playing.as_ref().and_then(|t| t.filter.as_ref()), apply)
+                    && f.active {
+                        unsafe {
+                            apply(
+                                f.obj.as_ptr(),
+                                buf.as_mut_ptr(),
+                                2,
+                                read_length as c_int,
+                                rate as c_int,
+                            )
+                        };
                     }
-                }
 
                 let rel = c.playing.as_ref().map_or(1.0, |t| t.relative_volume);
                 let mut i = 0;
@@ -394,7 +420,11 @@ impl Mixer {
                         * power_to_magnitude(&c.secondary_volume, linear)
                         * rel
                         * c.mixer_volume;
-                    let volume = if c.last_playing { c.last_volume + 0.01 * (target - c.last_volume) } else { target };
+                    let volume = if c.last_playing {
+                        c.last_volume + 0.01 * (target - c.last_volume)
+                    } else {
+                        target
+                    };
                     out[(mixed) * 2] += l * volume;
                     out[(mixed) * 2 + 1] += r * volume;
                     c.last_volume = volume;
@@ -412,7 +442,7 @@ impl Mixer {
         }
 
         if self.channel_count == 1 {
-            for f in out.chunks_exact_mut(2) {
+            for f in out.as_chunks_mut::<2>().0 {
                 let m = (f[0] + f[1]) / 2.0;
                 f[0] = m;
                 f[1] = m;

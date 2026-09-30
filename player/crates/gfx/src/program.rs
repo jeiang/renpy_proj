@@ -2,8 +2,8 @@
 
 use std::collections::HashMap;
 use std::num::NonZeroU64;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use parking_lot::Mutex;
 use wgpu::*;
@@ -84,23 +84,37 @@ fn comps_of(ty: &str) -> Option<usize> {
 fn parse(src: &str, stage: naga::ShaderStage) -> Result<naga::Module, String> {
     naga::front::glsl::Frontend::default()
         .parse(&naga::front::glsl::Options::from(stage), src)
-        .map_err(|e| e.errors.iter().map(|x| x.kind.to_string()).collect::<Vec<_>>().join("; "))
+        .map_err(|e| {
+            e.errors
+                .iter()
+                .map(|x| x.kind.to_string())
+                .collect::<Vec<_>>()
+                .join("; ")
+        })
 }
 
 fn validate(m: &naga::Module) -> Result<(), String> {
-    naga::valid::Validator::new(naga::valid::ValidationFlags::all(), naga::valid::Capabilities::all())
-        .validate(m)
-        .map(|_| ())
-        .map_err(|e| format!("validate: {}", e.as_inner()))
+    naga::valid::Validator::new(
+        naga::valid::ValidationFlags::all(),
+        naga::valid::Capabilities::all(),
+    )
+    .validate(m)
+    .map(|_| ())
+    .map_err(|e| format!("validate: {}", e.as_inner()))
 }
 
 fn uniform_block(m: &naga::Module) -> Result<(HashMap<String, u32>, u32), String> {
     for (_, ty) in m.types.iter() {
-        if ty.name.as_deref() == Some("RenpyUniforms") {
-            if let naga::TypeInner::Struct { members, span } = &ty.inner {
-                return Ok((members.iter().filter_map(|x| Some((x.name.clone()?, x.offset))).collect(), *span));
+        if ty.name.as_deref() == Some("RenpyUniforms")
+            && let naga::TypeInner::Struct { members, span } = &ty.inner {
+                return Ok((
+                    members
+                        .iter()
+                        .filter_map(|x| Some((x.name.clone()?, x.offset)))
+                        .collect(),
+                    *span,
+                ));
             }
-        }
     }
     Err("internal error: no RenpyUniforms block".into())
 }
@@ -109,19 +123,32 @@ impl ProgramInner {
     /// Translates and validates a program. Fails the way `glCompileShader` / `glLinkProgram` would.
     pub fn compile(name: &str, vertex: &str, fragment: &str) -> Result<ProgramInner, String> {
         let tr = translate::translate(vertex, fragment)?;
-        let vm = parse(&tr.vs, naga::ShaderStage::Vertex).map_err(|e| format!("vertex shader: {e}"))?;
-        let fm = parse(&tr.fs, naga::ShaderStage::Fragment).map_err(|e| format!("fragment shader: {e}"))?;
+        let vm =
+            parse(&tr.vs, naga::ShaderStage::Vertex).map_err(|e| format!("vertex shader: {e}"))?;
+        let fm = parse(&tr.fs, naga::ShaderStage::Fragment)
+            .map_err(|e| format!("fragment shader: {e}"))?;
         validate(&vm).map_err(|e| format!("vertex shader: {e}"))?;
         validate(&fm).map_err(|e| format!("fragment shader: {e}"))?;
         let (offs, span) = uniform_block(&vm)?;
         let mut slots = vec![];
         for d in &tr.uniforms {
-            let comps = comps_of(&d.ty).ok_or_else(|| format!("unsupported uniform type {} for {}", d.ty, d.name))?;
-            let offset = *offs.get(&d.name).ok_or_else(|| format!("uniform {} missing from block", d.name))?;
-            slots.push(UniformSlot { name: d.name.clone(), ty: d.ty.clone(), array: d.array, offset, comps });
+            let comps = comps_of(&d.ty)
+                .ok_or_else(|| format!("unsupported uniform type {} for {}", d.ty, d.name))?;
+            let offset = *offs
+                .get(&d.name)
+                .ok_or_else(|| format!("uniform {} missing from block", d.name))?;
+            slots.push(UniformSlot {
+                name: d.name.clone(),
+                ty: d.ty.clone(),
+                array: d.array,
+                offset,
+                comps,
+            });
         }
         let flip_offset = *offs.get("renpy_flip_y").ok_or("no renpy_flip_y")?;
-        let size_offset = *offs.get("renpy_target_size").ok_or("no renpy_target_size")?;
+        let size_offset = *offs
+            .get("renpy_target_size")
+            .ok_or("no renpy_target_size")?;
         Ok(ProgramInner {
             id: NEXT_PROGRAM_ID.fetch_add(1, Ordering::Relaxed),
             name: name.to_string(),
@@ -138,7 +165,12 @@ impl ProgramInner {
     }
 
     /// Resolves the program's attributes against a mesh layout. `offsets` maps attribute names to float offsets.
-    pub fn resolve(&self, point_size: u32, stride: u32, offsets: &HashMap<String, u32>) -> Result<VLayout, String> {
+    pub fn resolve(
+        &self,
+        point_size: u32,
+        stride: u32,
+        offsets: &HashMap<String, u32>,
+    ) -> Result<VLayout, String> {
         let mut attrs = vec![];
         let mut has_position = false;
         for (n, d, loc) in &self.tr.attributes {
@@ -163,12 +195,21 @@ impl ProgramInner {
             }
         }
         let stride = if attrs.is_empty() { 0 } else { stride };
-        Ok(VLayout { point_size, stride, attrs, has_position })
+        Ok(VLayout {
+            point_size,
+            stride,
+            attrs,
+            has_position,
+        })
     }
 
     /// The location of `a_position`, if the program reads it.
     fn position_location(&self) -> Option<u32> {
-        self.tr.attributes.iter().find(|(n, _, _)| n == "a_position").map(|(_, _, l)| *l)
+        self.tr
+            .attributes
+            .iter()
+            .find(|(n, _, _)| n == "a_position")
+            .map(|(_, _, l)| *l)
     }
 
     fn objects(&self, sh: &Shared) -> Arc<GpuObjects> {
@@ -217,13 +258,22 @@ impl ProgramInner {
                 count: None,
             });
         }
-        let bgl1 = dev.create_bind_group_layout(&BindGroupLayoutDescriptor { label: None, entries: &e1 });
+        let bgl1 = dev.create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: None,
+            entries: &e1,
+        });
         let layout = dev.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[Some(&bgl0), Some(&bgl1)],
             immediate_size: 0,
         });
-        let o = Arc::new(GpuObjects { vs, fs, bgl0, bgl1, layout });
+        let o = Arc::new(GpuObjects {
+            vs,
+            fs,
+            bgl0,
+            bgl1,
+            layout,
+        });
         *g = Some(o.clone());
         o
     }
@@ -258,7 +308,11 @@ impl ProgramInner {
                 4 => VertexFormat::Float32x4,
                 n => return Err(format!("unsupported attribute width {n}")),
             };
-            attrs1.push(VertexAttribute { format: f, offset: *off as u64 * 4, shader_location: *loc });
+            attrs1.push(VertexAttribute {
+                format: f,
+                offset: *off as u64 * 4,
+                shader_location: *loc,
+            });
         }
         let mut bufs = vec![];
         if v.has_position {
@@ -305,7 +359,11 @@ impl ProgramInner {
         let depth_stencil = Some(DepthStencilState {
             format: crate::gpu::DEPTH_FORMAT,
             depth_write_enabled: Some(key.depth),
-            depth_compare: Some(if key.depth { CompareFunction::LessEqual } else { CompareFunction::Always }),
+            depth_compare: Some(if key.depth {
+                CompareFunction::LessEqual
+            } else {
+                CompareFunction::Always
+            }),
             stencil: StencilState::default(),
             bias: DepthBiasState::default(),
         });
@@ -323,9 +381,17 @@ impl ProgramInner {
                 module: &o.fs,
                 entry_point: Some("main"),
                 compilation_options: Default::default(),
-                targets: &[Some(ColorTargetState { format: key.format, blend, write_mask: mask })],
+                targets: &[Some(ColorTargetState {
+                    format: key.format,
+                    blend,
+                    write_mask: mask,
+                })],
             }),
-            primitive: PrimitiveState { cull_mode, front_face, ..Default::default() },
+            primitive: PrimitiveState {
+                cull_mode,
+                front_face,
+                ..Default::default()
+            },
             depth_stencil,
             multisample: MultisampleState::default(),
             multiview_mask: None,
@@ -342,7 +408,8 @@ impl ProgramInner {
     /// Packs the flattened values of every uniform into `out` (`block_size` bytes). `values[i]` belongs to `slots[i]`.
     pub fn pack(&self, values: &[Vec<f64>], out: &mut [u8]) -> Result<(), String> {
         for (slot, v) in self.slots.iter().zip(values) {
-            pack_slot(slot, v, out).map_err(|e| format!("uniform {} in shader {}: {e}", slot.name, self.name))?;
+            pack_slot(slot, v, out)
+                .map_err(|e| format!("uniform {} in shader {}: {e}", slot.name, self.name))?;
         }
         Ok(())
     }
@@ -357,8 +424,17 @@ fn put_i(out: &mut [u8], off: usize, x: f64) {
 }
 
 fn pack_slot(slot: &UniformSlot, v: &[f64], out: &mut [u8]) -> Result<(), String> {
-    let is_int = slot.ty.starts_with("int") || slot.ty.starts_with("ivec") || slot.ty.starts_with("bool") || slot.ty.starts_with("bvec");
-    let put = |out: &mut [u8], off: usize, x: f64| if is_int { put_i(out, off, x) } else { put_f(out, off, x) };
+    let is_int = slot.ty.starts_with("int")
+        || slot.ty.starts_with("ivec")
+        || slot.ty.starts_with("bool")
+        || slot.ty.starts_with("bvec");
+    let put = |out: &mut [u8], off: usize, x: f64| {
+        if is_int {
+            put_i(out, off, x)
+        } else {
+            put_f(out, off, x)
+        }
+    };
     let base = slot.offset as usize;
     let n = slot.array.map(|a| a as usize);
     let elems = n.unwrap_or(1);
@@ -422,10 +498,21 @@ pub fn blend_state(b: &[i32; 6]) -> Result<BlendState, String> {
     let comp = |eq: i32, s: i32, d: i32| -> Result<BlendComponent, String> {
         let operation = op(eq)?;
         if matches!(operation, BlendOperation::Min | BlendOperation::Max) {
-            Ok(BlendComponent { src_factor: BlendFactor::One, dst_factor: BlendFactor::One, operation })
+            Ok(BlendComponent {
+                src_factor: BlendFactor::One,
+                dst_factor: BlendFactor::One,
+                operation,
+            })
         } else {
-            Ok(BlendComponent { src_factor: factor(s)?, dst_factor: factor(d)?, operation })
+            Ok(BlendComponent {
+                src_factor: factor(s)?,
+                dst_factor: factor(d)?,
+                operation,
+            })
         }
     };
-    Ok(BlendState { color: comp(b[0], b[1], b[2])?, alpha: comp(b[3], b[4], b[5])? })
+    Ok(BlendState {
+        color: comp(b[0], b[1], b[2])?,
+        alpha: comp(b[3], b[4], b[5])?,
+    })
 }

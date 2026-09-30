@@ -57,7 +57,12 @@ struct Clock {
 impl Clock {
     #[new]
     fn new() -> Self {
-        Self { last: ticks(), last_frames: Vec::new(), frametime: 0, raw_frametime: 0 }
+        Self {
+            last: ticks(),
+            last_frames: Vec::new(),
+            frametime: 0,
+            raw_frametime: 0,
+        }
     }
 
     #[pyo3(signature = (framerate=0.0))]

@@ -3,7 +3,6 @@ name = "media"
 description = "FFmpeg decode, cpal output: renpy.audio.renpysound and video frames."
 version.workspace = true
 edition.workspace = true
-license.workspace = true
 publish.workspace = true
 
 [dependencies]

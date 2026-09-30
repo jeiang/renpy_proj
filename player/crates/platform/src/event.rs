@@ -136,7 +136,10 @@ static NAMES: OnceLock<Py<PyDict>> = OnceLock::new();
 static NOEVENT: OnceLock<Py<PyAny>> = OnceLock::new();
 
 fn names(py: Python<'_>) -> &Bound<'_, PyDict> {
-    NAMES.get().expect("renpy.pygame.event is initialised").bind(py)
+    NAMES
+        .get()
+        .expect("renpy.pygame.event is initialised")
+        .bind(py)
 }
 
 /// The Python `Event` (`EventType`) class: a type id plus attributes.
@@ -164,7 +167,10 @@ impl Event {
         if let Some(src) = kwargs {
             d.update(src.as_mapping())?;
         }
-        Ok(Self { typ: r#type, dict: d.unbind() })
+        Ok(Self {
+            typ: r#type,
+            dict: d.unbind(),
+        })
     }
 
     #[getter]
@@ -185,7 +191,9 @@ impl Event {
     fn __getattr__(&self, py: Python<'_>, name: &str) -> PyResult<Py<PyAny>> {
         match self.dict.bind(py).get_item(name)? {
             Some(v) => Ok(v.unbind()),
-            None => Err(PyAttributeError::new_err(format!("'EventType' object has no attribute '{name}'"))),
+            None => Err(PyAttributeError::new_err(format!(
+                "'EventType' object has no attribute '{name}'"
+            ))),
         }
     }
 
@@ -244,7 +252,12 @@ impl Event {
         }
         items.sort();
         let rest: Vec<String> = items.into_iter().map(|(k, v)| format!("{k}={v}")).collect();
-        Ok(format!("<Event({}-{} {})>", self.typ, ename, rest.join(", ")))
+        Ok(format!(
+            "<Event({}-{} {})>",
+            self.typ,
+            ename,
+            rest.join(", ")
+        ))
     }
 }
 
@@ -261,7 +274,13 @@ pub fn push_native(
     d.set_item("_type", typ)?;
     fill(&d)?;
     d.set_item("timestamp", timemod::ticks())?;
-    let ev = Bound::new(py, Event { typ, dict: d.unbind() })?;
+    let ev = Bound::new(
+        py,
+        Event {
+            typ,
+            dict: d.unbind(),
+        },
+    )?;
     STATE.lock().queue.push_back((typ, ev.into_any().unbind()));
     Ok(())
 }
@@ -310,7 +329,14 @@ pub fn set_timer(eventid: i64, ms: i64, once: bool) {
         st.timers.remove(&eventid);
         if ms > 0 {
             let interval = Duration::from_millis(ms as u64);
-            st.timers.insert(eventid, Timer { next: Instant::now() + interval, interval, once });
+            st.timers.insert(
+                eventid,
+                Timer {
+                    next: Instant::now() + interval,
+                    interval,
+                    once,
+                },
+            );
         }
     }
     evloop::wake();
@@ -328,7 +354,10 @@ fn pop_front(py: Python<'_>) -> Option<Py<PyAny>> {
 }
 
 fn noevent(py: Python<'_>) -> Py<PyAny> {
-    NOEVENT.get().expect("renpy.pygame.event is initialised").clone_ref(py)
+    NOEVENT
+        .get()
+        .expect("renpy.pygame.event is initialised")
+        .clone_ref(py)
 }
 
 #[pyfunction]
@@ -377,7 +406,9 @@ fn poll(py: Python<'_>) -> PyResult<Py<PyAny>> {
 #[pyfunction]
 #[pyo3(signature = (timeout=None))]
 fn wait(py: Python<'_>, timeout: Option<i64>) -> PyResult<Py<PyAny>> {
-    let deadline = timeout.filter(|t| *t > 0).map(|t| Instant::now() + Duration::from_millis(t as u64));
+    let deadline = timeout
+        .filter(|t| *t > 0)
+        .map(|t| Instant::now() + Duration::from_millis(t as u64));
     loop {
         pump_events(py)?;
         if let Some(e) = pop_front(py) {
@@ -426,7 +457,10 @@ fn clear(py: Python<'_>, t: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
 #[pyfunction]
 fn post(py: Python<'_>, e: &Bound<'_, PyAny>) -> PyResult<()> {
     let Ok(ev) = e.cast::<Event>() else {
-        return Err(util::pg_error(py, "event.post must be called with an Event."));
+        return Err(util::pg_error(
+            py,
+            "event.post must be called with an Event.",
+        ));
     };
     let typ = ev.borrow().typ;
     {
@@ -457,7 +491,7 @@ fn get_standard_events(py: Python<'_>) -> PyResult<Vec<i64>> {
     let mut out = Vec::new();
     for k in names(py).keys().iter() {
         let i: i64 = k.extract()?;
-        if i < consts::USEREVENT || i > consts::USEREVENT_MAX {
+        if !(consts::USEREVENT..=consts::USEREVENT_MAX).contains(&i) {
             out.push(i);
         }
     }
@@ -496,7 +530,11 @@ fn set_allowed(py: Python<'_>, t: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
         _ => None,
     };
     let all: Vec<i64> = if ids.is_none() {
-        names(py).keys().iter().map(|k| k.extract()).collect::<PyResult<_>>()?
+        names(py)
+            .keys()
+            .iter()
+            .map(|k| k.extract())
+            .collect::<PyResult<_>>()?
     } else {
         Vec::new()
     };
@@ -522,7 +560,8 @@ fn set_grab(py: Python<'_>, on: bool) -> PyResult<()> {
     use winit::window::CursorGrabMode;
     if let Some(w) = evloop::window() {
         let res = if on {
-            w.set_cursor_grab(CursorGrabMode::Confined).or_else(|_| w.set_cursor_grab(CursorGrabMode::Locked))
+            w.set_cursor_grab(CursorGrabMode::Confined)
+                .or_else(|_| w.set_cursor_grab(CursorGrabMode::Locked))
         } else {
             w.set_cursor_grab(CursorGrabMode::None)
         };
@@ -549,7 +588,12 @@ fn get_mousewheel_buttons() -> bool {
 
 #[pyfunction]
 fn copy_event_queue(py: Python<'_>) -> PyResult<Py<PyList>> {
-    let copy: Vec<Py<PyAny>> = STATE.lock().queue.iter().map(|(_, e)| e.clone_ref(py)).collect();
+    let copy: Vec<Py<PyAny>> = STATE
+        .lock()
+        .queue
+        .iter()
+        .map(|(_, e)| e.clone_ref(py))
+        .collect();
     Ok(PyList::new(py, copy)?.unbind())
 }
 
@@ -576,7 +620,17 @@ pub mod renpy_pygame_event {
         }
         NAMES.set(d.clone().unbind()).ok();
         m.add("event_names", d)?;
-        let noev = Bound::new(py, Event { typ: 0, dict: { let e = PyDict::new(py); e.set_item("_type", 0)?; e.unbind() } })?;
+        let noev = Bound::new(
+            py,
+            Event {
+                typ: 0,
+                dict: {
+                    let e = PyDict::new(py);
+                    e.set_item("_type", 0)?;
+                    e.unbind()
+                },
+            },
+        )?;
         NOEVENT.set(noev.clone().into_any().unbind()).ok();
         m.add("NOEVENT_EVENT", noev)?;
         m.add("ACTIVEEVENT", consts::ACTIVEEVENT)?;
@@ -593,7 +647,7 @@ pub mod renpy_pygame_event {
     #[pymodule_export]
     use super::{
         clear, copy_event_queue, event_name, get, get_blocked, get_grab, get_mousewheel_buttons,
-        get_standard_events, init, peek, poll, post, pump, quit, register, set_allowed, set_blocked,
-        set_grab, set_mousewheel_buttons, wait,
+        get_standard_events, init, peek, poll, post, pump, quit, register, set_allowed,
+        set_blocked, set_grab, set_mousewheel_buttons, wait,
     };
 }

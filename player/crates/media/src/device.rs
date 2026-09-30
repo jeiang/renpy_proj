@@ -31,7 +31,12 @@ impl Drop for Device {
     }
 }
 
-pub fn start(rate: u32, buffer_frames: u32, equal_mono: bool, linear_fades: bool) -> Result<Device, String> {
+pub fn start(
+    rate: u32,
+    buffer_frames: u32,
+    equal_mono: bool,
+    linear_fades: bool,
+) -> Result<Device, String> {
     let (stop_tx, stop_rx) = mpsc::channel::<()>();
     let (ready_tx, ready_rx) = mpsc::channel::<Result<u32, String>>();
     let dummy = std::env::var("SDL_AUDIODRIVER").is_ok_and(|v| v == "dummy");
@@ -40,9 +45,23 @@ pub fn start(rate: u32, buffer_frames: u32, equal_mono: bool, linear_fades: bool
         .name("audio output".into())
         .spawn(move || {
             let r = if dummy {
-                run_dummy(rate, buffer_frames, equal_mono, linear_fades, &ready_tx, &stop_rx)
+                run_dummy(
+                    rate,
+                    buffer_frames,
+                    equal_mono,
+                    linear_fades,
+                    &ready_tx,
+                    &stop_rx,
+                )
             } else {
-                run_cpal(rate, buffer_frames, equal_mono, linear_fades, &ready_tx, &stop_rx)
+                run_cpal(
+                    rate,
+                    buffer_frames,
+                    equal_mono,
+                    linear_fades,
+                    &ready_tx,
+                    &stop_rx,
+                )
             };
             if let Err(e) = r {
                 let _ = ready_tx.send(Err(e));
@@ -51,7 +70,10 @@ pub fn start(rate: u32, buffer_frames: u32, equal_mono: bool, linear_fades: bool
         .map_err(|e| e.to_string())?;
 
     match ready_rx.recv() {
-        Ok(Ok(_rate)) => Ok(Device { stop: stop_tx, thread: Some(thread) }),
+        Ok(Ok(_rate)) => Ok(Device {
+            stop: stop_tx,
+            thread: Some(thread),
+        }),
         Ok(Err(e)) => {
             let _ = thread.join();
             Err(e)
@@ -106,7 +128,9 @@ fn run_cpal(
     stop: &mpsc::Receiver<()>,
 ) -> Result<(), String> {
     let host = cpal::default_host();
-    let device = host.default_output_device().ok_or("no audio output device")?;
+    let device = host
+        .default_output_device()
+        .ok_or("no audio output device")?;
 
     // Prefer stereo f32 at the requested rate; otherwise use what the device offers.
     let preferred = device
@@ -147,7 +171,11 @@ fn run_cpal(
     Ok(())
 }
 
-fn build_stream<T>(device: &cpal::Device, config: &StreamConfig, channels: usize) -> Result<cpal::Stream, String>
+fn build_stream<T>(
+    device: &cpal::Device,
+    config: &StreamConfig,
+    channels: usize,
+) -> Result<cpal::Stream, String>
 where
     T: SizedSample + FromSample<f32> + Send + 'static,
 {
