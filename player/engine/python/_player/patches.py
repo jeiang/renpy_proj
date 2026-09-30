@@ -16,13 +16,11 @@ summary, writes nothing else and exits after the patches are applied, before ini
 window. The exit code is 0 when every patch matched, 1 otherwise.
 """
 
-import contextlib
 import hashlib
 import json
 import os
 import sys
 import textwrap
-import time
 
 # Filled by on_script_loaded; read by _player.preflight.
 results = {"fingerprint": None, "dirs": [], "files": [], "applied": [], "unmatched": [], "errors": []}
@@ -32,74 +30,20 @@ def source_hash(src):
     return hashlib.sha1(str(src).encode("utf-8")).hexdigest()
 
 
-def _compat():
-    try:
-        import _player.compat as c
-
-        return c
-    except ImportError:
-        return None
-
-
 def fingerprint(settings):
-    """`_player.compat.fingerprint()` when the compat module provides it, else the prototype algorithm:
-    a hash of (name, md5 of the .rpy, else the .rpyc) over the script files, .rpy preferred so that
-    a rewritten .rpyc does not change it."""
+    """The build fingerprint that keys the patch library (`_player.compat.fingerprint`)."""
+    import _player.compat
 
-    c = _compat()
-
-    if c is not None and hasattr(c, "fingerprint"):
-        return c.fingerprint()
-
-    import renpy
-
-    items = []
-
-    harness = settings.get("harnessdir")
-
-    for fn, d in sorted(renpy.game.script.script_files, key=lambda x: (x[0] or "", x[1] or "")):
-        if harness and d is not None and os.path.normpath(d) == os.path.normpath(harness):
-            continue  # the harness script is the player's, not part of the game build
-
-        data = None
-
-        try:
-            if d is not None:
-                for ext in (".rpy", "_ren.py", ".rpyc"):
-                    p = os.path.join(d, fn + ext)
-
-                    if os.path.exists(p):
-                        with open(p, "rb") as f:
-                            data = f.read()
-
-                        break
-            else:
-                f = renpy.loader.load(fn + ".rpyc", tl=False)
-                data = f.read()
-                f.close()
-        except Exception:
-            data = b""
-
-        items.append((fn, hashlib.md5(data or b"").hexdigest()))
-
-    return hashlib.sha256(json.dumps(items).encode()).hexdigest()[:16]
+    return _player.compat.fingerprint()
 
 
 def _event(settings, file, line, detail):
     if os.environ.get("PLAYER_PATCHES_APPLY_TEST"):
         return  # apply-test writes nothing
 
-    c = _compat()
+    import _player.compat
 
-    if c is not None and hasattr(c, "event"):
-        c.event("patch", file=file, line=line, detail=detail)
-        return
-
-    rdir = os.path.join(settings["data"], "reports", settings["key"])
-    os.makedirs(rdir, exist_ok=True)
-
-    with open(os.path.join(rdir, "runtime.jsonl"), "a", encoding="utf-8") as f:
-        f.write(json.dumps({"time": time.strftime("%H:%M:%S"), "kind": "patch", "file": file, "line": line, "detail": detail}) + "\n")
+    _player.compat.event("patch", file=file, line=line, detail=detail)
 
 
 def _node_index():
@@ -124,10 +68,9 @@ def _compile(code, new):
     """Plain Python 3: the Python 2 semantics pass of the compat module stays off."""
     import renpy
 
-    c = _compat()
-    plain = getattr(c, "plain_python3", None) if c is not None else None
+    import _player.compat
 
-    with plain() if plain else contextlib.nullcontext():
+    with _player.compat.plain_python3():
         return renpy.python.py_compile(
             new, code.mode, filename=code.filename, lineno=code.linenumber, py=3, cache=False, column=code.col_offset
         )
