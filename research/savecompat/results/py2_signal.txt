@@ -1,0 +1,4 @@
+(engine major, has py2 str opcodes, has copy_reg/exceptions module) -> saves
+(7, True, False) 7533
+(7, True, True) 205
+(8, False, False) 10003

@@ -1,0 +1,4 @@
+SI saves in SI game {('ok', 'predicted-clean'): 52, ('resumes-earlier', 'predicted-clean'): 3}
+SI saves, store.VoiceInfo hidden (fault injection) {('unpickle-error', 'predicted-unresolved'): 51, ('ok', 'predicted-clean'): 4}
+SI saves in WhiteRussian game {('load-fails', 'predicted-clean'): 51, ('ok', 'predicted-clean'): 2, ('resumes-earlier', 'predicted-clean'): 2}
+WR saves in SI game {('load-fails', 'predicted-clean'): 89}

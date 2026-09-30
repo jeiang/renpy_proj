@@ -1,0 +1,22 @@
+saves 17741 persistent 843 games 633
+save errors: []
+save protocol x engine minor:
+   (2, '7.2') 1
+   (2, '7.3') 995
+   (2, '7.4') 4240
+   (2, '7.5') 1760
+   (2, '7.6') 732
+   (2, '7.7') 10
+   (2, '8.0') 3634
+   (2, '8.1') 3605
+   (2, '8.2') 798
+   (2, '8.3') 1474
+   (5, '8.4') 338
+   (5, '8.5') 154
+saves with py2 markers: [(('__builtin__',), 16890), ((), 492), (('__builtin__', 'copy_reg', 'exceptions'), 194), (('__builtin__', '_codecs.encode'), 154), (('__builtin__', 'copy_reg'), 11)]
+saves with py2 str ops>0: 7738  protocol==2: 17249
+member sets: [(('extra_info', 'json', 'log', 'renpy_version'), 10006), (('extra_info', 'json', 'log', 'renpy_version', 'signatures'), 7735)]
+unsigned saves: 10006
+persistent protocol: Counter({2: 785, 5: 58}) signed: 426 errors: []
+distinct globals: 4704
+top-level modules: [('store', 4438), ('renpy', 162), ('_operator', 51), ('pink_engine', 25), ('__builtin__', 5), ('collections', 3), ('builtins', 3), ('datetime', 3), ('operator', 3), ('time', 2), ('functools', 1), ('_codecs', 1), ('copy', 1), ('None', 1), ('pygame_sdl2', 1), ('copy_reg', 1), ('exceptions', 1), ('__future__', 1), ('filtered_image', 1)]

@@ -1,0 +1,4 @@
+run-a-src agree 89 mismatch 0 verdict pairs (static, truth): {('ok', 'ok'): 87, ('resumes-earlier', 'resumes-earlier'): 2}
+run-b-rpyc agree 89 mismatch 0 verdict pairs (static, truth): {('ok', 'ok'): 87, ('resumes-earlier', 'resumes-earlier'): 2}
+run-c-portfresh agree 89 mismatch 0 verdict pairs (static, truth): {('resumes-earlier', 'resumes-earlier'): 71, ('load-fails', 'load-fails'): 18}
+run-d-portmerge agree 89 mismatch 0 verdict pairs (static, truth): {('ok', 'ok'): 87, ('resumes-earlier', 'resumes-earlier'): 2}

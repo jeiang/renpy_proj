@@ -1,0 +1,31 @@
+distinct 4707 Counter({'store': 4439, 'ok': 240, 'foreign': 27, 'missing-module': 1})
+missing-module saves=413   games=2   eng=['7.5', '7.6', '8.1']  pygame_sdl2.rect Rect
+foreign        saves=298   games=1   eng=['8.0', '8.1']  filtered_image FilterProperties
+foreign        saves=32    games=1   eng=['8.2']  pink_engine.orthogonal_tiled_map OrthogonalTiledMap
+foreign        saves=32    games=1   eng=['8.2']  pink_engine.sound_manager PinkSoundManager
+foreign        saves=32    games=1   eng=['8.2']  pink_engine.orthogonal_tiled_map SmoothZoomController
+foreign        saves=20    games=1   eng=['8.2']  pink_engine.orthogonal_tiled_map OrthogonalTiledMapGameObjectSpriteCollection
+foreign        saves=20    games=1   eng=['8.2']  pink_engine.tiled_game TiledMapSpriteCollection
+foreign        saves=20    games=1   eng=['8.2']  pink_engine.tiled_game TiledMapSpriteCollectionElement
+foreign        saves=20    games=1   eng=['8.2']  pink_engine.tiled_game TiledMapGameLayer
+foreign        saves=20    games=1   eng=['8.2']  pink_engine.orthogonal_tiled_map OrthogonalTiledMapTiledBases
+foreign        saves=20    games=1   eng=['8.2']  pink_engine.orthogonal_tiled_map OrthogonalTiledMapTiledBasesEntry
+foreign        saves=20    games=1   eng=['8.2']  pink_engine.orthogonal_tiled_map OrthogonalTiledMapGameTile
+foreign        saves=20    games=1   eng=['8.2']  pink_engine.orthogonal_tiled_map OrthogonalTiledMapGameObject
+foreign        saves=20    games=1   eng=['8.2']  pink_engine.orthogonal_tiled_map_commands ControlCommand
+foreign        saves=20    games=1   eng=['8.2']  pink_engine.commons Coord
+foreign        saves=20    games=1   eng=['8.2']  pink_engine.orthogonal_tiled_map ConditionalCodeTriggers
+foreign        saves=20    games=1   eng=['8.2']  pink_engine.orthogonal_tiled_map StartMapEvents
+foreign        saves=20    games=1   eng=['8.2']  pink_engine.orthogonal_tiled_map StartMapEvent
+foreign        saves=20    games=1   eng=['8.2']  pink_engine.orthogonal_tiled_map OrthogonalTiledCamera
+foreign        saves=20    games=1   eng=['8.2']  pink_engine.tiled_game TiledMap
+foreign        saves=20    games=1   eng=['8.2']  pink_engine.tiled_game TiledMapElement
+foreign        saves=20    games=1   eng=['8.2']  pink_engine.tiled_game OverlayManager
+foreign        saves=20    games=1   eng=['8.2']  pink_engine.tileset Tileset
+foreign        saves=20    games=1   eng=['8.2']  pink_engine.tileset TilesetTile
+foreign        saves=20    games=1   eng=['8.2']  pink_engine.orthogonal_tiled_map DirectionCache
+foreign        saves=8     games=1   eng=['8.2']  pink_engine.sound_manager PinkChannel
+foreign        saves=6     games=1   eng=['8.2']  pink_engine.tiled_game OverlaySolid
+foreign        saves=2     games=1   eng=['8.4']  None Movie
+
+NATIVE-module classes referenced by saves (count of saves, games):
