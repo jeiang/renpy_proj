@@ -1,0 +1,17 @@
+# Reason: pygame.image.load (Rust, surface crate) returns a fresh surface, so pgrender.load_image no longer copies the full frame again (stock needs the copy for SDL2_image's RWops-backed surface).
+
+diff --git a/renpy/display/pgrender.py b/renpy/display/pgrender.py
+--- a/renpy/display/pgrender.py
++++ b/renpy/display/pgrender.py
+@@ -196,8 +196,9 @@
+ 
+         raise Exception("Could not load image {!r}{}: {!r}".format(filename, extra, e))
+ 
+-    rv = copy_surface_unscaled(surf)
+-    return rv
++    # Player patch: pygame.image.load returns a new surface that nothing else
++    # references, so the stock full-frame copy is skipped.
++    return surf
+ 
+ 
+ load_image_unscaled = load_image

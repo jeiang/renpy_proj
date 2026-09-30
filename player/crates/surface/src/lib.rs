@@ -10,6 +10,7 @@ mod buf;
 mod draw;
 mod gfx;
 mod image;
+mod loader;
 mod ops;
 mod par;
 mod pyutil;
@@ -79,7 +80,10 @@ mod rp_surface {
 #[pymodule]
 mod rp_image {
     #[pymodule_export]
-    use crate::image::{get_extended, has_init, init, load, quit_, save};
+    use crate::image::{
+        get_extended, has_init, init, load, prefetch, prefetch_clear, prefetch_shutdown,
+        prefetch_stats, quit_, save,
+    };
 
     use pyo3::prelude::*;
 

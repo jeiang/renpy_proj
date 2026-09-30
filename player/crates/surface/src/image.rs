@@ -150,6 +150,44 @@ pub fn get_extended() -> bool {
     true
 }
 
+/// The name the game used, from the `namehint` argument (bytes or str).
+fn namehint_str(n: &Bound<'_, PyAny>) -> Option<String> {
+    if let Ok(s) = n.extract::<String>() {
+        Some(s)
+    } else {
+        n.extract::<Vec<u8>>()
+            .ok()
+            .map(|b| String::from_utf8_lossy(&b).into_owned())
+    }
+}
+
+/// `prefetch(name, opener, priority=2)`: decode `name` on the loader pool. `opener()`
+/// returns the file bytes and runs on a pool thread with the GIL held.
+/// Priorities: 0 a caller waits, 1 scene now, 2 script prediction, 3 warming.
+#[pyfunction]
+#[pyo3(signature = (name, opener, priority=2))]
+pub fn prefetch(name: String, opener: Py<PyAny>, priority: u8) {
+    crate::loader::prefetch(name, opener, priority);
+}
+
+/// Drops unclaimed prefetch results.
+#[pyfunction]
+pub fn prefetch_clear() {
+    crate::loader::clear();
+}
+
+/// Stops the loader pool (call at exit, before the interpreter finalizes).
+#[pyfunction]
+pub fn prefetch_shutdown() {
+    crate::loader::shutdown();
+}
+
+/// `(workers, submitted, ready_hits, waited_hits, misses, wait_ms)`.
+#[pyfunction]
+pub fn prefetch_stats() -> (usize, u64, u64, u64, u64, f64) {
+    crate::loader::stats()
+}
+
 #[pyfunction]
 #[pyo3(signature = (fi, namehint=None, size=None))]
 pub fn load(
@@ -158,7 +196,14 @@ pub fn load(
     namehint: Option<&Bound<'_, PyAny>>,
     size: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<Surface> {
-    let _ = (namehint, size);
+    // A prefetched image (see `loader`) skips the read and the decode.
+    if size.is_none_or(|s| s.is_none()) {
+        if let Some(name) = namehint.and_then(|n| namehint_str(n)) {
+            if let Some(img) = crate::loader::take(py, &name) {
+                return Ok(Surface::from_rgba(img.width, img.height, img.rgba));
+            }
+        }
+    }
     let data: Vec<u8> = if fi.is_instance_of::<PyString>() || fi.is_instance_of::<PyBytes>() {
         let path: std::path::PathBuf = if let Ok(s) = fi.extract::<String>() {
             s.into()

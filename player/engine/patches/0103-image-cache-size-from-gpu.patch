@@ -1,0 +1,18 @@
+# Reason: the stock 400 MB image cache re-misses a 1080p scene set; size it from GPU memory (renpy.gl2.wgpudraw.gpu_memory_bytes) when the game keeps the stock default.
+
+diff --git a/renpy/display/im.py b/renpy/display/im.py
+--- a/renpy/display/im.py
++++ b/renpy/display/im.py
+@@ -170,7 +170,11 @@
+                 2 * renpy.config.image_cache_size * renpy.config.screen_width * renpy.config.screen_height
+             )
+         else:
+-            self.cache_limit = int(renpy.config.image_cache_size_mb * 1024 * 1024 // 4)
++            # Player patch: size the cache from GPU memory unless the game set a size.
++            import _player.images
++
++            size_mb = _player.images.cache_size_mb(renpy.config.image_cache_size_mb)
++            self.cache_limit = int(size_mb * 1024 * 1024 // 4)
+ 
+     def quit(self):
+         if not self.preload_thread:
