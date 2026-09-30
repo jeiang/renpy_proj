@@ -441,6 +441,10 @@ class WgpuDraw(object):
 
         # The shader cache,
         self.shader_cache = None
+        self.first_frame_logged = False
+        self.first_frame_times = []
+        self.frame_count = 0
+        self.slow_frames_logged = 0
 
         # The texture loader.
         self.texture_loader = None
@@ -742,6 +746,32 @@ class WgpuDraw(object):
 
         return True
 
+    def precompile_shaders(self):
+        """
+        Translates every built-in shader program a game draws with, so that their pipelines build on worker threads
+        before the first frame needs them. The programs are each `renpy.*` part alone and each part together with
+        `renpy.texture`. Programs listed in `cache/shaders.txt` were already compiled by `ShaderCache.load`.
+        """
+
+        from renpy.gl2.gl2shadercache import shader_part
+
+        t0 = time.time()
+
+        names = sorted(n for n in shader_part if n.startswith("renpy.") and n != renpy.config.default_shader)
+        combos = [(n,) for n in names]
+        combos += [("renpy.texture", n) for n in names if n != "renpy.texture"]
+
+        for partnames in combos:
+            if partnames in self.shader_cache.cache:
+                continue
+            try:
+                self.shader_cache.get(partnames)
+            except Exception:
+                renpy.display.log.write("Precompiling shader %r failed:", partnames)
+                renpy.display.log.exception()
+
+        renpy.display.log.write("Shaders precompiled at load: %d programs in %.1f ms; pipelines build in the background.", len(self.shader_cache.cache), (time.time() - t0) * 1000.0)
+
     def on_resize(self, first=False, full_reset=False):
 
         if first:
@@ -845,6 +875,7 @@ class WgpuDraw(object):
 
         if full_reset:
             self.shader_cache.load()
+            self.precompile_shaders()
             self.texture_loader.init()
         else:
             self.texture_loader.cleanup()
@@ -1110,6 +1141,8 @@ class WgpuDraw(object):
 
         renpy.plog(1, "start draw_screen")
 
+        t_frame = time.time()
+
         if renpy.display.video.fullscreen:
             surf = renpy.display.video.render_movie("movie", self.virtual_size[0], self.virtual_size[1])
         else:
@@ -1147,6 +1180,18 @@ class WgpuDraw(object):
         if flip:
             self.flip()
             self.texture_loader.cleanup()
+
+            frame_ms = (time.time() - t_frame) * 1000.0
+            self.frame_count += 1
+            if frame_ms > 40.0 and self.slow_frames_logged < 20:
+                self.slow_frames_logged += 1
+                renpy.display.log.write("Slow frame %d: draw and present took %.0f ms.", self.frame_count, frame_ms)
+
+            if not self.first_frame_logged:
+                self.first_frame_times.append((time.time() - t_frame) * 1000.0)
+                if len(self.first_frame_times) == 30:
+                    self.first_frame_logged = True
+                    renpy.display.log.write("First 30 frames (draw and present, ms): %s", " ".join("%.0f" % i for i in self.first_frame_times))
 
     def load_all_textures(self, what, reverse):
         """
@@ -1360,8 +1405,14 @@ class WgpuDraw(object):
     def screenshot(self, render_tree):
         """
         Draws `render_tree` offscreen and returns it as a Surface with straight (not premultiplied) alpha. Without a
-        tree there is no readable back buffer, so the result is a transparent surface of the drawable size.
+        tree this is the last frame Ren'Py drew (`renpy.game.interface.surftree`), drawn the same way: a presented
+        window frame cannot be read back. Before the first frame there is nothing on screen, and the result is a
+        transparent surface of the drawable size.
         """
+
+        if render_tree is None:
+            interface = getattr(renpy.game, "interface", None)
+            render_tree = getattr(interface, "surftree", None)
 
         if render_tree is None:
             sw, sh = self.drawable_size

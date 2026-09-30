@@ -320,6 +320,7 @@ fn fire_timers(py: Python<'_>) -> PyResult<()> {
 /// Pumps winit without blocking and fires due timers.
 pub fn pump_events(py: Python<'_>) -> PyResult<()> {
     evloop::pump(Some(Duration::ZERO));
+    crate::pad::poll(py)?;
     fire_timers(py)
 }
 

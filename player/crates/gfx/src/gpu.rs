@@ -59,6 +59,31 @@ struct V { @builtin(position) p: vec4<f32>, @location(0) uv: vec2<f32> };
 @fragment fn fs(v: V) -> @location(0) vec4<f32> { return textureSampleLevel(t, s, v.uv, 0.0); }
 "#;
 
+/// GPU memory budget in bytes, set when a device opens. 0 means unknown.
+static GPU_MEMORY: AtomicU64 = AtomicU64::new(0);
+
+/// The best estimate of the memory the GPU can use, or `None` when the backend gives no figure.
+/// Metal: `recommendedMaxWorkingSetSize` of the device.
+pub fn gpu_memory_bytes() -> Option<u64> {
+    match GPU_MEMORY.load(Ordering::Relaxed) {
+        0 => None,
+        n => Some(n),
+    }
+}
+
+#[cfg(target_vendor = "apple")]
+fn query_gpu_memory(device: &Device) -> Option<u64> {
+    use objc2_metal::MTLDevice;
+    // SAFETY: the device is not used through the raw handle beyond this read-only query.
+    let hal = unsafe { device.as_hal::<wgpu::hal::api::Metal>() }?;
+    Some(hal.raw_device().recommendedMaxWorkingSetSize())
+}
+
+#[cfg(not(target_vendor = "apple"))]
+fn query_gpu_memory(_device: &Device) -> Option<u64> {
+    None
+}
+
 pub struct Shared {
     pub instance: Instance,
     pub adapter: Adapter,
@@ -174,6 +199,7 @@ impl Shared {
                 sampler,
             }
         };
+        GPU_MEMORY.store(query_gpu_memory(&device).unwrap_or(0), Ordering::Relaxed);
         Ok(Arc::new(Shared {
             instance,
             adapter,

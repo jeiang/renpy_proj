@@ -498,6 +498,12 @@ fn create_headless(width: u32, height: u32) -> PyResult<Gpu> {
     })
 }
 
+/// Best estimate of GPU memory in bytes (Metal: `recommendedMaxWorkingSetSize`), or `None` when unknown.
+#[pyfunction]
+fn gpu_memory_bytes() -> Option<u64> {
+    crate::gpu::gpu_memory_bytes()
+}
+
 /// The physical size of the window, from `platform`.
 #[pyfunction]
 fn drawable_size() -> (u32, u32) {
@@ -519,6 +525,7 @@ pub fn init_module(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(create, m)?)?;
     m.add_function(wrap_pyfunction!(create_headless, m)?)?;
     m.add_function(wrap_pyfunction!(drawable_size, m)?)?;
+    m.add_function(wrap_pyfunction!(gpu_memory_bytes, m)?)?;
     let builtins = py.import("builtins")?;
     let src = CString::new(PY_SOURCE).map_err(rt)?;
     let code = builtins.call_method1(
