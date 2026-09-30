@@ -107,3 +107,35 @@ player <game-dir> [--data <dir>] [--logdir <dir>] [--harness-script <file>] [--r
 - The working directory of the game is the project folder (Ren'Py's `basedir`), as in stock. A game that writes relative paths (SecretIsland writes `gameLog.txt`) writes there. The player itself never writes into the game folder or the project folder.
 - Run the screenshot gates with the release binary: the debug build renders too slowly for the harness settle times.
 - `--harness-script <file>`: an `.rpy` or `.rpym` file that the test harness injects without writing into the game folder. The loader lists it as the game script `zzz_harness.rpy` (or `.rpym`) in a virtual directory (`<data>/renpy_base/harness`, served through `renpy.vfs` and the loader callbacks). The player compiles it into its cache. The harness uses it for the probe, route replay and screenshots.
+
+# M2 contracts
+
+Added for "M2: macOS parity for Ren'Py 8 games". The M1 sections above still hold.
+
+## Game file view (`vfs`)
+
+Decision: an in-process path map, not an OS-level virtual file system. MO2's USVFS hooks Win32 file APIs inside the process; macOS and Linux would need DYLD interposing, LD_PRELOAD or FUSE, each with signing or permission costs. Every file access a game can make goes through Python (games cannot load native code in this player), and every native access is ours. So one map, consulted by patched Python file functions and by Rust, covers all three platforms.
+
+- Layers, highest priority first: **overlay** `<data>/overlay/<game key>/` (every write lands here), **mods** `<data>/mods/<game key>/<mod>/` in the order of `<data>/mods/<game key>/order.txt` (one enabled mod name per line; last line wins), **patch files** `<data>/patches/<game key>/files/` (file overrides from the patch library), **game** (the real base folder, read-only).
+- Paths inside the game's base folder are **virtual**. Reads resolve to the highest layer that has the file. Directory listings are the union of all layers. Every write, create, rename or delete of a virtual path goes to the overlay. A delete of a file that exists in a lower layer records a whiteout (`<overlay>/.vfs-whiteouts`), so the file then looks absent. Paths outside the base folder pass through unchanged.
+- Hidden: the game's shipped `game/cache/` is never visible, from any layer below the overlay.
+- The working directory stays the base folder, as in stock, so relative paths still work and resolve through the map.
+- Rust crate `player/crates/vfs`: `pub struct Vfs`, `pub fn install(Vfs)`, `pub fn get() -> Option<&'static Vfs>`, `Vfs::resolve_read(&Path) -> Option<PathBuf>`, `Vfs::resolve_write(&Path) -> PathBuf`, `Vfs::list_dir(&Path) -> Vec<DirEntry>`, `Vfs::remove(&Path)`, `Vfs::rename(&Path, &Path)`. Python builtin `_player_vfs` exposes the same functions. `media` and `surface` resolve any path they open themselves through `vfs::get()`.
+- `player/engine/python/_player/vfs.py` patches `builtins.open`, `io.open`, `io.FileIO`, `os.open`, `os.stat`/`lstat`, `os.path.exists`/`isfile`/`isdir`/`getsize`/`getmtime`, `os.listdir`, `os.scandir`, `os.walk`, `os.remove`/`unlink`, `os.rename`/`replace`, `os.mkdir`/`makedirs`, `os.rmdir`, `shutil` helpers that bypass these. `_player.boot` installs it before `renpy.bootstrap`.
+- Mods: a mod folder has the same layout as the game base folder (`game/...`). Ren'Py loads mod `.rpy`/`.rpyc`/archives because the loader scans the union view. `player mods <game> list|enable|disable|order` edits `order.txt`.
+
+## `text` (Python: `renpy.text.ftfont`, `renpy.text.hbfont`, `renpy.text.bidi`)
+
+Pure-Rust text replaces the stock Cython FreeType/HarfBuzz modules and the LTR-only `bidi` stand-in: `skrifa`/`swash` (outlines, hinting, rasterizing), `rustybuzz` (shaping), `unicode-bidi`. All are MIT/Apache. This also removes the dynamic FreeType/HarfBuzz link. The Python API is the one in research/boundary §4.3. `draw` writes premultiplied RGBA into a Rust `Surface` directly (no capsule). `textsupport.Glyph` objects are filled through Python attributes.
+
+## `saves` (save detector, stock-save import)
+
+`player/crates/saves` ports `research/savecompat/savescan.py`'s four layers (metadata, pickle opcode scan, class resolution, stub unpickle with a namemap walk). On the first open of a game, stock saves (`~/Library/RenPy/<save_directory>/` and the game's `game/saves/`) are copied, never moved, into `<data>/saves/<game key>/`, with a per-file verdict. Unloadable saves are copied with a `.blocked` suffix and listed in the pre-flight report. The stock save folder and `persistent` are only read.
+
+## Pre-flight report
+
+`<data>/reports/<game key>/preflight.json` and `.md`, written after script load and before `init`: engine version detected from the game's `renpy/` or `lib/`, the build fingerprint, Ren'Py 7 status, save verdicts, 3D model or Live2D use, mods and patches applied, unsupported features found. The library shows it.
+
+## `library` (CLI and GUI)
+
+`player` subcommands: `player <game>` (run), `player serve <game>` (M5, reserved), `player scan <folder>...`, `player list`, `player mods ...`, `player report <game>`. Scanned folders and found games live in `<data>/library.toml`. `player` with no arguments opens the library window (egui on the existing winit/wgpu stack), which lists games with engine version, Ren'Py 7 status, mods and the pre-flight result, and launches a game as a child process.
