@@ -36,6 +36,32 @@ class _Zip:
         return zlib.decompress(raw, -15) if m == 8 else raw
 
 
+class _Reader:
+    """importlib.resources reader over the data entries of one package directory of a zip."""
+
+    def __init__(self, z, package):
+        self.z = z
+        self.prefix = package.replace(".", "/") + "/"
+
+    def open_resource(self, resource):
+        import io
+
+        try:
+            return io.BytesIO(self.z.read(self.prefix + resource))
+        except KeyError:
+            raise FileNotFoundError(2, "No such resource", resource) from None
+
+    def resource_path(self, resource):
+        raise FileNotFoundError(resource)
+
+    def is_resource(self, path):
+        return not path.endswith(".pyc") and (self.prefix + path) in self.z.idx
+
+    def contents(self):
+        n = len(self.prefix)
+        return iter(sorted({e[n:].split("/")[0] for e in self.z.idx if e.startswith(self.prefix) and len(e) > n}))
+
+
 class _Loader:
     """Loader and resource provider for modules stored as .pyc in one zip."""
 
@@ -68,6 +94,11 @@ class _Loader:
 
     def get_filename(self, fullname):
         return self.z.name + "/" + self._entry(fullname)[:-1]
+
+    def get_resource_reader(self, fullname):
+        if not self.is_package(fullname):
+            return None
+        return _Reader(self.z, fullname)
 
     def get_data(self, path):
         p = str(path).replace("\\", "/")

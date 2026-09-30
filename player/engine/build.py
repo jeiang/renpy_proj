@@ -303,7 +303,11 @@ PYC_MAGIC = importlib.util.MAGIC_NUMBER
 
 
 def add_pyc(z: zipfile.ZipFile, src: Path, arc: str):
-    code = compile(src.read_bytes(), arc, "exec", dont_inherit=True)
+    add_pyc_source(z, src.read_bytes(), arc)
+
+
+def add_pyc_source(z: zipfile.ZipFile, source: bytes, arc: str):
+    code = compile(source, arc, "exec", dont_inherit=True)
     # flags=1: unchecked hash-based pyc, so the importer never compares source timestamps.
     z.writestr(zipfile.ZipInfo(arc[:-3] + ".pyc", (1980, 1, 1, 0, 0, 0)),
                PYC_MAGIC + (1).to_bytes(4, "little") + b"\0" * 8 + marshal.dumps(code),
@@ -320,6 +324,16 @@ def build_layer_zip(tree: Path, dest: Path):
                     continue
                 add_pyc(z, p, rel)
                 n += 1
+        # Bundled pure-Python packages (see fetch.sh).
+        for wheel in sorted((UPSTREAM.parent / "pywheels").glob("*.whl")):
+            with zipfile.ZipFile(wheel) as w:
+                for name in sorted(w.namelist()):
+                    if name.endswith(".py") and ".dist-info/" not in name:
+                        add_pyc_source(z, w.read(name), name)
+                        n += 1
+                    elif name.endswith(".pem"):  # certifi's CA bundle, read through importlib.resources
+                        z.writestr(zipfile.ZipInfo(name, (1980, 1, 1, 0, 0, 0)), w.read(name),
+                                   compress_type=zipfile.ZIP_DEFLATED)
     log("layer.zip", n, "modules", dest.stat().st_size, "bytes")
 
 
@@ -360,7 +374,7 @@ def main():
     ap.add_argument("--py-include", help="Python 3.12 headers (default: pyhost's build, else this python)")
     args = ap.parse_args()
 
-    if not UPSTREAM.exists():
+    if not UPSTREAM.exists() or not (UPSTREAM.parent / "pywheels").is_dir():
         run(["bash", str(ENGINE / "fetch.sh")])
 
     py_include = args.py_include
@@ -370,7 +384,7 @@ def main():
     log("python headers:", py_include)
 
     inputs = [p for root in (ENGINE / "patches", ENGINE / "python", ENGINE / "extra") for p in files_under(root)]
-    inputs += [ENGINE / "build.py"]
+    inputs += [ENGINE / "build.py", ENGINE / "fetch.sh"]
     fingerprint, stamp = digest_inputs(inputs)
     stamp += py_include
     stamp_file = OUT / "stamp.txt"

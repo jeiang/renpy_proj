@@ -1,0 +1,32 @@
+# Reason: the player never writes outside its data dir. Saves go only to <data>/saves/<game key>: no game/saves location, and MultiPersistent lives beside them instead of in ~/Library/RenPy.
+
+diff --git a/renpy/persistent.py b/renpy/persistent.py
+index 116fea2..98630d9 100644
+--- a/renpy/persistent.py
++++ b/renpy/persistent.py
+@@ -594,6 +594,10 @@ def MultiPersistent(name, save_on_quit=False):
+     if "RENPY_MULTIPERSISTENT" in os.environ:
+         files = [renpy.exports.fsdecode(os.environ["RENPY_MULTIPERSISTENT"])]
+ 
++    elif renpy.config.player_cache_dir:
++        # Player patch: keep MultiPersistent in the player's save directory, not in ~/Library/RenPy.
++        files = [os.path.join(renpy.config.savedir, "multipersistent")]
++
+     elif renpy.android or renpy.ios:
+         # Due to the security policy of mobile devices, we store MultiPersistent
+         # in the same place as common persistent.
+diff --git a/renpy/savelocation.py b/renpy/savelocation.py
+index 0b3ad1e..4dffd60 100644
+--- a/renpy/savelocation.py
++++ b/renpy/savelocation.py
+@@ -697,8 +697,8 @@ def init():
+     # 1. User savedir.
+     location_add(renpy.config.savedir)
+ 
+-    # 2. Game-local savedir.
+-    if (not renpy.mobile) and (not renpy.macapp):
++    # 2. Game-local savedir. Player patch: never used, the player does not touch the game folder.
++    if (not renpy.mobile) and (not renpy.macapp) and (not renpy.config.player_cache_dir):
+         path = os.path.join(renpy.config.gamedir, "saves")
+         location_add(path)
+ 

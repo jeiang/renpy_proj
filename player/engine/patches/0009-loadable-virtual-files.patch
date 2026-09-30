@@ -1,0 +1,19 @@
+# Reason: renpy/common is virtual, so loadable() (used by lint and by font checks) must recognize files that the scan listed, not only files that exist on disk.
+
+diff --git a/renpy/loader.py b/renpy/loader.py
+index 2650847..3eac632 100644
+--- a/renpy/loader.py
++++ b/renpy/loader.py
+@@ -728,6 +728,12 @@ def loadable_core(name):
+     if name in loadable_cache:
+         return loadable_cache[name]
+ 
++    # Player patch: renpy/common is virtual, so transfn cannot find its files on disk. The scan records
++    # every listed file under its lower-cased name.
++    if loadable_cache.get(unicodedata.normalize("NFC", name.lower())) is True:
++        loadable_cache[name] = True
++        return True
++
+     try:
+         transfn(name)
+         loadable_cache[name] = True
