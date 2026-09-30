@@ -1,0 +1,17 @@
+# Reason: Cache.preload_image also queues the image on the Rust loader pool, so predicted images decode on several cores ahead of the single Python preloader thread, with the GIL released.
+
+diff --git a/renpy/display/im.py b/renpy/display/im.py
+--- a/renpy/display/im.py
++++ b/renpy/display/im.py
+@@ -487,6 +487,11 @@
+             self.preloads.append(im)
+             in_cache = False
+ 
++            # Player patch: decode ahead on the loader pool (priority 2, script prediction).
++            import _player.images
++
++            _player.images.prefetch(im, 2)
++
+         if not in_cache:
+             with self.preload_lock:
+                 self.preload_lock.notify()

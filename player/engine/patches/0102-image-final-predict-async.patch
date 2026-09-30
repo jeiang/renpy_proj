@@ -1,0 +1,29 @@
+# Reason: the final predict of a scene loaded every missing image synchronously, one after another, on the main thread; it now queues them all on the loader pool and returns.
+
+diff --git a/renpy/display/predict.py b/renpy/display/predict.py
+--- a/renpy/display/predict.py
++++ b/renpy/display/predict.py
+@@ -68,9 +68,22 @@
+     screens.append((_screen_name, args, kwargs))
+ 
+ 
++def final_predict_image(im):
++    """
++    Player patch: the final predict of the scene queues every image on the
++    loader pool (priority 1) and returns at once. Stock loads each one here,
++    one after another on the main thread. The draw then waits only for the
++    slowest job.
++    """
++
++    import _player.images
++
++    _player.images.prefetch(im, 1)
++
++
+ def reset():
+     global image
+-    image = renpy.display.im.cache.get_texture
++    image = final_predict_image
+     predicted.clear()
+     del screens[:]
+ 
