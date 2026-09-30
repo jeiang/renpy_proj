@@ -331,6 +331,9 @@ def build_layer_zip(tree: Path, dest: Path):
                     if name.endswith(".py") and ".dist-info/" not in name:
                         add_pyc_source(z, w.read(name), name)
                         n += 1
+                    elif name.endswith(".pem"):  # certifi's CA bundle, read through importlib.resources
+                        z.writestr(zipfile.ZipInfo(name, (1980, 1, 1, 0, 0, 0)), w.read(name),
+                                   compress_type=zipfile.ZIP_DEFLATED)
     log("layer.zip", n, "modules", dest.stat().st_size, "bytes")
 
 
