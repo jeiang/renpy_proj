@@ -1,0 +1,34 @@
+[workspace]
+resolver = "3"
+members = ["crates/pyhost", "crates/engine", "crates/surface", "crates/platform", "crates/gfx", "crates/media", "crates/player"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[workspace.dependencies]
+pyo3 = { version = "0.29", default-features = false, features = ["macros"] }
+pyo3-ffi = "0.29"
+wgpu = "30"
+naga = { version = "30", features = ["glsl-in", "wgsl-out"] }
+winit = "0.30"
+cpal = "0.16"
+gilrs = "0.11"
+ffmpeg-next = { version = "=7.1.0", default-features = false, features = ["codec", "format", "software-resampling"] }
+ffmpeg-sys-next = { version = "=7.1.3", default-features = false }
+pollster = "0.4"
+bytemuck = { version = "1", features = ["derive"] }
+parking_lot = "0.12"
+log = "0.4"
+anyhow = "1"
+pyhost = { path = "crates/pyhost" }
+engine = { path = "crates/engine" }
+surface = { path = "crates/surface" }
+platform = { path = "crates/platform" }
+gfx = { path = "crates/gfx" }
+media = { path = "crates/media" }
+
+[profile.release]
+debug = 1
