@@ -208,6 +208,10 @@ def install(settings, detection):
     install_loader_hooks()
     install_import_hook()
 
+    from _player.compat import errors as _errors
+
+    _errors.install_init_retry()
+
     # Ren'Py 7 searched images/ for image files by name.
     if "images/" not in renpy.config.search_prefixes:
         renpy.config.search_prefixes = list(renpy.config.search_prefixes) + ["images/"]

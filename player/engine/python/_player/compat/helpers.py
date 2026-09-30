@@ -173,7 +173,9 @@ def _py2c_sorted(it, *args, **kw):
     cmp = kw.pop("cmp", None)
     if args:
         cmp = args[0]
-    rv = list(it)
+    import renpy.revertable
+
+    rv = renpy.revertable.RevertableList(it)  # the store's own `sorted` returns a revertable list
     _py2c_sort(rv, cmp=cmp, **kw)
     return rv
 

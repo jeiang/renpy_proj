@@ -21,6 +21,7 @@ from _player.compat import hooks, notice, report
 from _player.compat.report import log
 
 _attempts = collections.Counter()
+_replaced = {}  # old module code object -> recompiled one, for the retry of a block that was already running
 _ORDERING_RE = re.compile(r"not supported between instances of|unorderable types")
 
 _PATTERNS = [
@@ -93,7 +94,12 @@ def fix_ordering(exc):
 
     frames = _frames(exc)
 
-    if not frames or not hooks.is_game_file(frames[-1][0].co_filename):
+    # The sort may run inside an engine wrapper (renpy.revertable.revertable_sorted) called from game code:
+    # start at the innermost game frame.
+    while frames and not hooks.is_game_file(frames[-1][0].co_filename):
+        frames.pop()
+
+    if not frames:
         return []
 
     fixed = []
@@ -118,6 +124,7 @@ def fix_ordering(exc):
 
         if co.co_name == "<module>":
             code.bytecode = new_module
+            _replaced[co] = new_module
             fixed.append((co.co_filename, lineno, "<module>"))
             continue
 
@@ -220,3 +227,47 @@ def install():
     """`renpy.game.post_init`: the game's own `config.exception_handler` is set by now and stays in the chain."""
 
     renpy.config.exception_handler = make_handler(renpy.config.exception_handler)
+
+
+def _retry_wrapper(orig):
+    """Where the handler cannot run (init code, lint, a context without rollback), fix the ordering and run the call again.
+    The call is an exec or eval of one compiled game block, so the retry re-runs that block."""
+
+    def call(*args, **kwargs):
+        try:
+            return orig(*args, **kwargs)
+        except TypeError as exc:
+            if not _ORDERING_RE.search(str(exc)) or not _no_handler_path():
+                raise
+
+            fixed = fix_ordering(exc)
+
+            if not fixed:
+                raise
+
+            file, line, _name = fixed[0]
+            report.event("fix", file, line, "Python 2 ordering: %s; recompiled %s; block run again" % (exc, ", ".join("%s:%d %s" % f for f in fixed)))
+            args = (_replaced.get(args[0], args[0]),) + args[1:]
+            return orig(*args, **kwargs)
+
+    call.__wrapped__ = orig
+    return call
+
+
+def _no_handler_path():
+    try:
+        ctx = renpy.game.context()
+    except Exception:
+        return True
+
+    return ctx is None or ctx.init_phase or not renpy.exports.can_rollback() or renpy.game.args.command != "run"
+
+
+def install_init_retry():
+    """Called with the other hooks, before the script loads."""
+
+    for name in ("py_exec_bytecode", "py_eval_bytecode"):
+        orig = getattr(renpy.python, name)
+
+        if not hasattr(orig, "__wrapped__"):
+            setattr(renpy.python, name, _retry_wrapper(orig))
