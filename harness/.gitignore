@@ -1,0 +1,6 @@
+# Clones of games, per-run scratch, outputs and compiled helper tools (never committed).
+/work/
+/out/
+/bin/
+__pycache__/
+/out-*.log

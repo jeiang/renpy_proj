@@ -1,0 +1,10 @@
+# Executed-dialogue probe. {lines} is filled in by gate.py.
+cmd auto on
+cmd click on
+wait menu True 180
+cmd start
+after_start
+cmd advance {lines}
+wait advance-done {timeout}
+settle 1
+quit
