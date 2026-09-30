@@ -1,0 +1,20 @@
+# Reason: pyobjus is not bundled in the player, so language autodetect on macOS raised ModuleNotFoundError at init (config.enable_language_autodetect). Use CoreFoundation through ctypes.
+
+--- a/renpy/translation/__init__.py
++++ b/renpy/translation/__init__.py
+@@ -1270,7 +1270,14 @@
+ 
+         Locale = autoclass("java.util.Locale")
+         locale_name = str(Locale.getDefault().getLanguage())
+-    elif renpy.ios or renpy.macintosh:
++    elif renpy.macintosh:
++        # Player patch: pyobjus is not bundled; ask CoreFoundation through ctypes.
++        import _player.platform_locale
++
++        locale_name = _player.platform_locale.preferred_language()
++        if locale_name is not None:
++            locale_name = parse_bcp47_to_locale(locale_name)
++    elif renpy.ios:
+         import pyobjus  # type: ignore
+ 
+         NSLocale = pyobjus.autoclass("NSLocale")
