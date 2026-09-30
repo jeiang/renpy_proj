@@ -53,50 +53,66 @@ def _resolve(module, name):
 # ---------------------------------------------------------------- engine version of the game
 
 
+def _read(path):
+    with open(path, "r", encoding="utf-8", errors="replace") as f:
+        return f.read()
+
+
 def detect_engine(basedir):
     """Engine version of the game from its own `renpy/` and `lib/` folders. Files are only read.
 
+    Sources, in order: `renpy/vc_version.py` `version = '...'` (7.5+ layouts), else `version_tuple` in
+    `renpy/__init__.py`. Ren'Py 7.4 to 7.6 ship one `__init__.py` for Python 2 and 3 with two tuples; the
+    game's Python (`lib/py2-*`, `lib/py3-*`, `.pyo` beside the sources) picks one.
+
     Returns (version string or None, source description, python major or None)."""
 
-    init = os.path.join(basedir, "renpy", "__init__.py")
+    renpy_dir = os.path.join(basedir, "renpy")
+    init = os.path.join(renpy_dir, "__init__.py")
 
     if not os.path.isfile(init):
         return None, "no renpy/ folder in the game", None
 
-    with open(init, "r", encoding="utf-8", errors="replace") as f:
-        text = f.read()
-
-    tuples = [tuple(int(x) for x in m.groups()) for m in re.finditer(r"^\s*version_tuple\s*=\s*\((\d+),\s*(\d+),\s*(\d+)", text, re.M)]
-
-    if not tuples:
-        return None, "no version_tuple in renpy/__init__.py", None
-
-    libdirs = []
     try:
         libdirs = os.listdir(os.path.join(basedir, "lib"))
     except OSError:
-        pass
+        libdirs = []
 
-    py3 = any(d.startswith(("py3-", "python3")) for d in libdirs)
-    py2 = any(d.startswith(("py2-", "python2")) for d in libdirs)
+    try:
+        pyo = any(n.endswith(".pyo") for n in os.listdir(renpy_dir))
+    except OSError:
+        pyo = False
 
-    # Ren'Py 7.5 and 7.6 ship one __init__.py for both Python versions; 8.0+ has only py3.
-    if py3 or not py2:
+    py3 = any(d.startswith(("py3-", "python3")) for d in libdirs) or os.path.isdir(os.path.join(renpy_dir, "__pycache__"))
+    py2 = any(d.startswith(("py2-", "python2")) for d in libdirs) or pyo
+    pymajor = 3 if py3 and not py2 else 2 if py2 and not py3 else None
+
+    vc_path = os.path.join(renpy_dir, "vc_version.py")
+    vc_text = _read(vc_path) if os.path.isfile(vc_path) else ""
+
+    m = re.search(r"^version\s*=\s*u?['\"]([0-9][0-9.]*)['\"]", vc_text, re.M)
+    if m:
+        return m.group(1), "renpy/vc_version.py", pymajor
+
+    tuples = [tuple(int(x) for x in m.groups()) for m in re.finditer(r"^\s*version_tuple\s*=\s*\((\d+),\s*(\d+),\s*(\d+)", _read(init), re.M)]
+
+    if not tuples:
+        return None, "no version in renpy/vc_version.py or renpy/__init__.py", pymajor
+
+    note = ""
+    if len(tuples) == 1:
+        chosen = tuples[0]
+    elif pymajor == 2:
+        chosen = min(tuples)
+    elif pymajor == 3:
         chosen = max(tuples)
-        pymajor = 3 if py3 else None
     else:
         chosen = min(tuples)
-        pymajor = 2
+        note = " (two version tuples and no sign of the game's Python; the older is shown)"
 
-    vc = ""
-    vc_path = os.path.join(basedir, "renpy", "vc_version.py")
-    if os.path.isfile(vc_path):
-        with open(vc_path, "r", encoding="utf-8", errors="replace") as f:
-            m = re.search(r"vc_version\s*=\s*(\d+)", f.read())
-            if m:
-                vc = "." + m.group(1)
-
-    return ".".join(str(i) for i in chosen) + vc, "renpy/__init__.py, lib/" + (",".join(sorted(libdirs)[:3]) if libdirs else "(none)"), pymajor
+    vc = re.search(r"^vc_version\s*=\s*(\d+)", vc_text, re.M)
+    version = ".".join(str(i) for i in chosen) + ("." + vc.group(1) if vc else "")
+    return version, "renpy/__init__.py" + note, pymajor
 
 
 # ---------------------------------------------------------------- features
@@ -460,15 +476,17 @@ def on_script_loaded(settings, savedir):
     files = []
     features = {"live2d": False, "live2d_files": [], "models_3d": False, "model_files": [], "native_extensions": [], "evidence": [], "scanned": "not scanned"}
 
+    # The namemap uses each node as its own key; a node hashes and compares as its name.
     namemap = renpy.game.script.namemap
+    names = [n.name for n in namemap.values()]
 
     try:
-        record = _stock_import(settings, savedir, list(namemap), errors)
+        record = _stock_import(settings, savedir, names, errors)
     except Exception:
         errors.append("stock save import failed:\n" + traceback.format_exc())
 
     try:
-        files = json.loads(_player_saves.scan_dir(savedir, list(namemap), _resolve))
+        files = json.loads(_player_saves.scan_dir(savedir, names, _resolve))
     except Exception:
         errors.append("save scan failed:\n" + traceback.format_exc())
 
