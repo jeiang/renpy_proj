@@ -1,0 +1,10 @@
+[package]
+name = "win-host"
+version = "0.0.0"
+edition = "2021"
+[workspace]
+[dependencies]
+pyo3-ffi = "0.29"
+[profile.release]
+debug = false
+lto = false

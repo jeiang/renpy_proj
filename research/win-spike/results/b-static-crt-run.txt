@@ -1,0 +1,36 @@
+py_initialize_ms=7.3
+bootstrap_importer_ms=6.9
+version 3.12.8 executable C:\spike\target\mt\release\win-host.exe
+sys.path [] flags.isolated 1 utf8_mode 1
+prefix C:\Users\Administrator meta_path ['BuiltinImporter', 'FrozenImporter', 'PathFinder', '_Finder', 'BuiltinSubmoduleImporter']
+probe_pkg loader _Loader fast.ANSWER 42 fast.__spec__.origin built-in
+imported 99 of 104 in 40.3 ms
+failed [('_lzma', 'ModuleNotFoundError', "No module named '_lzma'"), ('_posixsubprocess', 'ModuleNotFoundError', "No module named '_posixsubprocess'"), ('_scproxy', 'ModuleNotFoundError', "No module named '_scproxy'"), ('fcntl', 'ModuleNotFoundError', "No module named 'fcntl'"), ('grp', 'ModuleNotFoundError', "No module named 'grp'")]
+loader of json: _Loader json/__init__.pyc
+json is blob-loaded: True ; math builtin: True
+ctypes ok 8
+py_initialize_ms=6.6
+bootstrap_importer_ms=6.3
+OPENSSL OpenSSL 3.6.4 25 Aug 2026
+sha256 2d711642b726b044 md5 impl _hashlib
+ctx 16 default_verify_paths None
+hashlib.new('sha512') 1f40fc92da241694 2d711642b726b044
+    VERSION.dll
+    WS2_32.dll
+    ole32.dll
+    OLEAUT32.dll
+    USER32.dll
+    api-ms-win-core-path-l1-1-0.dll
+    ADVAPI32.dll
+    SHELL32.dll
+    RPCRT4.dll
+    IPHLPAPI.DLL
+    bcrypt.dll
+    COMDLG32.dll
+    CRYPT32.dll
+    api-ms-win-core-synch-l1-2-0.dll
+    KERNEL32.dll
+    ntdll.dll
+empty script: median 26.2 ms  min 24.8  max 30.9
+census import script: median 115.1 ms  min 109.6  max 120.0
+size: 22.56 MB

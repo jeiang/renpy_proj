@@ -1,0 +1,126 @@
+{
+ "renpy.astsupport": {
+  "rc": 0,
+  "errors": []
+ },
+ "renpy.audio.filter": {
+  "rc": 0,
+  "errors": []
+ },
+ "renpy.cslots": {
+  "rc": 0,
+  "errors": []
+ },
+ "renpy.display.accelerator": {
+  "rc": 0,
+  "errors": []
+ },
+ "renpy.display.matrix": {
+  "rc": 0,
+  "errors": []
+ },
+ "renpy.display.quaternion": {
+  "rc": 0,
+  "errors": []
+ },
+ "renpy.display.render": {
+  "rc": 0,
+  "errors": []
+ },
+ "renpy.encryption": {
+  "rc": 0,
+  "errors": []
+ },
+ "renpy.gl2.gl2mesh": {
+  "rc": 0,
+  "errors": []
+ },
+ "renpy.gl2.gl2mesh2": {
+  "rc": 0,
+  "errors": []
+ },
+ "renpy.gl2.gl2mesh3": {
+  "rc": 0,
+  "errors": []
+ },
+ "renpy.gl2.gl2model": {
+  "rc": 0,
+  "errors": []
+ },
+ "renpy.gl2.gl2polygon": {
+  "rc": 0,
+  "errors": []
+ },
+ "renpy.lexersupport": {
+  "rc": 0,
+  "errors": []
+ },
+ "renpy.pydict": {
+  "rc": 0,
+  "errors": []
+ },
+ "renpy.style": {
+  "rc": 0,
+  "errors": []
+ },
+ "renpy.styledata.style_activate_functions": {
+  "rc": 0,
+  "errors": []
+ },
+ "renpy.styledata.style_functions": {
+  "rc": 0,
+  "errors": []
+ },
+ "renpy.styledata.style_hover_functions": {
+  "rc": 0,
+  "errors": []
+ },
+ "renpy.styledata.style_idle_functions": {
+  "rc": 0,
+  "errors": []
+ },
+ "renpy.styledata.style_insensitive_functions": {
+  "rc": 0,
+  "errors": []
+ },
+ "renpy.styledata.style_selected_activate_functions": {
+  "rc": 0,
+  "errors": []
+ },
+ "renpy.styledata.style_selected_functions": {
+  "rc": 0,
+  "errors": []
+ },
+ "renpy.styledata.style_selected_hover_functions": {
+  "rc": 0,
+  "errors": []
+ },
+ "renpy.styledata.style_selected_idle_functions": {
+  "rc": 0,
+  "errors": []
+ },
+ "renpy.styledata.style_selected_insensitive_functions": {
+  "rc": 0,
+  "errors": []
+ },
+ "renpy.styledata.styleclass": {
+  "rc": 0,
+  "errors": []
+ },
+ "renpy.styledata.stylesets": {
+  "rc": 0,
+  "errors": []
+ },
+ "renpy.text.textsupport": {
+  "rc": 0,
+  "errors": []
+ },
+ "renpy.text.texwrap": {
+  "rc": 0,
+  "errors": []
+ },
+ "renpy.tfd": {
+  "rc": 0,
+  "errors": []
+ }
+}

@@ -1,0 +1,14 @@
+py_initialize_ms=6.9
+bootstrap_importer_ms=6.2
+version 3.12.14 executable C:\spike\target\c\release\win-host.exe
+sys.path [] flags.isolated 1 utf8_mode 1
+prefix C:\Users\Administrator meta_path ['BuiltinImporter', 'FrozenImporter', 'PathFinder', '_Finder', 'BuiltinSubmoduleImporter']
+probe_pkg loader _Loader fast.ANSWER 42 fast.__spec__.origin built-in
+imported 100 of 104 in 40.3 ms
+failed [('_posixsubprocess', 'ModuleNotFoundError', "No module named '_posixsubprocess'"), ('_scproxy', 'ModuleNotFoundError', "No module named '_scproxy'"), ('fcntl', 'ModuleNotFoundError', "No module named 'fcntl'"), ('grp', 'ModuleNotFoundError', "No module named 'grp'")]
+loader of json: _Loader json/__init__.pyc
+json is blob-loaded: True ; math builtin: True
+ctypes ok 8
+empty script: median 26.4 ms  min 24.8  max 31.6
+census import script: median 112.3 ms  min 107.9  max 125.2
+size: 22.97 MB
