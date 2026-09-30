@@ -350,8 +350,14 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
     data.mkdir()
     if seed_saves:
         shutil.copytree(seed_saves, saves, dirs_exist_ok=True)
-        if engine == "player":   # the player keeps saves in <data>/saves/<game key>
-            shutil.copytree(seed_saves, data / "saves", dirs_exist_ok=True)
+        # The player reads <data>/saves/<save_directory with [^A-Za-z0-9._ -] -> "_">/ (flat) and, on a first open, imports
+        # stock saves from $RENPY_PATH_TO_SAVES/<save_directory>/ (the seed above, nested as stock wrote it). Seed the
+        # first form too, so the resume check does not depend on the import.
+        if engine == "player" and not ctx.opts.get("player_import_only"):
+            for d in sorted({p.parent for p in pathlib.Path(seed_saves).rglob("*") if p.is_file()}):
+                rel = d.relative_to(seed_saves).as_posix()
+                dest = data / "saves" / (re.sub(r"[^A-Za-z0-9._ -]+", "_", rel) if rel != "." else "")
+                shutil.copytree(d, dest, dirs_exist_ok=True, ignore=lambda _d, names: [n for n in names if (d / n).is_dir()])
     for fname, fsrc in (extra_files or {}).items():   # into the scratch clone only
         shutil.copy(fsrc, base / "game" / fname)
     if inject and engine == "stock":
@@ -428,6 +434,6 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
     if keep_saves:
         shutil.copytree(saves, out / "saves", dirs_exist_ok=True)
         if engine == "player" and (data / "saves").exists():
-            shutil.copytree(data / "saves", out / "saves", dirs_exist_ok=True)
+            shutil.copytree(data / "saves", out / "saves-player", dirs_exist_ok=True)
     safe_rmtree(root)
     return res
