@@ -445,6 +445,9 @@ class WgpuDraw(object):
         self.first_frame_times = []
         self.frame_count = 0
         self.slow_frames_logged = 0
+        self.skipped_seen = 0
+        self.last_flip_end = 0.0
+        self.refresh_rate = 60
 
         # The texture loader.
         self.texture_loader = None
@@ -587,6 +590,10 @@ class WgpuDraw(object):
             vsync = 0
 
         renpy.display.interface.frame_duration = 1.0 * abs(vsync or 1) / refresh_rate
+        self.refresh_rate = refresh_rate
+
+        if self.gpu is not None:
+            self.gpu.set_vsync(bool(vsync) and vsync > 0)
 
         renpy.display.log.write("swap interval: %r frames", vsync)
 
@@ -718,6 +725,7 @@ class WgpuDraw(object):
             return False
 
         self.gpu = gpu = new_gpu
+        self.gpu.set_vsync(bool(vsync) and vsync > 0)
 
         gpu_info = self.gpu.info()
         self.info["gpu_name"] = gpu_info["gpu_name"]
@@ -1118,7 +1126,27 @@ class WgpuDraw(object):
 
         end = time.time()
 
+        skipped = self.gpu.skipped_frames()
+        covered = skipped != self.skipped_seen
+        self.skipped_seen = skipped
+
         if vsync:
+
+            # A swap interval above 1 shows every nth refresh. The present mode only paces one frame per refresh,
+            # so hold the rest of the interval here.
+            if vsync > 1:
+                wait = self.last_flip_end + vsync / self.refresh_rate - end
+                if wait > 0:
+                    time.sleep(wait)
+                    end = time.time()
+
+            # A covered or minimized window gives no drawable, or the compositor hands drawables out at once, so
+            # the present does not block. Hold a frame at the swap interval when the flips came in under half of it.
+            else:
+                wait = self.last_flip_end + 1.0 / self.refresh_rate - end
+                if (covered or end - self.last_flip_end < 0.5 / self.refresh_rate) and wait > 0:
+                    time.sleep(wait)
+                    end = time.time()
 
             # When the window is covered, we can get into a state where no
             # drawing occurs and everything goes fast. Detect that and
@@ -1133,6 +1161,8 @@ class WgpuDraw(object):
                 if (frame_times[-1] - frame_times[0] < .001 * 10):
                     time.sleep(1.0 / 120.0)
                     renpy.plog(1, "after broken vsync sleep")
+
+        self.last_flip_end = end
 
     def draw_screen(self, render_tree, flip=True, screenshot=False):
         """
