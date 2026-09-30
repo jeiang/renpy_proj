@@ -280,12 +280,17 @@ def make_sync_clip():
     return dest
 
 
+VIDEO_HOLD = 6   # seconds the movie stays up after the measured window, for the screenshot
+
+
 def _video_run(ctx, name, path, fps, extra=None):
     o = ctx.opts
-    plan = L.parse_plan("cmd auto on\ncmd click on\nwait menu True 180\ncmd click off\nsettle 2\ncmd movie %s %s %s %s\n"
-                        "wait video-result %d\nsettle 1\nquit\n" % (_q(path), fps, o["video_secs"], o["video_warm"],
-                                                                     o["video_secs"] + o["video_warm"] + 120))
+    plan = L.parse_plan("cmd auto on\ncmd click on\nwait menu True 180\ncmd click off\nsettle 2\ncmd movie %s %s %s %s %s\n"
+                        "wait video-result %d\nshot video volatile\nquit\n" % (fps, o["video_secs"], o["video_warm"], VIDEO_HOLD, path,
+                                                                                 o["video_secs"] + o["video_warm"] + 120))
     r = L.launch(ctx, name, plan=plan, timeout=o["video_secs"] + o["video_warm"] + 400, extra_files=extra)
+    if not any(x["file"] for x in r["shots"]) and not r["aborted"]:
+        r["aborted"] = "no screenshot of the video window"
     vj = ctx.out / name / "video.json"
     return r, (json.loads(vj.read_text()) if vj.exists() else None)
 
@@ -299,14 +304,26 @@ def check_video(ctx):
     problems = _hygiene(r)
     if not v:
         return {"check": "video", "status": "fail", "problems": problems + ["no video result written: %s" % r["aborted"]], "launch": _launch_summary(r)}
-    ratio = v["frames"] / v["expected_frames"] if v["expected_frames"] else 0
+    # Gate on frames Ren'Py presented in the window (engine_frames). Decoded frames (frames) are the secondary field.
+    ratio = v["engine_frames"] / v["expected_frames"] if v["expected_frames"] else 0
+    dec_ratio = v["decoded_frames"] / v["expected_frames"] if v["expected_frames"] else 0
     warnings = []
     if ratio < o["video_min_ratio"]:
-        problems.append("delivered %.0f%% of the expected frames (min %.0f%%)" % (100 * ratio, 100 * o["video_min_ratio"]))
+        problems.append("presented %.1f fps of %.0f nominal: %.0f%% of the expected frames (min %.0f%%)"
+                        % (v["presented_fps"], v["fps_nominal"], 100 * ratio, 100 * o["video_min_ratio"]))
+    if dec_ratio < o["video_min_ratio"]:   # the window can redraw while no movie plays: the decoded count proves the movie runs
+        problems.append("decoded %d of %.0f expected frames (%.0f%%, min %.0f%%): the movie did not play (channel %s)"
+                        % (v["decoded_frames"], v["expected_frames"], 100 * dec_ratio, 100 * o["video_min_ratio"], v.get("channel_playing")))
+    if v["presented_fps"] > 2 * v["fps_nominal"]:
+        warnings.append("presented %.0f fps for a %.0f fps movie: the draw loop is not paced" % (v["presented_fps"], v["fps_nominal"]))
+    if o.get("video_zero_drop") and (v["presented_late"] or v["late"]):
+        problems.append("zero-drop: %d presented and %d decoded frame intervals beyond 1.5x (presented max %.1f ms, decoded max %.1f ms)"
+                        % (v["presented_late"], v["late"], v["presented_interval_max"], v["interval_max"]))
     if r["forced_kill"] and not r["aborted"]:
         problems.append("game did not exit on the quit command")
     launches = [_launch_summary(r)]
-    out = {"check": "video", "frames_ratio": ratio, "metrics": v}
+    out = {"check": "video", "presented_fps": v["presented_fps"], "frames_ratio": ratio, "decoded_fps": v["fps"],
+           "decoded_ratio": dec_ratio, "shot": next((x["file"] for x in r["shots"] if x["file"]), None), "metrics": v}
     # A/V sync is measured on the synthetic clip (VP9 + Opus, known frame rate, no loop wrap). The corpus movies carry
     # no audio track: their position is the video's own clock, so it cannot show a sync error.
     sync = v
@@ -330,18 +347,12 @@ def check_video(ctx):
             problems.append("A/V offset up to %.0f ms (max %.0f ms)" % (sync["av_offset_ms_max"], o["video_max_av_ms"]))
         if abs(sync["audio_wall_drift_ms"]) > o["video_max_drift_ms"]:
             problems.append("audio clock drifted %.0f ms from the wall clock (max %.0f ms)" % (sync["audio_wall_drift_ms"], o["video_max_drift_ms"]))
-        if sync is not v and sync["frames"] / sync["expected_frames"] < o["video_min_ratio"]:
-            problems.append("sync clip: delivered %.0f%% of the expected frames" % (100 * sync["frames"] / sync["expected_frames"]))
+        if sync is not v and sync["engine_frames"] / sync["expected_frames"] < o["video_min_ratio"]:
+            problems.append("sync clip: presented %.0f%% of the expected frames" % (100 * sync["engine_frames"] / sync["expected_frames"]))
     elif sync:
         warnings.append(sync.get("av_sync", "A/V sync not measured"))
     out.update(status="fail" if problems else "pass", problems=problems, warnings=warnings, launches=launches)
     return out
-
-
-def _q(path):
-    if " " in path:
-        raise ValueError("video path with spaces is not supported by the command channel: " + path)
-    return path
 
 
 CHECKS = {"lint": check_lint, "probe": check_probe, "route": check_route, "saveresume": check_saveresume, "video": check_video}

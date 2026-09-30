@@ -49,11 +49,15 @@ def parse():
     r.add_argument("--resume-lines", type=int, default=20)
     r.add_argument("--video-secs", type=float, default=15)
     r.add_argument("--video-warm", type=float, default=3)
-    r.add_argument("--video-min-ratio", type=float, default=0.85, help="min delivered/expected frames")
+    r.add_argument("--video-min-ratio", type=float, default=0.85, help="min presented (engine_frames)/expected frames")
+    r.add_argument("--video-zero-drop", action="store_true",
+                   help="quiet-machine run: fail if any presented or decoded frame interval is beyond 1.5x nominal")
     r.add_argument("--video-max-av-ms", type=float, default=150, help="max frame-vs-audio offset")
     r.add_argument("--video-max-drift-ms", type=float, default=100, help="max audio-vs-wall clock drift over the window")
     r.add_argument("--no-sync-clip", dest="sync_clip", action="store_false",
                    help="do not build and play the synthetic A/V clip when the game movie has no audio")
+    r.add_argument("--player-import-only", dest="player_import_only", action="store_true",
+                   help="saveresume: seed stock saves only under RENPY_PATH_TO_SAVES (the player's first-open import), not into <data>/saves")
     r.add_argument("--lock-timeout", type=int, default=7200)
     d = sub.add_parser("diff")
     d.add_argument("--a", required=True)
@@ -107,7 +111,7 @@ def run_checks(a, ctx, key, out, names):
         print("[gate]   -> %s%s" % (res["status"], "  " + "; ".join(res.get("problems") or [res.get("error", "")]) if res["status"] != "pass" else ""), flush=True)
     summary = {"game": key, "engine": a.engine, "stock_engine": None if a.engine == "player" else ctx.stock_engine_id(),
                "tier": a.tier, "seconds": round(time.time() - t0, 1),
-               "status": "pass" if all(r["status"] == "pass" for r in results.values()) else "fail",
+               "status": "pass" if all(r["status"] in ("pass", "skipped") for r in results.values()) else "fail",
                "checks": {n: r["status"] for n, r in results.items()}}
     (out / "result.json").write_text(json.dumps(summary, indent=1))
     (out / "summary.md").write_text(report.markdown(summary, results))

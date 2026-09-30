@@ -4,7 +4,7 @@
 #   progress.txt  game -> gate: one event per line (append only)
 # Runs on every Ren'Py 8.x (py3). Inert unless $HARNESS_DIR is set.
 #
-# Commands: start | load SLOT | save SLOT | auto on|off | click on|off | advance N | advance-to N | jump LABEL | exec CODE | movie PATH FPS SECS WARM | quit
+# Commands: start | load SLOT | save SLOT | auto on|off | click on|off | advance N | advance-to N | jump LABEL | exec CODE | movie FPS SECS WARM HOLD PATH | quit
 #   auto     answer input screens ("Tester") and take the first menu choice
 #   click    end any non-menu interaction every 1 s (splash screens, pauses)
 #   advance  end interactions until N more say statements ran (advance-to: until N in total), then hold:
@@ -85,8 +85,13 @@ init 999 python:
         elif c == "exec":
             exec(a, renpy.store.__dict__)
         elif c == "movie":
+            # PATH is last and may hold spaces. From a menu or game menu there is an outer context to leave; from the
+            # story (one context) a plain jump does the same.
             _hz_st["movie_args"] = a
-            renpy.jump_out_of_context("hz_movie")
+            if len(renpy.game.contexts) > 1:
+                renpy.jump_out_of_context("hz_movie")
+            else:
+                renpy.jump("hz_movie")
         elif c == "quit":
             renpy.quit(save=False)
 
@@ -114,7 +119,9 @@ init 999 python:
                     except _hz_ctl:
                         raise
                     except Exception as e:
+                        import traceback
                         _hz_write("cmd-error %r" % (e,))
+                        _hz_write("cmd-error-trace " + " | ".join(l.strip() for l in traceback.format_exc().splitlines()[-8:]))
         mm = bool(renpy.get_screen("main_menu"))
         if mm != st["menu"]:
             st["menu"] = mm
@@ -222,13 +229,13 @@ init 999 python:
         return r
 
 label hz_movie:
-    $ _hz_args = _hz_st["movie_args"].split()
+    $ _hz_args = _hz_st["movie_args"].split(None, 4)
     $ _hz_install_movie_probe()
-    $ _hz_run_movie(_hz_args[0], float(_hz_args[1]), float(_hz_args[2]), float(_hz_args[3]))
+    $ _hz_run_movie(_hz_args[4], float(_hz_args[0]), float(_hz_args[1]), float(_hz_args[2]), float(_hz_args[3]))
     return
 
 init 999 python:
-    def _hz_run_movie(path, fps, secs, warm):
+    def _hz_run_movie(path, fps, secs, warm, hold):
         t_start = time.time()
         # Ren'Py trims frame_times to config.performance_window (5 s); keep the whole run.
         config.performance_window = warm + secs + 5.0
@@ -240,7 +247,8 @@ init 999 python:
         renpy.pause(warm + secs + 0.5)
         ta, tb = t_start + warm, t_start + warm + secs
         r = _hz_movie_stats(ta, tb, fps)
-        ft = [x for x in renpy.display.interface.frame_times if ta <= x <= tb]
+        ft = [x for x in renpy.display.interface.frame_times if ta <= x <= tb]   # frames Ren'Py drew in the window
+        pd = [(b - a) * 1000.0 for a, b in zip(ft, ft[1:])]
         try:
             ch = renpy.audio.audio.get_channel(_hz_mv_channel[0] if _hz_mv_channel else "movie")
             r["pcm_ok"] = bool(renpy.audio.audio.pcm_ok)
@@ -248,7 +256,10 @@ init 999 python:
             r["channel_playing"] = str(ch.get_playing())
         except Exception as e:
             r["channel_err"] = repr(e)
-        r.update({"path": path, "fps_nominal": fps, "secs": secs, "expected_frames": secs * fps, "engine_frames": len(ft),
+        r.update({"path": path, "fps_nominal": fps, "secs": secs, "expected_frames": secs * fps, "engine_frames": len(ft), "decoded_frames": r["frames"],
+                  "presented_fps": len(ft) / secs, "presented_interval_p50": _hz_pct(pd, 50), "presented_interval_p95": _hz_pct(pd, 95),
+                  "presented_interval_max": max(pd) if pd else 0, "presented_late": len([x for x in pd if x > 1500.0 / fps]),
+                  "presented_over2x": len([x for x in pd if x > 2500.0 / fps]),
                   "renpy": renpy.version_only})
         try:
             r["renderer"] = dict((k, str(v)) for k, v in renpy.get_renderer_info().items())
@@ -257,6 +268,7 @@ init 999 python:
         with open(os.path.join(_hz_dir, "video.json"), "w") as f:
             json.dump(r, f)
         _hz_write("video-result done")
+        renpy.pause(hold)   # the movie keeps playing: the gate takes its screenshot now, outside the measured window
         renpy.quit(save=False)
 
 screen _hz_poll_screen():
