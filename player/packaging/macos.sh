@@ -24,6 +24,20 @@
 #        NOTARY_KEYCHAIN_PROFILE a `xcrun notarytool store-credentials` profile name: notarizes and staples
 #      Each step is skipped, with a message, when its variable is not set.
 #
+# Universal binary (x86_64 + arm64) is NOT built here. State of the attempt:
+#   - The static CPython builds for Intel: `PYHOST_ARCH=x86_64 sh crates/pyhost/cpython/build.sh <player-dir>`
+#     gives build-out/cpython-x86_64 (clang -arch x86_64 under Rosetta, x86_64 static libs from the
+#     nixpkgs-26.05-darwin pin, because the main pin dropped x86_64-darwin).
+#   - Rust std for x86_64-apple-darwin is not in the dev shell's toolchain, and the official rust-std
+#     tarball is rejected (the nix rustc is "built from a source tarball", so crate metadata differs).
+#     `-Zbuild-std` with a RUSTC wrapper that passes --sysroot (overlay with the rust-src component)
+#     works: a hello-world built and ran under Rosetta.
+#   - Not done: x86_64 FFmpeg (LGPL), FreeType and HarfBuzz have no x86_64 build in the pinned
+#     nixpkgs; a cross build of the LGPL FFmpeg from the 26.05-darwin pin ran for over 30 minutes
+#     without finishing, and the player's build scripts (engine, pyhost, link lines) are not
+#     parametrized by architecture. Both the flake (a second nixpkgs input, a Rust toolchain with the
+#     x86_64 target) and those scripts need changes that belong to the coordinator.
+#
 # Environment: PLAYER_ENTITLEMENTS names the entitlements plist for the signature (default:
 # packaging/entitlements.plist).
 set -euo pipefail

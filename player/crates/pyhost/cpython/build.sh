@@ -16,17 +16,27 @@ PYURL=https://www.python.org/ftp/python/$PYVER/Python-$PYVER.tar.xz
 PYSHA=c909157bb25ec114e5869124cc2a9c4a4d4c1e957ca4ff553f1edc692101154e
 UP=$PLAYER/upstream
 SRC=$UP/src/Python-$PYVER
-B=$UP/cpython-build
-OUT=$PLAYER/build-out/cpython
+# PYHOST_ARCH=x86_64 builds the Intel slice for a universal binary (packaging/universal.sh): same recipe,
+# `clang -arch x86_64` (the configure tests run through Rosetta), x86_64 static libraries from the
+# nixpkgs-26.05-darwin pin (the main pin dropped x86_64-darwin), and a separate build and output folder.
+ARCH=${PYHOST_ARCH:-arm64}
+case "$ARCH" in
+  arm64) B=$UP/cpython-build; OUT=$PLAYER/build-out/cpython; NIXPKGS="nixpkgs#pkgsStatic"; TBD_TARGET=arm64-macos; ARCHFLAGS="" ;;
+  x86_64) B=$UP/cpython-build-x86_64; OUT=$PLAYER/build-out/cpython-x86_64
+          NIXPKGS="github:NixOS/nixpkgs/nixpkgs-26.05-darwin#legacyPackages.x86_64-darwin.pkgsStatic"
+          TBD_TARGET=x86_64-macos; ARCHFLAGS="-arch x86_64" ;;
+  *) echo "pyhost: PYHOST_ARCH must be arm64 or x86_64" >&2; exit 1 ;;
+esac
 
 case "$(uname -s)-$(uname -m)" in
   Darwin-arm64) ;;
+  Darwin-x86_64) [ "$ARCH" = x86_64 ] || { echo "pyhost: PYHOST_ARCH=arm64 needs an Apple Silicon host" >&2; exit 1; } ;;
   *) echo "pyhost: the static CPython build supports macOS arm64 only (Linux and Windows are M4)" >&2; exit 1 ;;
 esac
 command -v nix >/dev/null || { echo "pyhost: nix is required for the static libffi, bzip2, xz, expat, zlib and openssl (run inside 'nix develop .#player')" >&2; exit 1; }
 
 # ---- static dependencies from nix (resolved before the environment is cleaned) ----
-nixp() { nix build --no-link --print-out-paths "nixpkgs#pkgsStatic.$1" 2>/dev/null | head -1; }
+nixp() { nix build --no-link --print-out-paths "$NIXPKGS.$1" 2>/dev/null | head -1; }
 FFI=$(nixp libffi.out); FFI_DEV=$(nixp libffi.dev)
 BZ=$(nixp bzip2.out); BZ_DEV=$(nixp bzip2.dev)
 XZ=$(nixp xz.out); XZ_DEV=$(nixp xz.dev)
@@ -40,7 +50,7 @@ PYTHON_HOME_TMP=${TMPDIR:-/tmp}
 
 # ---- clean environment: Apple clang, not the nix cc wrapper ----
 run() { env -i HOME="$HOME" TMPDIR="${TMPDIR:-/tmp}" PATH=/usr/bin:/bin:/usr/sbin:/sbin \
-  MACOSX_DEPLOYMENT_TARGET=11.0 "$@"; }
+  MACOSX_DEPLOYMENT_TARGET=11.0 ${ARCHFLAGS:+CC="/usr/bin/clang $ARCHFLAGS" CXX="/usr/bin/clang++ $ARCHFLAGS" LDFLAGS="$ARCHFLAGS"} "$@"; }
 
 # ---- fetch ----
 mkdir -p "$UP/src" "$B" "$OUT"
@@ -117,7 +127,7 @@ if [ ! -f "$B/libpython3.12.a" ] || [ "$(cat "$B/recipe" 2>/dev/null)" != "$RECI
   rm -rf "$B/obj" "$B/install"; mkdir -p "$B/obj"; cd "$B/obj"
   cp "$B/Setup.local.new" "$SRC/Modules/Setup.local"
   # FAULT 2: on a new SDK configure detects dup3/pipe2, which fail to link against the 11.0 deployment target.
-  run "$SRC/configure" --prefix="$B/install" --disable-shared --without-ensurepip --disable-test-modules \
+  run "$SRC/configure" --prefix="$B/install" ${ARCHFLAGS:+--build=x86_64-apple-darwin} --disable-shared --without-ensurepip --disable-test-modules \
       ac_cv_func_dup3=no ac_cv_func_pipe2=no >"$B/configure.log" 2>&1
   # FAULT 1: an out-of-tree build reads Modules/Setup.local from the build dir, and Modules/config.c is
   # regenerated only when Setup.local is newer. Without this every module stays shared.
@@ -160,10 +170,10 @@ z=zipfile.ZipFile(sys.argv[1],'a',zipfile.ZIP_DEFLATED); z.write('smokepkg/data.
 # search path: a stub for the system /usr/lib/libiconv.2.dylib (no exported symbols are needed; the
 # Xcode libiconv.tbd cannot be read by nix's older ld).
 mkdir -p "$OUT/sysdeps"
-cat > "$OUT/sysdeps/libiconv.tbd" <<'TBD'
+cat > "$OUT/sysdeps/libiconv.tbd" <<TBD
 --- !tapi-tbd
 tbd-version:     4
-targets:         [ arm64-macos ]
+targets:         [ $TBD_TARGET ]
 install-name:    '/usr/lib/libiconv.2.dylib'
 current-version: 7
 compatibility-version: 7
