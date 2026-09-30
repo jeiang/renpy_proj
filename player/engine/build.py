@@ -105,7 +105,7 @@ def digest_inputs(extra_files):
     fingerprint = h.hexdigest()[:16]
     s = hashlib.sha256(fingerprint.encode())
     for p in extra_files:
-        s.update(str(p.relative_to(ENGINE)).encode() + b"\0" + p.read_bytes() + b"\0")
+        s.update(os.path.relpath(p, ENGINE).encode() + b"\0" + p.read_bytes() + b"\0")
     commit = subprocess.check_output(["git", "-C", str(UPSTREAM), "rev-parse", "HEAD"], text=True).strip()
     s.update(commit.encode())
     return fingerprint, s.hexdigest()
@@ -337,7 +337,54 @@ def build_layer_zip(tree: Path, dest: Path):
     log("layer.zip", n, "modules", dest.stat().st_size, "bytes")
 
 
-def build_common_zip(tree: Path, dest: Path):
+# ---- Build-time .rpyc for renpy/common (packaging slice) --------------------------------------
+#
+# The player binary does not exist while this script runs, so Ren'Py's parser runs in the host python3.12
+# (the dev shell's) against the same patched tree, with the Cython modules rebuilt as shared libraries.
+# packaging/compile_common.py does the work. See its docstring.
+
+PACKAGING = PLAYER / "packaging"
+HOST_SKIP = {"renpy.text.ftfont", "renpy.text.hbfont"}  # need FreeType and HarfBuzz; the parser does not
+
+
+def build_host_tree(tree: Path, cdir: Path, mods, dest: Path):
+    """dest/renpy = the patched renpy package plus every Cython module built as a host-loadable library."""
+    if dest.exists():
+        shutil.rmtree(dest)
+    shutil.copytree(tree / "renpy", dest / "renpy", ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "common"))
+    host_include = sysconfig.get_paths()["include"]
+    cflags = [
+        "-O1", "-DNDEBUG", "-std=gnu99", "-fno-strict-aliasing", "-w", "-fPIC",
+        "-I" + host_include, "-I" + str(tree / "src"), "-I" + str(tree / "tmp" / "gen3"),
+        *pkg_config("--cflags", "sdl2"),
+    ]
+    ldflags = ["-bundle", "-undefined", "dynamic_lookup"] if sys.platform == "darwin" else ["-shared"]
+
+    def one(item):
+        name, helpers = item
+        out = dest / (name.replace(".", "/") + ".so")
+        run(["cc", *cflags, *ldflags, str(cdir / (name + ".c")), *[str(tree / h) for h in helpers], "-o", str(out)])
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count() or 4) as ex:
+        list(ex.map(one, [(n, h) for n, h in sorted(mods.items()) if n not in HOST_SKIP]))
+    log("host modules", len(mods) - len(HOST_SKIP))
+
+
+def compile_common(tree: Path, cdir: Path, mods) -> Path:
+    """Compiles renpy/common to .rpyc. Returns the directory that holds them (rpyc/common/*.rpyc)."""
+    work = OUT / "common-rpyc"
+    if work.exists():
+        shutil.rmtree(work)
+    work.mkdir(parents=True)
+    build_host_tree(tree, cdir, mods, work / "host")
+    run([sys.executable, str(PACKAGING / "compile_common.py"),
+         "--hosttree", str(work / "host"),
+         "--common", str(tree / COMMON_DIR), "--out", str(work / "out"),
+         "--workdir", str(work / "scratch"), "--pywheels", str(UPSTREAM.parent / "pywheels")])
+    return work / "out" / "rpyc" / "common"
+
+
+def build_common_zip(tree: Path, dest: Path, rpyc_dir: Path):
     n = 0
     base = tree / COMMON_DIR
     with zipfile.ZipFile(dest, "w") as z:
@@ -351,6 +398,11 @@ def build_common_zip(tree: Path, dest: Path):
             z.writestr(zi, p.read_bytes(),
                        compress_type=zipfile.ZIP_STORED if stored else zipfile.ZIP_DEFLATED,
                        compresslevel=None if stored else 9)
+            n += 1
+        # The compiled scripts, at the zip root next to their sources: the loader prefers them.
+        for p in sorted(rpyc_dir.rglob("*.rpy*c")):
+            z.writestr(zipfile.ZipInfo(p.relative_to(rpyc_dir).as_posix(), (1980, 1, 1, 0, 0, 0)), p.read_bytes(),
+                       compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
             n += 1
     log("common.zip", n, "files", dest.stat().st_size, "bytes")
 
@@ -384,7 +436,7 @@ def main():
     log("python headers:", py_include)
 
     inputs = [p for root in (ENGINE / "patches", ENGINE / "python", ENGINE / "extra") for p in files_under(root)]
-    inputs += [ENGINE / "build.py", ENGINE / "fetch.sh"]
+    inputs += [ENGINE / "build.py", ENGINE / "fetch.sh", PACKAGING / "compile_common.py"]
     fingerprint, stamp = digest_inputs(inputs)
     stamp += py_include
     stamp_file = OUT / "stamp.txt"
@@ -414,7 +466,7 @@ def main():
     compile_all(tree, cdir, odir, mods, py_include)
 
     build_layer_zip(tree, OUT / "layer.zip")
-    build_common_zip(tree, OUT / "common.zip")
+    build_common_zip(tree, OUT / "common.zip", compile_common(tree, cdir, mods))
 
     (OUT / "inittab.txt").write_text("".join(f"{n} {init_symbol(n)}\n" for n in sorted(mods)))
     (OUT / "link.txt").write_text("\n".join(native_link_info()) + "\n")
