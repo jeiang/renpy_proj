@@ -7,7 +7,7 @@
 
 use std::fs::File;
 use std::io::{self, Read, Seek, SeekFrom};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyInt, PyString};
@@ -129,53 +129,69 @@ fn get_int(o: &Bound<'_, PyAny>, attr: &str) -> Option<u64> {
     v.extract::<u64>().ok()
 }
 
+/// The real path behind a game path: the highest vfs layer that has it.
+fn real_path(p: &Path) -> Option<PathBuf> {
+    match vfs::get() {
+        Some(v) => v.resolve_read(p),
+        None => Some(p.to_path_buf()),
+    }
+}
+
 /// Looks for a file on disk behind `obj`, following `.raw` up to three levels.
+///
+/// A `BufferedReader` over an archive member has no `base`: the `RWopsIO` under it has. So a
+/// whole-file read is only right for the innermost object; an outer level never decides it.
 fn file_window(obj: &Bound<'_, PyAny>) -> Option<Box<dyn ByteSource>> {
     let mut cur = obj.clone();
     for _ in 0..3 {
+        let inner = match cur.getattr("raw") {
+            Ok(next) if !next.is_none() => Some(next),
+            _ => None,
+        };
         if let Ok(name) = cur.getattr("name")
-            && name.is_instance_of::<PyString>() {
-                let path: String = name.extract().ok()?;
-                let p = Path::new(&path);
-                let base = get_int(&cur, "base");
-                let length = get_int(&cur, "length");
-                if let (Some(base), Some(length)) = (base, length) {
-                    if let Ok(md) = std::fs::metadata(p)
-                        && md.is_file() && md.len() >= base + length {
-                            let file = File::open(p).ok()?;
-                            let mut w = FileWindow {
-                                file,
-                                base,
-                                len: length,
-                                pos: 0,
-                            };
-                            w.seek(SeekFrom::Start(0)).ok()?;
-                            return Some(Box::new(w));
-                        }
-                } else if base.is_none() && is_plain_io(&cur) {
-                    // A file from `open(path, "rb")`, still at its start.
-                    let at_start = cur
-                        .call_method0("tell")
-                        .ok()
-                        .and_then(|t| t.extract::<u64>().ok())
-                        == Some(0);
-                    if at_start
-                        && let Ok(md) = std::fs::metadata(p)
-                            && md.is_file() {
-                                let file = File::open(p).ok()?;
-                                return Some(Box::new(FileWindow {
-                                    file,
-                                    base: 0,
-                                    len: md.len(),
-                                    pos: 0,
-                                }));
-                            }
+            && name.is_instance_of::<PyString>()
+        {
+            let path: String = name.extract().ok()?;
+            let p = real_path(Path::new(&path))?;
+            let base = get_int(&cur, "base");
+            let length = get_int(&cur, "length");
+            if let (Some(base), Some(length)) = (base, length) {
+                if let Ok(md) = std::fs::metadata(&p)
+                    && md.is_file()
+                    && md.len() >= base + length
+                {
+                    let file = File::open(&p).ok()?;
+                    let mut w = FileWindow {
+                        file,
+                        base,
+                        len: length,
+                        pos: 0,
+                    };
+                    w.seek(SeekFrom::Start(0)).ok()?;
+                    return Some(Box::new(w));
+                }
+            } else if inner.is_none() && is_plain_io(&cur) {
+                // A file from `open(path, "rb")`, still at its start.
+                let at_start = cur
+                    .call_method0("tell")
+                    .ok()
+                    .and_then(|t| t.extract::<u64>().ok())
+                    == Some(0);
+                if at_start
+                    && let Ok(md) = std::fs::metadata(&p)
+                    && md.is_file()
+                {
+                    let file = File::open(&p).ok()?;
+                    return Some(Box::new(FileWindow {
+                        file,
+                        base: 0,
+                        len: md.len(),
+                        pos: 0,
+                    }));
                 }
             }
-        match cur.getattr("raw") {
-            Ok(next) if !next.is_none() => cur = next,
-            _ => break,
         }
+        cur = inner?;
     }
     None
 }
