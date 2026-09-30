@@ -228,3 +228,99 @@ Notes on the table:
 * **Loud Python 2 failures found while compiling** (would already surface at load): BraveheartAcademy 1 `fail-parse` (`SyntaxError: invalid syntax` on an eval snippet that is two plain words, a scanner false positive of a name with a space, not code); Harem_Hotel 2 `fail-parse` (`print` statement in a block that `fix_tokens` cannot save, and a sloppy-syntax snippet) plus 2 `fix_tokens` recoveries; AstralLust 1 `fix_ast` recovery (`global` ordering). All others compile as-is. Loose `.py` files: A_World_Between_Us 2, Lucky_Paradox 120, no `SyntaxError`.
 * Loose `.py` (third-party, imported by the game) Lucky_Paradox's `python-packages`: 22 `bytes()` calls, 6 possibly-int `/` (in modules, which `wrap_node` does not see), 7 `iteritems` + 4 `iterkeys` + 3 `itervalues`, `__nonzero__` x2, `__cmp__`, `__div__`, `__long__`, `next`, 14 references to `buffer`, 5 `long/unichr`. A_World_Between_Us's two: 4 possibly-int `/`, 9 `.decode`, 2 `reduce` `NameError`. These are the paths a `renpy/`-side rewrite of game code does not reach (A5).
 * Kinds of site by whether the engine already covers them (A4): `unicode`, `basestring`, `xrange`, `raw_input` are provided; `long`, `unichr`, `reduce`, `cmp`, `file`, `execfile`, `buffer` are not (loud `NameError`); `.keys()[i]`, `map(...)[i]`, `filter`, `zip` results stored are loud on index, **silent only when stored and used only for iteration, and unpicklable when kept in a saved variable** (a `dict_keys`/`map` in the store breaks saving with a pickling error).
+
+## C. Runtime error census (new Ren'Py 7 games on 8.5.3)
+
+Ten new games, each an APFS clone under this worktree's gitignored `corpus/run/`, engine = the 8.5.3 SDK (`research/shared-engine-launcher/sdk/renpy-8.5.3-sdk`), `RENPY_PATH_TO_SAVES` on scratch. Driver `run_new.py` (`--deep`, `--cabin-no-unrpyc`, `--video` variants; raw output in gitignored `out/`, first-exception summaries in `runtime_results.json`, `deep_results.json`, `cabin_no_unrpyc.json`). Per game: `lint`, then a **45 s start probe** (`research/renpy7-on-8/probe/zz_probe.rpy`: auto-forward, label/say log, Start pressed after 4 s), then a **90 s deep probe** I added (`deep_probe.rpy`: the same plus a 1.5 s repeating `dismiss`/`input_enter` event and `config.auto_choice_delay = 1.5`, so it walks past the first say, name prompts and menus). The run lock was taken for every run, each run ended with `pkill -9 -f` by path plus a `pgrep` check (no process left after any), and **`~/Library/RenPy` is byte-identical before and after** (`ls -lT` listing hash `3d54375d…`, unchanged). ~/Games: the "before" listing hash was not captured (that background job died with its shell); `find ~/Games -newermt <session start>` finds no modified file, and every game run used a clone.
+
+"alive" is not a pass: Ren'Py stays up on its error screen. Each row was checked against `traceback.txt`, `errors.txt` and stdout. Nothing here is visually confirmed.
+
+| game | lint rc | lint first error | 45 s probe | 45 s: say lines / labels | 90 s deep probe | deep: say lines / labels | deep first error |
+|---|---|---|---|---|---|---|---|
+| A_World_Between_Us | 0 | none | alive | 0 / 8 | alive | 0 / 11 | none |
+| AlexsVantasticAdventure | 0 | none | alive | 1 / 13 | alive | 47 / 20 | none |
+| BlackRose | 0 | none | alive | 1 / 8 | exited rc=0 | 3 / 8 | none |
+| BloomWar | 0 | none | alive | 1 / 11 | alive | 39 / 16 | none |
+| BraveheartAcademy | 0 | none | alive | 1 / 14 | alive | 3 / 15 | none |
+| Bumpkin | 0 | none | exited rc=1 | 0 / 3 | exited rc=1 | 0 / 3 | ValueError: AST node line range (109, 1) is not valid @ game/game_system/inventory.rpy", line 95, in prepare_screen |
+| CabinByTheLake | 1 | Exception: Could not load file …/CabinByTheLake__lint/game/un.rpyc. @  | exited rc=1 | - / - | alive | 9 / 12 | none |
+| DFraction | 0 | none | alive | 1 / 11 | alive | 51 / 12 | none |
+| DTRemake | 1 | parse error: File "game/ui.rpy", line 80: the focus_mask keyword argument was not given a value. | alive | - / - | alive | - / - | parse error: File "game/ui.rpy", line 80: the focus_mask keyword argument was not given a value. |
+| Dreamscape | 1 | parse error: File "game/screens.rpy", line 372: the auto keyword argument was not given a value. | alive | - / - | alive | - / - | parse error: File "game/screens.rpy", line 372: the auto keyword argument was not given a value. |
+
+
+How much code the probes exercised: a handful to 51 dialogue lines and 3 to 20 labels per game (games have 187 to 19 819 dialogue blocks, `lint` Statistics), stopped by age-verification imagemaps (A_World_Between_Us reaches `pre_imagemapc` and waits for a click), intro splashes and name entry. **A clean row means "no exception in the first minutes of play", not "no Python 2 problem".** BlackRose's deep probe exited with rc 0 after 3 lines (clean exit, no traceback; cause not chased: the injected events reached a quit or end-of-game path).
+
+### C1. First error, classified
+
+| Game | First error | Class | Python 2 vs 3? | Construct / cause |
+|---|---|---|---|---|
+| A_World_Between_Us | none in lint or probes; 114 lint lines: 79 "Could not evaluate 'Fat'/'Officer' in the who part of a say statement" in `tl/english`, 3 not-loadable files | none | no | lint noise in `tl/english`; cause [INFERENCE]: `who` names defined only conditionally |
+| AlexsVantasticAdventure | none (47 lines, 20 labels in deep probe) | none | no | |
+| BloomWar | none (39 lines, 16 labels) | none | no | |
+| DFraction | none (51 lines, 12 labels) | none | no | |
+| BraveheartAcademy | none (3 lines, 15 labels); 15 lint "image file not loadable" (path with leading `/`) | asset path | no | `Image side x uses file '/images/...webp', which is not loadable`: 15 |
+| BlackRose | none; lint 370 "not loadable" | asset path | no | files are stored as `images/scene/...` in `archive.rpa` and referenced as `scene/...`, i.e. the same `config.search_prefixes` `images/` default change as Lucky_Paradox ([renpy7-on-8](../renpy7-on-8/README.md)); a subset (e.g. `Sachie-PillowTalk-EpisodeStart`) is not in the archive at all |
+| CabinByTheLake | lint/start: `Exception: Could not load file .../game/un.rpyc` (stdout: `Failed to load un.rpyc: a bytes-like object is required, not 'str'`), before any game script runs | engine load failure, **Python 2 pickle** | **yes** (in a helper file, not game logic) | `game/un.rpyc` is the leftover **unrpyc v1 decompiler stub** (its `unrpyc.log.txt` sits beside it): a pickle that calls `zlib.decompress` on a py2 `str`, which Ren'Py 7 executed on load. Removing that one file: lint rc 0, runs, 9 lines in the deep probe. The `.rpy` beside it were probably produced by that decompile [INFERENCE from `unrpyc.log.txt`] |
+| DTRemake | parse error, `game/ui.rpy` line 80: "the focus_mask keyword argument was not given a value" (`imagebutton auto "..." ... focus_mask` with no value) | **Ren'Py syntax stricter** | no | 7.4.11 accepted a bare `focus_mask`; 8.5.3 rejects it. Loud, at load; process alive on the parse-error screen |
+| Dreamscape | parse error, `game/screens.rpy` line 372: "the auto keyword argument was not given a value" (`imagebutton auto:` with a block) | **Ren'Py syntax stricter** | no | same class: a property without a value that 7.4.11 accepted |
+| Bumpkin (0.14) | `ValueError: AST node line range (134, 1) is not valid` in `renpy.style.rebuild` → `prepare_screen`, `global_map_screen.rpy` line 12 (45 s probe); `(109, 1)` in `game_system/inventory.rpy:95` (deep probe: a different screen; process exits rc 1) | **engine (8.5.3) bug hit by 7.x screens** | no | same message as Harem_Hotel's CRLF finding ([renpy7-on-8](../renpy7-on-8/README.md)), raised in `sl2/slast.py compile_expr` when a screen with an `action [Show(..), Hide(..)]`-style list is prepared. **No unique source in this game contains a carriage return** (`cr_check.py`), and 64 list-literal-with-call expressions exist while six other games with 26 to 223 of them run fine, so the CRLF explanation is at best incomplete. Trigger not identified |
+| Lint of the others | rc 0; lint messages are asset/name notes only (table below) | none | no | |
+
+Lint message classes (`classify_lint.py`, regex buckets, not a parse of causes):
+
+| game | lint rc | lines | file not loadable (image/audio path) | image file case/spelling | could not evaluate say `who` | unknown/undefined name | unused/other lint warning | Python-related message |
+|---|---|---|---|---|---|---|---|---|
+| A_World_Between_Us | | 134 | 3 | . | 79 | . | 25 | . |
+| AlexsVantasticAdventure | | 19 | . | . | . | . | 3 | . |
+| BlackRose | | 471 | 370 | . | . | . | 32 | . |
+| BloomWar | | 11 | . | . | . | . | . | . |
+| BraveheartAcademy | | 53 | 15 | . | 1 | . | 24 | . |
+| Bumpkin | | 370 | 150 | . | . | . | 188 | . |
+| CabinByTheLake | | 11 | . | . | . | . | . | 2 |
+| DFraction | | 11 | . | . | . | . | 2 | . |
+| DTRemake | | 3 | . | . | . | . | . | . |
+| Dreamscape | | 3 | . | . | . | . | . | . |
+
+
+**Python 2 vs 3 first errors found: zero in game logic, in ten games.** The runtime failures are: one Python 2-only *pickle helper* (CabinByTheLake's `un.rpyc`), three engine strictness/bug cases (DTRemake, Dreamscape, Bumpkin), and asset-path issues in two more (BlackRose, BraveheartAcademy; Bumpkin's lint also has 150, e.g. `Video/x.webm` vs archive `images/video/x.webm`, prefix and case). This agrees with B: these ten games hold almost no Python.
+
+### C2. A_World_Between_Us: H.264 video on 8.5.3
+
+Files: 3 `.mp4` (h264, one 10-bit), 189 `.webm` of which 181 VP9, 7 VP8 and **1 H.264 inside a `.webm` container** (`ffprobe`, from `nix shell nixpkgs#ffmpeg`). Probes `video_probe.rpy` (12 s after start, one `Movie(play=...)` at a time for 3 s; game `main menu` files `gui/mm4.mp4`, `gui/mm5.mp4`, `images/test12.mp4`, `images/animations/ch2/c2_19_1.webm`, plus a VP9 and a VP8 reference; `renpy.screenshot` after 3 s; `signalstats` mean luma of each PNG):
+
+| File | Codec | `renpy.music.get_pos/get_duration("movie")` | Screenshot (mean luma, PNG size) |
+|---|---|---|---|
+| `images/test12.mp4` | h264 | `None` / `0.0` | 42.94, 2 527 328 bytes |
+| `gui/mm4.mp4` | h264 | `None` / `0.0` | 42.94, 2 527 328 bytes (identical to the one above) |
+| `gui/mm5.mp4` | h264 10-bit | `None` / `0.0` | 42.94, 2 527 328 bytes (identical) |
+| `images/animations/ch2/c2_19_1.webm` | h264 | `None` / `0.0` | 42.94, 2 527 328 bytes (identical) |
+| `images/animations/ab_kiss.webm` | vp9 | `None` / `0.0` | **84.40**, 7 473 773 bytes (different content) |
+| `images/animations/lyne4.webm` | vp8 | `None` / `0.0` | **31.95**, 2 346 080 bytes (different content) |
+
+Reading it: the four H.264 shots are byte-size-identical with the same luma, i.e. the same static frame with **no video content drawn**; the VP9 and VP8 shots differ from it and from each other. (The `get_pos/get_duration` values are `None/0.0` for every file, including the two that draw, so they carry no information here.) No `Movie`/codec message appears in `log.txt` or stdout and no traceback: **8.5.3 silently draws nothing for H.264.**
+
+Cause, from the engine library: `strings`-level scan of `lib/py3-mac-universal/librenpython.dylib` in the 8.5.3 SDK (`ffmpeg_decoders.sh`) lists these statically linked ffmpeg decoders: `vp8 vp9 libaom_av1 theora vp3 mpeg1video mpeg2video mpeg4 h263 h263p wmv1 msmpeg4v1-3 flac mp3 mp2 opus vorbis pcm_*`. **No `h264` (and no `hevc`).** [CODE-level confirmation of the observed behaviour; other platforms' libs not checked.] Which places in A_World use them: 2 of the 3 `.mp4` are `gui/mm4.mp4` and `gui/mm5.mp4` (main menu backgrounds) and one is a test file; the `.webm` with H.264 is `ch2/c2_19_1.webm`. Ren'Py 7.4.8 (the game's own engine) played these; whether that engine linked an H.264 decoder was not checked.
+
+## Implications for the route decision
+
+Facts only; the design decision stays with #19.
+
+* **One AST choke point covers all game Python; one source hook covers py2-only syntax; both are installable without editing the engine** (`python early` in the first-loaded file, or a file in `renpy/common/`). Three caches must be versioned with the rule set (`PYC_MAGIC`, `ccache`/`new_ccache.version`, `scache.version`) or a rule change serves stale code. `.py` modules the game imports bypass all of it (Lucky_Paradox's `python-packages` hold most of the silent/loud Python 2 sites in the corpus).
+* **The exception handler can do the "run until it fails, then fix and roll back" design as specified**: identify node and `PyCode`, swap `bytecode` in place (name unchanged, saves unaffected), `renpy.rollback(force=True)`, and the fixed statement ran without a second error (A6). Limits: no rollback in init, function objects keep old code, non-store side effects stay, and Ren'Py already writes `traceback.txt` and a `_tracesave-1` save before any handler runs.
+* **Demand is small in the current corpus.** Zero Python 2 first errors in 10 games in a few minutes of play each; silent-semantics sites are concentrated in 3 of 17 games (AstralLust 381 possibly-int `/`, BlackRose 120, Rift/Harem 12-13); most user-visible breakage on these games is not Python 2: parser strictness (2 of 10), a stale decompiler stub (1), an unexplained engine `ValueError` in screens (1), `images/` prefix assets (2 to 3), and H.264 video that 8.5.3 cannot decode (A_World_Between_Us: 2 menu videos and 1 event video).
+* **A compat module that also owns parser leniency, `search_prefixes`, and video fallback would cover more of what actually failed than Python 2 fixes alone** (fact, not a recommendation): see the C1 table.
+* Verified only for the 10 new games' opening minutes; not visually confirmed; the 7 earlier games were not re-run.
+
+## Reproduce
+
+```sh
+cd research/py2compat-facts && ./fetch.sh                 # upstream/ (fixes.py, python.py from tag 8.5.3.26051504)
+./run_hookprobe.sh run                                    # A: hook + rollback experiment (holds the run lock ~50 s)
+./run_census.sh && python3 tabulate.py                    # B: census.json + table (nix shell nixpkgs#python312)
+python3 run_new.py; python3 run_new.py --deep; python3 run_new.py --cabin-no-unrpyc; python3 run_new.py --video   # C
+python3 tabulate_runtime.py; python3 classify_lint.py     # C tables
+nix shell nixpkgs#python312 -c python3 cr_check.py <game dir>...; ./ffmpeg_decoders.sh
+```
+
+Needs the 8.5.3 SDK at `research/shared-engine-launcher/sdk/renpy-8.5.3-sdk`, the 17 games in `~/Games`, `research/renpy7-differences/scan_python.py` (its `upstream/` is not needed: `census.py` execs it with this directory's `upstream/`). Outputs in `out/` (raw logs, screenshots) and `corpus/` (clones) are gitignored: they contain game text and art.

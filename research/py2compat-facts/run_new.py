@@ -52,12 +52,12 @@ class Lock:
     def __exit__(self, *a): os.rmdir(LOCK)
 
 
-def clone(name, src, tag):
+def clone(name, src, tag, strip=()):
     dest = RUN / f"{name}__{tag}"
     if dest.exists(): shutil.rmtree(dest)
     RUN.mkdir(parents=True, exist_ok=True)
     subprocess.run(["/bin/cp", "-Rc", str(src), str(dest)], check=True)
-    for f in ("log.txt", "traceback.txt", "errors.txt", "probe_progress.txt", "hook_log.txt"):
+    for f in ("log.txt", "traceback.txt", "errors.txt", "probe_progress.txt", "hook_log.txt", *strip):
         (dest / f).unlink(missing_ok=True)
     return dest
 
@@ -77,7 +77,7 @@ def first_exc(text):
 
 def collect(d, out_prefix):
     r = {}
-    for n in ("traceback.txt", "errors.txt", "log.txt", "probe_progress.txt", "probe.out", "video_probe.txt"):
+    for n in ("traceback.txt", "errors.txt", "log.txt", "probe_progress.txt", "probe.out", "video_probe.txt", *[f"video_shot_{i}.png" for i in range(6)]):
         p = d / n
         if p.exists():
             shutil.copy(p, OUT / f"{out_prefix}.{n}")
@@ -98,9 +98,9 @@ def collect(d, out_prefix):
     return r
 
 
-def run_lint(name, src):
-    d = clone(name, src, "lint")
-    out = OUT / f"{name}.lint.out"
+def run_lint(name, src, strip=(), tag="lint"):
+    d = clone(name, src, tag, strip)
+    out = OUT / f"{name}.{tag}.out"
     with Lock(), open(out, "w") as f:
         t = time.time()
         p = subprocess.Popen([str(SDK), str(d), "lint"], stdout=f, stderr=subprocess.STDOUT, env=ENV, start_new_session=True)
@@ -109,7 +109,7 @@ def run_lint(name, src):
         sweep()
     txt = out.read_text(errors="replace")
     r = {"lint_rc": rc, "lint_secs": round(time.time() - t)}
-    r.update({"lint_" + k: v for k, v in collect(d, name + ".lint").items()})
+    r.update({"lint_" + k: v for k, v in collect(d, f"{name}.{tag}").items()})
     stats = [l for l in txt.splitlines() if "Statistics" in l or "analyzed" in l or "lines of Ren'Py" in l]
     r["lint_stats"] = stats[:1]
     r["lint_warning_count"] = sum(1 for l in txt.splitlines() if l.strip().startswith(("game/", "The ", "renpy/")))
@@ -117,15 +117,16 @@ def run_lint(name, src):
     return r
 
 
-def run_probe(name, src, video=False):
-    tag = "video" if video else "start"
-    d = clone(name, src, tag)
+def run_probe(name, src, video=False, strip=(), tag=None, deep=False):
+    tag = tag or ("video" if video else "deep" if deep else "start")
+    d = clone(name, src, tag, strip)
     shutil.copy(PROBE, d / "game/zz_probe.rpy")
     if video: shutil.copy(HERE / "video_probe.rpy", d / "game/zz_video.rpy")
+    if deep: shutil.copy(HERE / "deep_probe.rpy", d / "game/zz_deep.rpy")
     with Lock():
         p = subprocess.Popen([str(SDK), str(d)], stdout=open(d / "probe.out", "w"), stderr=subprocess.STDOUT, env=ENV,
                              start_new_session=True)
-        time.sleep(60 if video else 45)
+        time.sleep(90 if deep else 60 if video else 45)
         alive = p.poll() is None
         rc = None if alive else p.returncode
         try: os.killpg(p.pid, signal.SIGKILL)
@@ -139,17 +140,24 @@ def run_probe(name, src, video=False):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(); ap.add_argument("--only", default=""); ap.add_argument("--video", action="store_true")
+    ap.add_argument("--deep", action="store_true", help="90 s probe with auto-dismiss/auto-choice (deep_probe.rpy)")
+    ap.add_argument("--cabin-no-unrpyc", action="store_true", help="CabinByTheLake with the leftover unrpyc stub game/un.rpyc removed")
     a = ap.parse_args()
     OUT.mkdir(exist_ok=True)
     saves = tempfile.mkdtemp(prefix="py2c_saves_")
     ENV = dict(os.environ, RENPY_PATH_TO_SAVES=saves); ENV.pop("RENPY_SDK", None)
     before = snap()
-    res_path = HERE / ("video_results.json" if a.video else "runtime_results.json")
+    res_path = HERE / ("video_results.json" if a.video else "cabin_no_unrpyc.json" if a.cabin_no_unrpyc else "deep_results.json" if a.deep else "runtime_results.json")
     res = json.loads(res_path.read_text()) if res_path.exists() else {}
     for name, src in GAMES.items():
         if a.only not in name or (a.video and name != "A_World_Between_Us"): continue
-        if a.video:
+        if a.cabin_no_unrpyc:
+            if name != "CabinByTheLake": continue
+            res[name] = {**run_lint(name, src, ("game/un.rpyc",), "lint-no-un"), **run_probe(name, src, strip=("game/un.rpyc",), tag="start-no-un")}
+        elif a.video:
             res[name] = run_probe(name, src, video=True)
+        elif a.deep:
+            res[name] = run_probe(name, src, deep=True, strip=("game/un.rpyc",) if name == "CabinByTheLake" else ())
         else:
             res[name] = {**run_lint(name, src), **run_probe(name, src)}
         res_path.write_text(json.dumps(res, indent=1, sort_keys=True))

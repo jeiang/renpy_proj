@@ -1,0 +1,13 @@
+{
+ "CabinByTheLake": {
+  "lint_rc": 0,
+  "lint_secs": 2,
+  "lint_stats": [
+   "Statistics:"
+  ],
+  "lint_warning_count": 2,
+  "probe_labels": 11,
+  "probe_process_at_45s": "alive",
+  "probe_say_lines": 1
+ }
+}
