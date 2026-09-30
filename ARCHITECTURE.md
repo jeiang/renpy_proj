@@ -6,7 +6,7 @@ The build handoff from the planning map, [Map: Ren'Py 7/8 player feasibility and
 
 A single player binary that runs existing Ren'Py 7 and 8 games on macOS, Linux and Windows, and streams them to a browser on the LAN. It must be faster than stock Ren'Py on high-resolution video, cold scene changes and startup.
 
-Hard goal: a game runs from its `game/` folder alone. `lib/`, `Game.exe` and `Game.sh` are never used. The game's `renpy/` folder, if present, is only read to detect the version.
+Hard goal: a game runs from its `game/` folder alone. The game's `lib/`, `renpy/`, `Game.exe` and `Game.sh` are never executed. `lib/` and `renpy/`, if present, are only read to detect the engine version.
 
 ## Route
 
@@ -101,6 +101,7 @@ flowchart TB
 - Before loading, a static detector checks each save in four layers: metadata, a pickle opcode scan, class resolution, and a stub unpickle with a namemap walk. It agreed with real loads on 356 of 356 saves.
 - The Rust layer must keep `Style`, `Matrix`/`Matrix2D`, `PyExpr`, the `renpy.audio.filter` classes and `Rect` pickle-compatible.
 - Compiled caches live in the player's own per-game cache folder, keyed by build fingerprint. The player never reads a game's shipped `game/cache` (a stale shipped cache is what caused the line-range crash).
+- The player never writes into the game folder. This covers more than `game/cache`: stock Ren'Py writes a `.rpyc` beside every `.rpy` it compiles, and syntax-fixer rewrites force such recompiles. A tracked engine patch sends `.rpyc` output (and `bytecode` caches) to the per-game cache folder, which is read before the game's own `.rpyc` when the source hash matches.
 - Engine patches: common ones are player settings (for example, skipping save signature checks). The rest go through the patch library.
 
 ## User experience ([UX](https://github.com/jeiang/renpy_proj/issues/30))
