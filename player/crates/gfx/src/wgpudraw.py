@@ -1140,26 +1140,26 @@ class WgpuDraw(object):
                     time.sleep(wait)
                     end = time.time()
 
-            # A covered or minimized window gives no drawable, or the compositor hands drawables out at once, so
-            # the present does not block. Hold a frame at the swap interval when the flips came in under half of it.
-            else:
+            # A covered or minimized window gives no drawable, so the present does not block. Hold one refresh.
+            elif covered:
                 wait = self.last_flip_end + 1.0 / self.refresh_rate - end
-                if (covered or end - self.last_flip_end < 0.5 / self.refresh_rate) and wait > 0:
+                if wait > 0:
                     time.sleep(wait)
                     end = time.time()
 
-            # When the window is covered, we can get into a state where no
-            # drawing occurs and everything goes fast. Detect that and
-            # sleep.
+            # A present that returns at once because a drawable was free is normal, so no single flip is judged.
+            # The guard below looks at the last ten flips.
 
             frame_times.append(end)
 
             if len(frame_times) > 10:
                 frame_times.pop(0)
 
-                # If we're running at over 1000 fps, vsync is broken.
-                if (frame_times[-1] - frame_times[0] < .001 * 10):
-                    time.sleep(1.0 / 120.0)
+                # Nine flip intervals that add up to under 90 percent of nine refreshes: the present is not pacing.
+                # Normal Fifo pacing gives nine refreshes, and a short burst of free drawables stays above 90 percent.
+                burst = 0.9 * 9 / self.refresh_rate - (frame_times[-1] - frame_times[0])
+                if burst > 0:
+                    time.sleep(burst / 9)
                     renpy.plog(1, "after broken vsync sleep")
 
         self.last_flip_end = end
