@@ -13,3 +13,4 @@ anyhow = { workspace = true }
 parking_lot = { workspace = true }
 arboard = { version = "3", default-features = false }
 log = { workspace = true }
+gilrs = { workspace = true }

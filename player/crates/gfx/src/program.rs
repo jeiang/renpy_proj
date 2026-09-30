@@ -67,6 +67,8 @@ pub struct ProgramInner {
     pub block_size: u32,
     objs: Mutex<Option<Arc<GpuObjects>>>,
     pipelines: Mutex<HashMap<PipeKey, Arc<RenderPipeline>>>,
+    /// Held while a pipeline builds, so a draw that needs a pipeline the warm-up thread is building waits for it.
+    build_lock: Mutex<()>,
 }
 
 fn comps_of(ty: &str) -> Option<usize> {
@@ -161,6 +163,7 @@ impl ProgramInner {
             block_size: span.max(16),
             objs: Mutex::new(None),
             pipelines: Mutex::new(HashMap::new()),
+            build_lock: Mutex::new(()),
         })
     }
 
@@ -288,6 +291,10 @@ impl ProgramInner {
 
     /// Gets or builds the pipeline for `key`.
     pub fn pipeline(&self, sh: &Shared, key: &PipeKey) -> Result<Arc<RenderPipeline>, String> {
+        if let Some(p) = self.pipelines.lock().get(key) {
+            return Ok(p.clone());
+        }
+        let _building = self.build_lock.lock();
         if let Some(p) = self.pipelines.lock().get(key) {
             return Ok(p.clone());
         }
