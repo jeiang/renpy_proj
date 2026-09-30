@@ -217,6 +217,29 @@ impl Mixer {
         }
     }
 
+    /// Moves `ch` to its queued file when the playing one has shown its last frame. The mixer does
+    /// the same when the audio runs out, but that waits for the next audio callback, which leaves
+    /// a looping movie on its last frame for a frame or two.
+    pub fn hand_over_if_drained(&mut self, ch: usize) {
+        let c = &mut self.channels[ch];
+        if c.queued.is_none()
+            || c.stop_samples == 0
+            || !c.playing.as_ref().is_some_and(|t| t.media.drained())
+        {
+            return;
+        }
+        let mut old_tight = c.playing.as_ref().is_some_and(|t| t.tight);
+        let old = c.playing.take();
+        c.playing = c.queued.take();
+        if let Some(o) = old {
+            self.dying.push(o);
+        }
+        if c.playing.as_ref().is_some_and(|t| t.fadein_ms != 0) {
+            old_tight = false;
+        }
+        self.start_stream(ch, !old_tight);
+    }
+
     /// Position of channel `ch` in ms, or -1.
     pub fn get_pos_ms(&self, ch: usize) -> i64 {
         match self.channels.get(ch) {

@@ -369,8 +369,14 @@ fn deallocate_audio_filter(_audio_filter: &Bound<'_, PyAny>) {}
 fn video_ready(channel: i32) -> PyResult<bool> {
     let sh = {
         let mut m = MIXER.lock();
-        let c = m.channel(channel).map_err(err)?;
-        c.playing.as_ref().map(|t| t.media.shared())
+        m.channel(channel).map_err(err)?;
+        // Ren'Py redraws only when this says a frame is ready, so the move to the queued file
+        // must happen here too, or a loop waits for the next audio callback.
+        m.hand_over_if_drained(channel as usize);
+        m.channels[channel as usize]
+            .playing
+            .as_ref()
+            .map(|t| t.media.shared())
     };
     Ok(sh.is_none_or(|s| s.video_ready()))
 }
@@ -379,8 +385,12 @@ fn video_ready(channel: i32) -> PyResult<bool> {
 fn read_video(py: Python<'_>, channel: i32) -> PyResult<Option<Py<PyVideoFrame>>> {
     let sh = {
         let mut m = MIXER.lock();
-        let c = m.channel(channel).map_err(err)?;
-        c.playing.as_ref().map(|t| t.media.shared())
+        m.channel(channel).map_err(err)?;
+        m.hand_over_if_drained(channel as usize);
+        m.channels[channel as usize]
+            .playing
+            .as_ref()
+            .map(|t| t.media.shared())
     };
     let Some(sh) = sh else { return Ok(None) };
     let r = py.detach(move || sh.read_video());
