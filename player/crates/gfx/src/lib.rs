@@ -5,7 +5,9 @@ pub mod gpu;
 pub mod program;
 mod py;
 pub mod translate;
-mod yuv;
+pub mod yuv;
+
+pub use py::init_module;
 
 use std::ffi::CStr;
 

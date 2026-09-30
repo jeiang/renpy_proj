@@ -79,7 +79,7 @@ impl GpuProgram {
         let _ = std::thread::Builder::new().name("gfx-warm".into()).spawn(move || {
             let text = prog.tr.attributes.iter().any(|(n, _, _)| n.starts_with("a_text_"));
             for (stride, offs, is_text) in crate::gpu::standard_layouts() {
-                if is_text != text && (is_text || !prog.tr.attributes.iter().all(|(n, _, _)| n == "a_position" || n == "a_tex_coord")) && is_text {
+                if is_text && !text {
                     continue;
                 }
                 let offs: HashMap<String, u32> = offs.into_iter().map(|(n, o)| (n.to_string(), o)).collect();
@@ -402,6 +402,11 @@ fn drawable_size() -> (u32, u32) {
 #[pymodule]
 #[pyo3(name = "wgpudraw")]
 pub fn wgpudraw(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    init_module(py, m)
+}
+
+/// Fills module `renpy.gl2.wgpudraw`. Public so that a test build can wrap it in its own extension module.
+pub fn init_module(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Gpu>()?;
     m.add_class::<GpuTexture>()?;
     m.add_class::<GpuProgram>()?;

@@ -356,7 +356,7 @@ pub enum Cmd {
 
 /// The window surface, or a stand-in texture when running headless.
 enum Screen {
-    Window { surface: Surface<'static>, config: SurfaceConfiguration, frame: Option<SurfaceTexture> },
+    Window { surface: Surface<'static>, config: SurfaceConfiguration, frame: Option<SurfaceTexture>, spare: Option<Texture> },
     Headless { tex: Texture },
 }
 
@@ -409,7 +409,7 @@ impl Renderer {
         };
         surface.configure(&sh.device, &config);
         let screen_size = (config.width, config.height);
-        Ok(Renderer::with_screen(sh, Screen::Window { surface, config, frame: None }, format, screen_size))
+        Ok(Renderer::with_screen(sh, Screen::Window { surface, config, frame: None, spare: None }, format, screen_size))
     }
 
     pub fn new_headless(width: u32, height: u32) -> Result<Renderer, String> {
@@ -441,7 +441,7 @@ impl Renderer {
         let (w, h) = (width.max(1), height.max(1));
         self.screen_size = (w, h);
         match &mut self.screen {
-            Screen::Window { surface, config, frame } => {
+            Screen::Window { surface, config, frame, .. } => {
                 *frame = None;
                 config.width = w;
                 config.height = h;
@@ -570,9 +570,9 @@ impl Renderer {
     fn screen_view(&mut self) -> Result<TextureView, String> {
         match &mut self.screen {
             Screen::Headless { tex } => Ok(tex.create_view(&TextureViewDescriptor::default())),
-            Screen::Window { surface, config, frame } => {
+            Screen::Window { surface, config, frame, spare } => {
                 if frame.is_none() {
-                    for attempt in 0..3 {
+                    for _ in 0..3 {
                         match surface.get_current_texture() {
                             CurrentSurfaceTexture::Success(t) | CurrentSurfaceTexture::Suboptimal(t) => {
                                 *frame = Some(t);
@@ -581,19 +581,29 @@ impl Renderer {
                             CurrentSurfaceTexture::Outdated | CurrentSurfaceTexture::Lost => {
                                 surface.configure(&self.sh.device, config);
                             }
-                            CurrentSurfaceTexture::Timeout | CurrentSurfaceTexture::Occluded => {
-                                if attempt == 2 {
-                                    return Err("window surface is not available".into());
-                                }
-                            }
+                            // The window is covered or minimized: draw into a spare target and do not present.
+                            CurrentSurfaceTexture::Timeout | CurrentSurfaceTexture::Occluded => break,
                             other => return Err(format!("cannot acquire the window surface: {other:?}")),
                         }
                     }
                 }
-                frame
-                    .as_ref()
-                    .map(|f| f.texture.create_view(&TextureViewDescriptor::default()))
-                    .ok_or_else(|| "window surface is not available".to_string())
+                if let Some(f) = frame.as_ref() {
+                    return Ok(f.texture.create_view(&TextureViewDescriptor::default()));
+                }
+                let (w, h, fmt) = (config.width, config.height, config.format);
+                if spare.as_ref().map(|t| (t.width(), t.height())) != Some((w, h)) {
+                    *spare = Some(self.sh.device.create_texture(&TextureDescriptor {
+                        label: Some("spare screen"),
+                        size: Extent3d { width: w, height: h, depth_or_array_layers: 1 },
+                        mip_level_count: 1,
+                        sample_count: 1,
+                        dimension: TextureDimension::D2,
+                        format: fmt,
+                        usage: TextureUsages::RENDER_ATTACHMENT,
+                        view_formats: &[],
+                    }));
+                }
+                Ok(spare.as_ref().unwrap().create_view(&TextureViewDescriptor::default()))
             }
         }
     }
@@ -644,7 +654,7 @@ impl Renderer {
                     let mut rp = None;
                     let mut first = true;
                     let empty = p.draws.is_empty();
-                    let mut start = |enc: &mut CommandEncoder, clear_color: bool, first: bool| -> RenderPass<'static> {
+                    let start = |enc: &mut CommandEncoder, clear_color: bool, first: bool| -> RenderPass<'static> {
                         let load = match (&p.clear, clear_color) {
                             (Some(c), true) => LoadOp::Clear(Color { r: c[0], g: c[1], b: c[2], a: c[3] }),
                             _ => LoadOp::Load,
@@ -691,7 +701,7 @@ impl Renderer {
                             rp = Some(start(&mut enc, first, first));
                             first = false;
                         } else if d.clear_depth {
-                            rp = None;
+                            drop(rp.take());
                             rp = Some(start(&mut enc, false, false));
                         }
                         let pass = rp.as_mut().unwrap();
