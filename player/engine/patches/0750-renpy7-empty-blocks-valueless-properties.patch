@@ -31,7 +31,7 @@ diff --git a/renpy/lexer.py b/renpy/lexer.py
 +        except ImportError:
 +            return
 +
-+        event("patch", self.filename, self.number, what)
++        event("syntax", self.filename, self.number, what)
 +
      def expect_block(self, stmt):
          """
