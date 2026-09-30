@@ -19,8 +19,8 @@ use parking_lot::{Condvar, Mutex};
 use crate::source::ByteSource;
 use crate::types::{ColorInfo, Matrix, Plane, PlaneLayout, VideoFrame};
 
-/// Decoded video frames kept ready (as `FRAMES` in `ffmedia.c`).
-const FRAMES: usize = 3;
+/// Decoded video frames kept ready (`ffmedia.c` keeps 3; six ride out a scheduling stall on a loaded machine).
+const FRAMES: usize = 6;
 /// How many seconds early a frame may be handed out.
 const FRAME_EARLY_DELIVERY: f64 = 0.005;
 /// Size of the AVIO buffer.
@@ -33,6 +33,18 @@ const REPLAY_LIMIT: usize = 64;
 static SAMPLE_RATE: AtomicU32 = AtomicU32::new(44100);
 static EQUAL_MONO: AtomicBool = AtomicBool::new(true);
 static CURRENT_TIME: AtomicU64 = AtomicU64::new(0);
+/// Failures the decode thread cannot raise itself. `periodic` (GIL held) writes them to log.txt.
+static NOTES: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+fn note(msg: String) {
+    log::warn!("{msg}");
+    NOTES.lock().push(msg);
+}
+
+pub fn take_notes() -> Vec<String> {
+    std::mem::take(&mut *NOTES.lock())
+}
+
 static REAPER: Mutex<Vec<JoinHandle<()>>> = Mutex::new(Vec::new());
 
 pub fn set_params(rate: u32, equal_mono: bool) {
@@ -92,6 +104,11 @@ struct State {
     audio_queue_samples: i64,
     /// Length to play in frames; negative means play until data ends.
     audio_duration: i64,
+    /// A file with video and no audio track, played to its natural end. The mixer clock feeds
+    /// silence for it, and the file ends when the last frame has been handed out, not when a
+    /// sample count runs out: the two clocks differ by the device start latency, which shows as a
+    /// hold at every loop.
+    video_only: bool,
     audio_read_samples: i64,
 
     vq: VecDeque<Arc<VideoFrame>>,
@@ -222,6 +239,7 @@ impl Media {
                 audio_out_index: 0,
                 audio_queue_samples: 0,
                 audio_duration,
+                video_only: false,
                 audio_read_samples: 0,
                 vq: VecDeque::new(),
                 video_pts_offset: None,
@@ -267,6 +285,16 @@ impl Media {
         let st = &mut *guard;
         if !st.ready {
             out.fill(0.0);
+            return want;
+        }
+
+        if st.video_only {
+            if st.video_finished && st.vq.is_empty() {
+                st.audio_finished = true;
+                return 0;
+            }
+            out[..want * 2].fill(0.0);
+            st.audio_read_samples += want as i64;
             return want;
         }
 
@@ -350,7 +378,7 @@ unsafe extern "C" fn io_read(opaque: *mut c_void, buf: *mut u8, size: c_int) -> 
         Ok(0) => ffi::AVERROR_EOF,
         Ok(n) => n as c_int,
         Err(e) => {
-            log::warn!("media read failed: {e}");
+            note(format!("media read failed: {e}"));
             -ffi::EIO
         }
     }
@@ -371,7 +399,7 @@ unsafe extern "C" fn io_seek(opaque: *mut c_void, offset: i64, whence: c_int) ->
     match src.seek(pos) {
         Ok(p) => p as i64,
         Err(e) => {
-            log::warn!("media seek failed: {e}");
+            note(format!("media seek failed: {e}"));
             -1
         }
     }
@@ -490,11 +518,27 @@ struct Decoder {
     rate: u32,
 }
 
+#[cfg(target_os = "macos")]
+fn raise_thread_priority() {
+    unsafe extern "C" {
+        fn pthread_set_qos_class_self_np(qos: u32, rel: c_int) -> c_int;
+    }
+    // QOS_CLASS_USER_INITIATED: the decoder feeds the screen, so the scheduler must not park it
+    // behind background work on a busy machine.
+    unsafe {
+        pthread_set_qos_class_self_np(0x19, 0);
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn raise_thread_priority() {}
+
 fn decode_thread(sh: Arc<Shared>, src: Box<dyn ByteSource>) {
+    raise_thread_priority();
     match Decoder::open(&sh, src) {
         Ok(mut d) => d.run(),
         Err(e) => {
-            log::warn!("could not open {}: {e}", sh.name);
+            note(format!("could not open {}: {e}", sh.name));
             let mut st = sh.st.lock();
             st.audio_finished = true;
             st.video_finished = true;
@@ -576,7 +620,7 @@ impl Decoder {
                 }
                 d.vctx = d.open_video_context(s);
                 if d.vctx.is_null() {
-                    log::warn!("{}: no usable video decoder", sh.name);
+                    note(format!("{}: no usable video decoder", sh.name));
                     d.vstream = -1;
                 } else {
                     let codec = std::ffi::CStr::from_ptr((*(*d.vctx).codec).name).to_string_lossy();
@@ -586,7 +630,7 @@ impl Decoder {
             if d.astream >= 0 {
                 d.actx = open_codec(streams[d.astream as usize], None);
                 if d.actx.is_null() {
-                    log::warn!("{}: no usable audio decoder", sh.name);
+                    note(format!("{}: no usable audio decoder", sh.name));
                     d.astream = -1;
                 }
             }
@@ -617,6 +661,7 @@ impl Decoder {
                             ad = (ad - (sh.skip * rate as f64) as i64).max(0);
                         }
                         st.audio_duration = ad;
+                        st.video_only = ad >= 0 && sh.want_video && d.astream < 0 && !d.vctx.is_null();
                     }
                 }
                 st.has_video = d.vstream >= 0;

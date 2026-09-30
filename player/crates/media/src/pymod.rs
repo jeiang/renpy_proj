@@ -473,7 +473,15 @@ fn quit(py: Python<'_>) {
 }
 
 #[pyfunction]
-fn periodic() {
+fn periodic(py: Python<'_>) {
+    let notes = stream::take_notes();
+    if !notes.is_empty()
+        && let Ok(log) = py.import("renpy.display").and_then(|d| d.getattr("log"))
+    {
+        for n in notes {
+            let _ = log.call_method1("write", ("media: %s", n));
+        }
+    }
     let dying = {
         let mut m = MIXER.lock();
         m.handle_synchro_start();
