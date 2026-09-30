@@ -25,10 +25,10 @@ index d6301c0..b99e272 100644
 +def is_video_frame(obj):
 +    """
 +    True if `obj` is a decoded video frame from the player's media backend
-+    (renpy.audio.renpysound.read_video returns a PyVideoFrame).
++    (renpy.audio.renpysound.read_video returns a renpysound.VideoFrame).
 +    """
 +
-+    return type(obj).__name__ == "PyVideoFrame"
++    return type(obj).__name__ == "VideoFrame"
 +
 +
 +def get_movie_texture_gpu(channel, tex, mask_channel, side_mask, mipmap):
