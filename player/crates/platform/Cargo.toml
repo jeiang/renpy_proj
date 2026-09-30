@@ -8,4 +8,9 @@ publish.workspace = true
 
 [dependencies]
 pyo3 = { workspace = true }
+pyo3-ffi = { workspace = true }
 winit = { workspace = true }
+anyhow = { workspace = true }
+parking_lot = { workspace = true }
+arboard = { version = "3", default-features = false }
+log = { workspace = true }
