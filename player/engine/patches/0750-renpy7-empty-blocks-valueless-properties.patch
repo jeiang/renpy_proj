@@ -1,0 +1,66 @@
+# Reason: Ren'Py 7 games. Ren'Py 7 accepted `scene x with fade:`, `show x:` and `screen x:` with a colon and no block under it, and a screen property with no value (`focus_mask`, `imagebutton auto:`). Ren'Py 8.5.3 rejects both as parse errors. The rules apply only when `renpy.lexer.renpy7_syntax` is set (Ren'Py 7 detection).
+
+diff --git a/renpy/lexer.py b/renpy/lexer.py
+--- a/renpy/lexer.py
++++ b/renpy/lexer.py
+@@ -31,6 +31,13 @@
+ import linecache
+ 
+ import renpy
++
++# Player patch: true for a Ren'Py 7 game; `_player.boot` sets it from the Ren'Py 7 detection.
++renpy7_syntax = False
++
++# Player patch: statements whose colon Ren'Py 7 accepted with no block under it (`scene x with fade:`,
++# `show x:`, `screen x:`). Only a Ren'Py 7 game gets this (`renpy7_syntax`).
++RENPY7_EMPTY_BLOCKS = frozenset(["scene statement", "show statement", "screen statement"])
+ import renpy.vfs  # Player patch: virtual renpy/common files.
+ 
+ 
+@@ -942,6 +949,18 @@
+                 "Please check this line's indentation. You may have forgotten a colon (:).".format(stmt)
+             )
+ 
++    def renpy7_leniency(self, what):
++        """
++        Player patch: tells the runtime report that a Ren'Py 7 leniency was used here.
++        """
++
++        try:
++            from _player.compat import event
++        except ImportError:
++            return
++
++        event("patch", self.filename, self.number, what)
++
+     def expect_block(self, stmt):
+         """
+         Called to indicate that the statement requires that a non-empty
+@@ -949,6 +968,10 @@
+         """
+ 
+         if not self.subblock:
++            if stmt in RENPY7_EMPTY_BLOCKS and renpy7_syntax:
++                self.renpy7_leniency("%s with no block accepted" % stmt)
++                return
++
+             self.error("%s expects a non-empty block." % stmt)
+ 
+     def has_block(self):
+diff --git a/renpy/sl2/slparser.py b/renpy/sl2/slparser.py
+--- a/renpy/sl2/slparser.py
++++ b/renpy/sl2/slparser.py
+@@ -331,7 +331,12 @@
+ 
+             expr = l.comma_expression()
+             if expr is None:
+-                l.error("the {} keyword argument was not given a value.".format(name))
++                if renpy.lexer.renpy7_syntax:
++                    # Player patch: Ren'Py 7 took a screen property with no value (`focus_mask`, `auto`) as None.
++                    l.renpy7_leniency("screen property %s has no value, None used" % name)
++                    expr = renpy.lexer.make_pyexpr("None", l.filename, l.number, l.column, l.text, l.pos)
++                else:
++                    l.error("the {} keyword argument was not given a value.".format(name))
+ 
+             if (not keyword) and (not renpy.config.keyword_after_python):
+                 try:
