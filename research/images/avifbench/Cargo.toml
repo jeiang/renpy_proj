@@ -1,0 +1,9 @@
+[package]
+name = "avifbench"
+version = "0.0.0"
+edition = "2021"
+publish = false
+[dependencies]
+avif-decode = "1"
+image = { version = "0.25", default-features = false, features = ["avif-native"] }
+dav1d = "0.10"

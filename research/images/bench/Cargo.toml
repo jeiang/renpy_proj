@@ -1,0 +1,31 @@
+[package]
+name = "imgbench"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+png = "0.18"
+zune-png = "0.5"
+zune-core = "0.5"
+spng = "0.2.0-alpha.3"
+lodepng = "3"
+zune-jpeg = "0.5"
+jpeg-decoder = "0.3"
+turbojpeg = { version = "1", features = ["image"], optional = true }
+mozjpeg = { version = "0.10", optional = true }
+image-webp = "0.2"
+webp = "0.3"
+rayon = "1"
+libwebp-sys = "0.9"
+intel_tex_2 = { version = "0.4", optional = true }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+
+[[bin]]
+name = "bc7"
+required-features = ["bc7"]
+
+[features]
+default = []
+extra = ["turbojpeg", "mozjpeg"]
+bc7 = ["intel_tex_2"]

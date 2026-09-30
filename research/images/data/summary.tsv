@@ -1,0 +1,18 @@
+fmt	decoder	ms_per_MP	files	max_abs_diff_vs_ref
+png	SDL2_image via pygame_sdl2 (stock 8.5.3)	11.05	12	-
+png	image(crate)	5.08	12	1
+png	png	5.20	12	0
+png	zune-png	5.31	12	0
+png	lodepng	6.56	12	0
+png	spng	12.93	12	0
+jpg	SDL2_image via pygame_sdl2 (stock 8.5.3)	7.07	8	-
+jpg	turbojpeg	3.29	8	0
+jpg	mozjpeg	3.77	8	0
+jpg	zune-jpeg	4.11	8	5
+jpg	image(crate)	4.30	8	5
+jpg	jpeg-decoder	7.58	8	3
+webp	SDL2_image via pygame_sdl2 (stock 8.5.3)	7.23	12	-
+webp	libwebp+threads	6.59	12	0
+webp	libwebp(webp)	7.10	12	0
+webp	image(crate)	13.03	12	0
+webp	image-webp	13.59	12	0

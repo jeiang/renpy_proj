@@ -1,0 +1,7 @@
+file	decoder	min_ms	w	h
+a4k.avif	image(avif-native,dav1d)	31.10	3840	2160
+a4k.avif	avif-decode(dav1d)	161.55	3840	2160
+a0.avif	image(avif-native,dav1d)	12.66	1920	1080
+a0.avif	avif-decode(dav1d)	51.48	1920	1080
+a1.avif	image(avif-native,dav1d)	12.71	1920	1080
+a1.avif	avif-decode(dav1d)	50.86	1920	1080
