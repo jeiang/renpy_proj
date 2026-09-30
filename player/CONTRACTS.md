@@ -139,3 +139,8 @@ Pure-Rust text replaces the stock Cython FreeType/HarfBuzz modules and the LTR-o
 ## `library` (CLI and GUI)
 
 `player` subcommands: `player <game>` (run), `player serve <game>` (M5, reserved), `player scan <folder>...`, `player list`, `player mods ...`, `player report <game>`. Scanned folders and found games live in `<data>/library.toml`. `player` with no arguments opens the library window (egui on the existing winit/wgpu stack), which lists games with engine version, Ren'Py 7 status, mods and the pre-flight result, and launches a game as a child process.
+
+## M2 additions (merged)
+
+- `gfx`: `renpy.gl2.wgpudraw.gpu_memory_bytes() -> int | None` (Metal: `recommendedMaxWorkingSetSize`; other backends None). `screenshot(None)` draws the last surface tree, so save thumbnails are real. Shader programs are translated after `ShaderCache.load()` and their pipelines build on background threads.
+- `platform`: joysticks and controllers through gilrs with SDL numbering. Gap: gilrs gives no raw element lists, so `Joystick` axis and button counts grow as elements are seen, and hats and balls are 0.
