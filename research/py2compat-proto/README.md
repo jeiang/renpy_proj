@@ -32,7 +32,7 @@ Port-patch loader, end to end, on AstralLust: a TOML file in the patch library (
 | Bumpkin 0.14 | New Game, 186 lines, then `jump test_inv` shows the inventory screen. Was `ValueError: AST node line range`: see below |
 | Alex's Vantastic Adventure | menu only. My probe never got past the menu (`cmd start` not executed); it does the same with the module **off**, so it is a probe or game issue, cause not chased |
 | **Harem Hotel (7.4.11)** | **FAIL, still**: two Ren'Py 7 parse leniencies were found and fixed (`scene x with fade:` and `screen x` with a colon and an empty block), then the next parse error is `print "..."` in a Python block in `game/scripts/Garden/GardenUpdates.rpy:24` that `fix_tokens` cannot rescue (another py2-only construct in the same block is my guess, not checked). No traceback, the game shows Ren'Py's script-error screen |
-| SecretIsland, WaifuAcademy, DOF (bundled Python 3.9) | not run with this build; detection reads `lib/python3.9` and leaves them alone (unit checked in the rules, see `_bundled_engine`) [INFERENCE for the live run] |
+| SecretIsland, WaifuAcademy, DOF (bundled Python 3.9) | not run with this build. `_bundled_engine` reads `lib/python3.9` and should leave them alone [INFERENCE, not exercised] |
 
 Not visually confirmed beyond what is written above; Windows/Linux not tried. Each game was run once.
 
