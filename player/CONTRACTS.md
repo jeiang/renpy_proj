@@ -149,3 +149,37 @@ Pure-Rust text replaces the stock Cython FreeType/HarfBuzz modules and the LTR-o
 - `vfs` (merged): `Vfs::list_dir` returns `io::Result`. Extra API: `prepare_write`, `mkdir`, `rmdir`, `layer_dirs`, `is_virtual`, `read_order`, `write_order`, `game_key`, `resolve_game`. `_player.boot` changes the working directory to the base folder before it installs the vfs. Not virtual: bytes paths, file descriptors, `dir_fd` and `os.fwalk`; symlinks from outside into the base folder; a whiteout of one module file for the import hook. The mod list is fixed at start. `media` resolves the paths it opens itself through `vfs::get()`.
 - `text` (merged): pure-Rust `renpy.text.ftfont`, `hbfont` and `bidi` (skrifa, rustybuzz, unicode-bidi). FreeType and HarfBuzz are no longer linked. Known differences from stock: 1 px hinted-advance differences for some CFF glyphs under autohint; synthesized vertical metrics for fonts without `vmtx`; color bitmap and COLR glyphs are blank; `antialias=False` thresholds coverage at 128.
 - `gfx` (M2 fix): `Gpu.set_vsync(bool)` and `Gpu.skipped_frames()`; the present mode follows the swap interval (`Fifo` when vsync > 0, else `Immediate`). `gpu_memory_bytes()` asks the default Metal device when the renderer has no device yet, because `im.cache.init()` runs before display init.
+
+# M3 contracts
+
+Added for "M3: Ren'Py 7 games via the Python 2 compatibility module" (issue #36). Design: ARCHITECTURE.md "Ren'Py 7 games". Prototype: branch `prototype/py2compat-proto`, checked out at `.worktrees/py2compat-proto/research/py2compat-proto/` (`module/renpy/py2compat.py`, `module/renpy/common/00py2compat.rpy`, README "How it works" items 1-9). Facts: `research/py2compat-facts`, `research/renpy7-differences`, `research/renpy7-on-8`, `research/renpy7-impact`.
+
+## Detection
+
+`_player.compat.detect(basedir, gamedir) -> Detection(renpy7: bool, reason: str, engine_version: str | None)`, run in `_player.boot` before any game script loads. Order: env `PLAYER_PY2COMPAT=on|off`; the game's `lib/python2.7` or `lib/py2-*` (Ren'Py 7), `lib/python3*`/`py3-*` (not); `renpy/__init__.py` `version_tuple`; for a bare `game/`, a sample of `.rpyc` `PyCode` states without the `py` field. The pre-flight report's `renpy7` and `engine_version` use this function (the saves slice reads the result, it does not repeat the logic).
+
+## Compatibility module (`compat`)
+
+`player/engine/python/_player/compat/` (package). Active only when `renpy7` is true. It ports prototype items 2-5, 7-9: the AST Python 2 semantics pass hooked in front of `renpy.python.wrap_node` for game code only; `exec` in functions; the error-driven mixed-type ordering fix with rollback and retry; Ren'Py 7 engine differences (`images/` search prefix, decompiler stubs, `.rpyc` pickle-helper failures skipped and logged); the loose `.py` import hook; the rules version folded into every compile cache key. Script-parser leniencies are the syntax slice's (below). A fixed runtime error is written to the runtime report, not `traceback.txt`, and shown once in game as a notice. An unfixed error follows stock behavior (`traceback.txt` in the log dir).
+
+Runtime report: `<data>/reports/<game key>/runtime.jsonl`, one JSON object per event: `{"time", "kind": "rewrite"|"fix"|"syntax"|"patch"|"skip", "file", "line", "detail"}`. `player report` prints a summary of it after the pre-flight report.
+
+## Syntax fixer (`py2fix`)
+
+Rust crate `player/crates/py2fix`, builtin `_player_py2fix`: `fix(source: str, filename: str) -> (str, list[(line, col, rule)])`. A token-level rewrite of Python 2-only syntax into Python 3 that keeps line numbers: `print` statements (incl. `>>f`, trailing comma), `exec` statements, backticks, `<>`, `ur''`/`u''` prefixes where invalid, old octal literals, `except X, e`, `raise E, v`, tuple parameters, long suffix `L`. The compatibility module calls it only when `compile` of a Ren'Py 7 game's Python fails with `SyntaxError`, then logs each rewrite as a `syntax` event. Ren'Py script-language leniencies of Ren'Py 7 (valueless screen properties, `scene x with t:` and `screen x:` with empty blocks, and any others the corpus shows) are engine patches 0750-0799, active only for Ren'Py 7 games.
+
+## Patch library (`patches`)
+
+Rust crate `player/crates/patches`, builtin `_player_patches`. Patch files: `<data>/patches/<fingerprint>/*.toml` and `<data>/patches/<game key>/*.toml`. The fingerprint is the hash of the script set as in the prototype item 6, exposed as `_player.compat.fingerprint()` after load. Format (prototype item 6):
+
+```toml
+[[patch]]
+file = "game/events/special/prologue.rpy"
+line = 236
+original_hash = "sha1:ec7114f7"
+source = '''
+Lexi.name = _("PatchedGirl")
+'''
+```
+
+Rust parses and validates; Python applies after load and before the first init block, replacing `code.source` and `code.bytecode` of the matched `PyCode` in memory. Mismatches are reported with the hash found. Patch file overrides (whole files) are the vfs `patches/<game key>/files/` layer. CLI: `player patches <game> list|validate|apply-test` (`apply-test` loads the game headless, as `lint` does, and reports which patches match).
