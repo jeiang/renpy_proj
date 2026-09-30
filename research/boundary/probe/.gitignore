@@ -1,0 +1,5 @@
+__pycache__/
+*.so
+host
+*.c.out
+shim/shimpkg/consumer.c
