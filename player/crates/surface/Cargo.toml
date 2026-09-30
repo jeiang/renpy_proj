@@ -15,3 +15,4 @@ image-webp = "0.2"
 jpeg-encoder = "0.7"
 rayon = "1"
 parking_lot = "0.12"
+ffmpeg-sys-next = { workspace = true, features = ["swscale"] }

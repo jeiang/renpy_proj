@@ -19,7 +19,7 @@ pub const INIT_JXL: u32 = 16;
 pub const INIT_AVIF: u32 = 32;
 
 /// Formats this build decodes.
-const SUPPORTED: u32 = INIT_JPG | INIT_PNG | INIT_WEBP;
+const SUPPORTED: u32 = INIT_JPG | INIT_PNG | INIT_WEBP | INIT_AVIF;
 
 pub struct Decoded {
     pub width: u32,
@@ -115,22 +115,29 @@ pub fn decode(data: &[u8]) -> Result<Decoded, String> {
         decode_jpeg(data)
     } else if data.len() >= 12 && &data[..4] == b"RIFF" && &data[8..12] == b"WEBP" {
         decode_webp(data)
+    } else if is_ffmpeg_image(data) {
+        crate::avdec::decode(data)
     } else {
-        let kind = if data.starts_with(b"GIF8") {
-            "GIF"
-        } else if data.starts_with(b"BM") {
-            "BMP"
-        } else if data.len() >= 12 && &data[4..8] == b"ftyp" {
-            "AVIF/HEIF"
+        let kind = if data.len() >= 12 && &data[4..8] == b"ftyp" {
+            "HEIF"
         } else if data.starts_with(b"<?xml") || data.starts_with(b"<svg") {
             "SVG"
         } else {
             "unknown"
         };
         Err(format!(
-            "Unsupported image format ({kind}); this player decodes PNG, JPEG and WebP."
+            "Unsupported image format ({kind}); this player decodes PNG, JPEG, WebP, AVIF, GIF, BMP and TGA."
         ))
     }
+}
+
+/// Formats FFmpeg decodes here. TGA has no header magic, so only files with
+/// the TGA 2.0 footer count.
+fn is_ffmpeg_image(data: &[u8]) -> bool {
+    data.starts_with(b"GIF8")
+        || data.starts_with(b"BM")
+        || (data.len() >= 12 && &data[4..8] == b"ftyp" && matches!(&data[8..12], b"avif" | b"avis"))
+        || data.ends_with(b"TRUEVISION-XFILE.\0")
 }
 
 #[pyfunction]

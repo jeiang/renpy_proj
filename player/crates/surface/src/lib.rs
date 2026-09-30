@@ -5,6 +5,7 @@
 //! `renpy.pygame.surface`, `renpy.pygame.image`, `renpy.pygame.transform`,
 //! `renpy.pygame.draw` and `_renpy`.
 
+mod avdec;
 mod blit;
 mod buf;
 mod draw;
