@@ -5,6 +5,8 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
+build = "build.rs"
 
 [dependencies]
 pyo3-ffi = { workspace = true }
+anyhow = { workspace = true }
