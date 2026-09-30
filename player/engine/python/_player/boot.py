@@ -6,6 +6,7 @@ Reads its settings from sys.argv:
     --data <dir>       the player data dir (default: the platform app-data folder `renpy-player`)
     --renderer <name>  draw backend name (sets RENPY_RENDERER)
     --logdir <dir>     where log.txt and traceback.txt go (default: <data>/logs/<game key>)
+    --harness-script <file>  an .rpy or .rpym file served to the script loader as an extra game script
 
 Every other argument goes to Ren'Py (for example `lint` or `compile`).
 
@@ -26,12 +27,12 @@ settings = {}
 
 
 def parse_args(argv):
-    game = data = renderer = logdir = None
+    game = data = renderer = logdir = harness = None
     rest = []
     it = iter(argv)
 
     for a in it:
-        if a in ("--game", "--data", "--renderer", "--logdir"):
+        if a in ("--game", "--data", "--renderer", "--logdir", "--harness-script"):
             try:
                 v = next(it)
             except StopIteration:
@@ -43,15 +44,17 @@ def parse_args(argv):
                 data = v
             elif a == "--renderer":
                 renderer = v
+            elif a == "--harness-script":
+                harness = v
             else:
                 logdir = v
         else:
             rest.append(a)
 
     if not game:
-        raise SystemExit("usage: --game <dir> [--data <dir>] [--renderer <name>] [--logdir <dir>] [renpy args]")
+        raise SystemExit("usage: --game <dir> [--data <dir>] [--renderer <name>] [--logdir <dir>] [--harness-script <file>] [renpy args]")
 
-    return game, data, renderer, logdir, rest
+    return game, data, renderer, logdir, harness, rest
 
 
 def default_data_dir():
@@ -145,6 +148,52 @@ def install_loader(provider, commondir):
         loader.file_open_callbacks.append(opener)
 
 
+class HarnessProvider:
+    """renpy.vfs provider that serves one script from outside the game folder."""
+
+    def __init__(self, name, path):
+        self.name = name
+        self.path = path
+
+    def exists(self, rel):
+        return rel == self.name
+
+    def read(self, rel):
+        if rel != self.name:
+            raise KeyError(rel)
+
+        with io.open(self.path, "rb") as f:
+            return f.read()
+
+
+def install_harness(path, harnessdir):
+    """
+    Serves `path` as the game script zzz_harness.rpy (or .rpym). It is listed as a game file under a
+    virtual directory, so the player compiles it into its cache and never writes into the game folder.
+    """
+
+    import renpy.loader
+    import renpy.vfs
+    from renpy.pygame.rwobject import RWopsIO
+
+    name = "zzz_harness" + os.path.splitext(path)[1]
+    provider = HarnessProvider(name, path)
+    renpy.vfs.register(harnessdir, provider)
+    loader = renpy.loader
+
+    def scan_harness(add, seen):
+        add(harnessdir, name, loader.game_files, seen)
+
+    def open_harness(fn):
+        if fn == name:
+            return io.BufferedReader(RWopsIO.from_buffer(provider.read(name), name=name))
+
+        return None
+
+    loader.scandirfiles_callbacks.append(scan_harness)
+    loader.file_open_callbacks.append(open_harness)
+
+
 # The functions below are what renpy.py provides in a stock install. They are called as
 # renpy.__main__.<name>: bootstrap.py and main.py use them.
 
@@ -162,6 +211,9 @@ def path_to_common(renpy_base):
     renpy.config.player_cache_dir = settings["cachedir"]
     renpy.vfs.register(commondir, settings["provider"])
     install_loader(settings["provider"], commondir)
+
+    if settings["harness"]:
+        install_harness(settings["harness"], settings["harnessdir"])
 
     return commondir
 
@@ -202,7 +254,7 @@ def predefined_searchpath(commondir):
 def main():
     import _player.build as build
 
-    game, data, renderer, logdir, rest = parse_args(sys.argv[1:])
+    game, data, renderer, logdir, harness, rest = parse_args(sys.argv[1:])
 
     basedir, gamedir = resolve_game(game)
 
@@ -223,7 +275,18 @@ def main():
         cachedir=os.path.join(data, "cache", key, build.FINGERPRINT),
         logdir=logdir or os.path.join(data, "logs", key),
         provider=ZipProvider(find_common_zip()),
+        harness=None,
     )
+
+    if harness:
+        if not os.path.isfile(harness):
+            raise SystemExit("harness script not found: %s" % harness)
+
+        if not harness.endswith((".rpy", ".rpym")):
+            raise SystemExit("harness script must be an .rpy or .rpym file: %s" % harness)
+
+        settings["harness"] = harness
+        settings["harnessdir"] = renpy_base + "/harness"
 
     os.makedirs(settings["cachedir"], exist_ok=True)
 
