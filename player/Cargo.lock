@@ -1477,6 +1477,7 @@ dependencies = [
  "parking_lot",
  "pyo3",
  "pyo3-ffi",
+ "vfs",
 ]
 
 [[package]]
