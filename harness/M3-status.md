@@ -41,7 +41,7 @@ Corpus notes (all in `corpus.toml` comments):
 
 ## Item 3: AlexsVantasticAdventure "menu only"
 
-The prototype saw `cmd start` never run. The staged driver does not reproduce it on any engine: stock 7.4.8 (full tier, `harness/out/AlexsVantasticAdventure-stock`), stock 8.5.3 on the released clone (module off: `Conversion: harness/out/m3-alex853` was a scratch run in `/tmp`, same digest `9c40dbfca5ce2bec`), and the player (`harness/out/AlexsVantasticAdventure-player`). `cmd start` runs at once (`label start` after 0.0 s) and the intro says 42 to 47 lines. Then the game reaches `label mainloop`, which ends in `call screen maingame` (a map with buttons). A driver that auto-advances loops there: `functionvan`, `functioncozy`, `mainloopreturn` repeat for ever with no new say line. That is the game cause. The prototype's "menu only" reading is not a game or engine fault [INFERENCE: its probe differed from this driver; the cause was not chased further].
+The prototype saw `cmd start` never run. The staged driver does not reproduce it on any engine: stock 7.4.8 (full tier, `harness/out/AlexsVantasticAdventure-stock`), stock 8.5.3 on the released clone (`--stock-engine sdk-853`, module off; a scratch run in `/tmp`, same probe digest `9c40dbfca5ce2bec` as stock 7.4.8), and the player (`harness/out/AlexsVantasticAdventure-player`). `cmd start` runs at once (`label start` after 0.0 s) and the intro says 42 to 47 lines. Then the game reaches `label mainloop`, which ends in `call screen maingame` (a map with buttons). A driver that auto-advances loops there: `functionvan`, `functioncozy`, `mainloopreturn` repeat for ever with no new say line. That is the game cause. The prototype's "menu only" reading is not a game or engine fault [INFERENCE: its probe differed from this driver; the cause was not chased further].
 
 ## Player runs, `--tier full --baseline`
 
@@ -67,7 +67,7 @@ Run conditions: `--stage-scale 4` (the first run of the staged driver; measured 
 | MaidandMaidens | pass | pass, equal | pass | pass | pass |
 | WhiteRussian | pass | pass, equal | pass | pass | pass |
 
-All 16 games that ran past 8 lines show the same executed dialogue as stock (probe `baseline_dialogue_equal`). Saved stock Python 2 saves load in the player in all 17 games (resume check; `showing_tags_match_save` true everywhere except where the check does not measure it). Video: presented 60 fps for all 14 with a movie; decoded fps equal the movie rate (stock decodes the same). Stock "presented" shows 100 to 120 because stock Ren'Py 7 redraws at 120 Hz; the gate caps the ratio at 1.
+All 17 games show the same executed dialogue as stock over the lines they ran (probe `baseline_dialogue_equal`; DFraction only 16 lines). The Python 2 stock saves load in the player in all 17 games and the showing tags match the save in all 17 (`showing_tags_match_save`); DFraction then crashes on bug 1 below. Video: presented 60 fps for all 14 with a movie; decoded fps equal the movie rate (stock decodes the same). Stock "presented" shows 100 to 120 because stock Ren'Py 7 redraws at 120 Hz; the gate caps the ratio at 1.
 
 ### Player bugs found (drives wave 2)
 
