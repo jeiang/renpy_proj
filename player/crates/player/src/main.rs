@@ -4,6 +4,7 @@
 
 mod patches_cli;
 mod report_cli;
+mod serve_cli;
 mod vfs_cli;
 
 use std::path::{Path, PathBuf};
@@ -70,7 +71,8 @@ const SUBCOMMANDS: &str = "\
        player report <game> [--data <dir>]   pre-flight report of a game
        player patches <game> list|validate|apply-test   port patches of a game
        player mods <game> list|enable|disable|order ... [--data <dir>]
-       player serve <game>                   reserved (M5)";
+       player serve <game> [--bind <addr>] [--port <n>] [--size <WxH>] [--fps <n>] [--kbps <n>]
+                  [--encoder <name>] [--latency-overlay]   stream the game to a browser (headless)";
 
 /// Splits `--data <dir>` out of `args`. The data folder defaults like `_player.boot.default_data_dir`.
 fn take_data(args: Vec<String>) -> Result<(Vec<String>, PathBuf)> {
@@ -192,7 +194,7 @@ fn main() -> Result<()> {
                     cmd_report(&rest, &data)?
                 }
             }
-            "serve" => bail!("player serve is reserved for M5 (streaming) and is not implemented"),
+            "serve" => serve_cli::run(args.split_off(1), run_game)?,
             "help" => bail!("{USAGE}\n{SUBCOMMANDS}"),
             _ => run_game(args)?,
         }
