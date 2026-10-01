@@ -639,6 +639,7 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
     env["PLAYER_COMPAT_NOTICE"] = "off"
     env["HZ_INPUT_ANSWER"] = str(g.get("input_answer", "Tester"))
     env["HZ_INPUT_LIMIT"] = str(g.get("input_limit", 3))
+    env["HZ_SCREEN_ACTIONS"] = ";".join("%s=%s" % kv for kv in g.get("screen_actions", {}).items())
     if not inject:
         env.pop("HARNESS_DIR")
     res = {"name": name, "engine": engine, "stripped_game_cache": strip, "argv": [a.replace(str(top), "<run>") for a in argv], "plan_log": []}

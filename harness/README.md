@@ -93,3 +93,5 @@ A plan is a text file of ops, one per line: `cmd TEXT` sends a command to the ga
 - The player runs with `PLAYER_COMPAT_NOTICE=off`: the Ren'Py 7 compatibility notice would otherwise be in the screenshots. Fixes stay in `reports/<key>/runtime.jsonl`.
 
 - Input screens are answered with `input_answer` (default "Tester"). More than `input_limit` (default 3) answers in one launch fails the stage with `cmd-error input-loop`: a game that rejects the answer would otherwise loop, and its rejection lines would count as executed dialogue (Braveheart did this until M3).
+
+- `screen_actions` (corpus.toml) answers custom choice screens the driver cannot click: when the named screen shows, the action expression runs, as a click on that button would. Without it a `call screen` ends with no choice and the game may fail later (Braveheart: `year` stayed 0).

@@ -21,6 +21,9 @@ init 999 python:
 
     _HZ_INPUT = os.environ.get("HZ_INPUT_ANSWER") or "Tester"
     _HZ_INPUT_LIMIT = int(os.environ.get("HZ_INPUT_LIMIT") or "3")
+    # Per-game "screen=action" pairs, separated by ";": an action expression (store names) run once each time that
+    # screen is showing, for custom choice screens the driver cannot answer (as a click on that button would).
+    _HZ_SCREEN_ACTIONS = [tuple(x.split("=", 1)) for x in (os.environ.get("HZ_SCREEN_ACTIONS") or "").split(";") if "=" in x]
 
     def _hz_write(s):
         if isinstance(s, bytes):   # py2 str holding non-ASCII text
@@ -175,6 +178,13 @@ init 999 python:
         st["n"] += 1
         try:
             if st["auto"] or st["adv"] is not None:
+                for _scr, _act in _HZ_SCREEN_ACTIONS:
+                    if renpy.get_screen(_scr) and st["n"] % 4 == 0:
+                        _hz_write("auto: screen %s %s" % (_scr, _act))
+                        rv = renpy.run(eval(_act, renpy.store.__dict__))
+                        if rv is not None:
+                            renpy.end_interaction(rv)
+                        return
                 if renpy.get_screen("input") and st["n"] % 4 == 0:
                     # A game that rejects the answer asks again; count answers so a rejection loop fails the
                     # stage instead of counting the game's "invalid name" lines as executed dialogue.
