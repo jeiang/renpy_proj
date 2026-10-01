@@ -28,7 +28,7 @@ The page puts stock, player and a difference image (|a-b| times 4) side by side.
 - **Mip-level seams** (`tilt`, `mina`, `mip` rows): horizontal bands where sharpness changes abruptly across the plane (one band per mip level). Compare where the bands are, and whether the player's bands are in the same places and as hard as stock's.
 - **Nearest rows:** both halves should look the same in both engines. Any left/right difference there is a flag leak.
 
-Numbers under each row (0 to 255 scale; the page header explains each): `mean_abs`, the same for the left and the right half, the share of pixels off by more than 24, and `own on/off` (how much the flag changes one engine's picture). Numbers do not tell which engine is "right"; they show where to look.
+Numbers under each row (0 to 255 scale; the page header explains each): `mean_abs`, the same for the left and the right half, the share of pixels off by more than 24, and `own on/off` (how much the flag changes one engine's picture). `own on/off` is a plain pixel difference of the two halves of one picture, so read it only as a stock-against-player comparison within a row, not as a size of the effect (the `tilt` halves are also different views, and on Linux the 1896x1056 window has pillarbox bars). Numbers do not tell which engine is "right"; they show where to look.
 
 ## Rerun
 
