@@ -22,6 +22,11 @@ WINTOOL_SRC = HARNESS / "tools" / "wintool.swift"
 WINTOOL = HARNESS / "bin" / "wintool"
 MAC_CLEAN_PATH = "/usr/bin:/bin:/usr/sbin:/sbin"
 LINUX_CLEAN_PATH = "/run/wrappers/bin:/run/current-system/sw/bin:/usr/bin:/bin"
+# Libraries that the stock Ren'Py engines (dynamic ELF files from the game or the SDK) load from the system. NixOS has no
+# libGL.so.1 or libX11 in its nix-ld set, so they are built from nixpkgs (cached after the first use) and appended to
+# NIX_LD_LIBRARY_PATH. Mesa's own driver libraries come from /run/opengl-driver/lib.
+LINUX_RUNTIME_PKGS = ("libglvnd", "libx11", "libxext", "libxcursor", "libxrandr", "libxi", "libxfixes", "libxrender",
+                      "libxcb", "libxinerama", "libxscrnsaver", "alsa-lib", "libpulseaudio", "wayland", "libxkbcommon", "libdecor")
 GRID = 40   # visibility sample grid, as in wintool.swift
 
 
@@ -188,12 +193,28 @@ class Hypr:
     def clone(self, src, dest):
         subprocess.run(["cp", "-a", "--reflink=auto", str(src), str(dest)], check=True)
 
+    _runtime_libs = None
+
+    def runtime_libs(self):
+        """-> list of lib dirs for NIX_LD_LIBRARY_PATH: the system nix-ld set, /run/opengl-driver/lib, LINUX_RUNTIME_PKGS."""
+        if Hypr._runtime_libs is None:
+            dirs = ["/run/opengl-driver/lib"]
+            r = subprocess.run(["nix", "build", "--no-link", "--print-out-paths"] + ["nixpkgs#" + p for p in LINUX_RUNTIME_PKGS],
+                               capture_output=True, text=True)
+            if r.returncode != 0:
+                raise RuntimeError("nix build of the stock engine's runtime libraries failed: " + r.stderr.strip()[-300:])
+            dirs += [p + "/lib" for p in r.stdout.split() if os.path.isdir(p + "/lib")]
+            Hypr._runtime_libs = dirs
+        return Hypr._runtime_libs
+
     def game_env(self, environ):
         """A whitelist: the Nix shell the gate runs in must not leak into the game (NIX_*, LIBRARY_PATH, PYTHON*, LD_*).
         nix-ld (NIX_LD, NIX_LD_LIBRARY_PATH) is how stock Ren'Py engines (dynamic ELF) find their libraries on NixOS."""
         keep = ("HOME", "USER", "LOGNAME", "LANG", "LC_ALL", "TZ", "NIX_LD", "NIX_LD_LIBRARY_PATH")
         env = {k: environ[k] for k in keep if k in environ}
         env.setdefault("LANG", "C.UTF-8")
+        if "NIX_LD" in env:
+            env["NIX_LD_LIBRARY_PATH"] = ":".join([env.get("NIX_LD_LIBRARY_PATH", "/run/current-system/sw/share/nix-ld/lib")] + self.runtime_libs())
         env.update(PATH=LINUX_CLEAN_PATH, XDG_RUNTIME_DIR=self.runtime, WAYLAND_DISPLAY=self.wayland, XDG_SESSION_TYPE="wayland",
                    DBUS_SESSION_BUS_ADDRESS="unix:path=%s/bus" % self.runtime)
         if self.x_display:
