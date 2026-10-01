@@ -44,7 +44,7 @@ evidence of each launch (`<launch>/stdout.log`, `progress.txt`, `plan.log`, `log
 
 ## Every launch
 
-`gatelib/launch.py` does, for each game process: take the machine lock `/tmp/renpy_proj.run.lock` (poll 0.1 s); APFS-clone (`/bin/cp -Rc`) the corpus source into `harness/work/` (never `~/Games`, never the source in place); strip `game/saves`; scratch saves via `RENPY_PATH_TO_SAVES`; hash the sorted listing of `~/Library/RenPy` before and after (inside the lock); record `vm.loadavg`; run; `SIGKILL` by clone path and confirm with `pgrep -f` (the lock stays if a process survived); collect `traceback.txt`/`errors.txt`/`log.txt`; delete the clone. Games run outside the Nix shell's toolchain environment. Any traceback file, a surviving process or a changed `~/Library/RenPy` fails the check.
+`gatelib/launch.py` does, for each game process: take the machine lock (see Machine lock; poll 0.1 s); APFS-clone (`/bin/cp -Rc`) the corpus source into `harness/work/` (never `~/Games`, never the source in place); strip `game/saves`; scratch saves via `RENPY_PATH_TO_SAVES`; hash the sorted listing of `~/Library/RenPy` before and after (inside the lock); record `vm.loadavg`; run; `SIGKILL` by clone path and confirm with `pgrep -f` (the lock stays if a process survived); collect `traceback.txt`/`errors.txt`/`log.txt`; delete the clone. Games run outside the Nix shell's toolchain environment. Any traceback file, a surviving process or a changed `~/Library/RenPy` fails the check.
 
 ## Stages
 
@@ -72,7 +72,9 @@ The table is `gatelib/stages.py` (`DEFAULTS`). A game overrides single entries i
 
 ## Machine lock
 
-`/tmp/renpy_proj.run.lock` is a directory. The holder writes `owner` into it (`pid=`, `start=`, `cmd=`) and removes `owner` and then the directory in a `finally`. A taker that finds the lock with an owner pid that is dead, or with no `owner` file and an age over 30 min, logs `machine lock taken over: <reason>` and takes it over. A launch whose game processes survived the sweep keeps the lock with `pid=0` (never stale): remove it by hand after killing them.
+The lock has two parts, and the holder keeps both while a game runs. First, an `flock` on `/tmp/renpy_proj.run.flock`: the kernel frees it when the holder dies, so nobody can steal it or lose it. Second, the directory `/tmp/renpy_proj.run.lock`, which older harness copies take with `mkdir`. The flock holder waits until the directory is absent, creates it, writes `owner` into it (`pid=`, `start=`, `cmd=`), and removes both in a `finally`. A directory whose owner pid is dead is removed and logged (`removed the dir of dead owner pid ...`). A directory whose owner pid is alive is never renamed or removed. A taker polls every 0.1 s until `lock_timeout`. The code is `gatelib/machinelock.py`. A launch whose game processes survived the sweep keeps the directory with `pid=0` (an owner that never counts as dead): remove it by hand after you kill them.
+
+Ad-hoc scripts that run a game take the lock with `python3 harness/tools/runlock.py -- <command...>`. It takes both parts, runs the command as a child, and releases them when the child exits. It uses only the standard library, so the system `python3` works. Do not use `mkdir` by hand. Never take the lock from an in-process tool or a long-lived shell: the lock lasts as long as that process, and a child that outlives its parent keeps running without the lock.
 
 ## Ren'Py 7 stock engines
 

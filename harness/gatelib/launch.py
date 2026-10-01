@@ -15,11 +15,11 @@ import sys
 import time
 import tomllib
 
+from . import machinelock as ML
 from . import plat
 from . import stages as ST
 
 HARNESS = pathlib.Path(__file__).resolve().parents[1]
-LOCK = "/tmp/renpy_proj.run.lock"
 SYNC_CLIP_NAME = "harness_av_sync.webm"
 RPY = HARNESS / "rpy" / "zz_harness.rpy"
 
@@ -85,105 +85,13 @@ def sweep(pattern):
     return False
 
 
-STALE_NO_OWNER_S = 1800   # a lock dir with no owner file (an older harness, a shell user) is stale after 30 min
-
-
-def _read_owner():
-    try:
-        txt = (pathlib.Path(LOCK) / "owner").read_text()
-    except OSError:
-        return None
-    m = re.search(r"pid=(\d+)", txt)
-    return {"pid": int(m.group(1)) if m else None, "text": txt.strip()}
-
-
-def _pid_alive(pid):
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    return True
-
-
-def _stale_reason():
-    """-> (why the existing lock is stale, its inode) or None when its holder may still be running."""
-    try:
-        ino = os.stat(LOCK).st_ino
-    except OSError:
-        return None   # gone meanwhile
-    owner = _read_owner()
-    if owner and owner["pid"] is not None:
-        if _pid_alive(owner["pid"]):
-            return None
-        return "owner pid %d is dead (%s)" % (owner["pid"], owner["text"].replace("\n", " ")), ino
-    try:
-        age = time.time() - os.stat(LOCK).st_mtime
-    except OSError:
-        return None
-    return ("no owner file and the lock is %.0f min old" % (age / 60), ino) if age > STALE_NO_OWNER_S else None
-
-
-def _write_owner():
-    (pathlib.Path(LOCK) / "owner").write_text("pid=%d\nstart=%s\ncmd=%s\n" % (
-        os.getpid(), time.strftime("%Y-%m-%dT%H:%M:%S%z"), " ".join(sys.argv)[:200]))
-
-
-def _take_over(reason, ino):
-    """Replace a stale lock. Never drops a lock a live process holds: the dir that is moved aside must be the one judged
-    stale (same inode, owner pid not alive); if it is not, it is put back when possible and never deleted. Then mkdir
-    the lock: when that fails another taker won, and this one goes back to waiting. -> True when this process holds it."""
-    aside = "%s.stale.%d" % (LOCK, os.getpid())
-    try:
-        os.rename(LOCK, aside)   # atomic: one taker moves the dir away
-    except OSError:
-        return False
-    owner = None
-    try:
-        m = re.search(r"pid=(\d+)", (pathlib.Path(aside) / "owner").read_text())
-        owner = int(m.group(1)) if m else None
-    except OSError:
-        pass
-    if os.stat(aside).st_ino != ino or (owner is not None and _pid_alive(owner)):
-        # not the lock we judged: a live holder's. Put it back; if the name is taken again, leave the dir alone
-        try:
-            os.rename(aside, LOCK)
-        except OSError:
-            print("[gate] machine lock: a live holder's lock was moved to %s and could not be restored" % aside, flush=True)
-        return False
-    shutil.rmtree(aside, ignore_errors=True)
-    if subprocess.run(["mkdir", LOCK], capture_output=True).returncode != 0:
-        return False   # someone else won the race: they hold it, never remove theirs
-    _write_owner()
-    print("[gate] machine lock taken over: %s" % reason, flush=True)
-    return True
-
-
 def take_lock(timeout):
-    """mkdir the lock, write `owner` (pid, start time, command) into it. A lock whose owner pid is dead, or that has no
-    owner file and is older than 30 min, is logged and taken over (see _take_over)."""
-    t0 = time.time()
-    while True:
-        if subprocess.run(["mkdir", LOCK], capture_output=True).returncode == 0:
-            _write_owner()
-            return
-        stale = _stale_reason()
-        if stale and _take_over(*stale):
-            owner = _read_owner()
-            if owner and owner["pid"] == os.getpid():
-                return
-        if time.time() - t0 > timeout:
-            raise TimeoutError("machine lock %s held for more than %d s" % (LOCK, timeout))
-        time.sleep(0.1)   # 0.1 s: a slower poll starves behind siblings that retake the lock at once
+    """flock plus the lock dir with its `owner` file: see machinelock.py."""
+    ML.take(timeout)
 
 
 def release_lock():
-    owner = _read_owner()
-    if owner and owner["pid"] not in (None, os.getpid()):
-        return   # not ours (it was taken over): never remove another process's lock
-    (pathlib.Path(LOCK) / "owner").unlink(missing_ok=True)
-    subprocess.run(["rmdir", LOCK], capture_output=True)
+    ML.release()
 
 
 def safe_rmtree(path):
@@ -663,9 +571,9 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
         if res["sweep_ok"]:
             release_lock()
     if not res["sweep_ok"]:
-        # keep the lock for good: pid=0 never counts as dead (os.kill(0, 0) signals our own group), so nobody takes it over
-        (pathlib.Path(LOCK) / "owner").write_text("pid=0\nstart=%s\nnote=game processes survived the sweep of %s\n" % (time.strftime("%Y-%m-%dT%H:%M:%S%z"), pattern))
-        res["lock_left"] = "game processes survived the sweep; lock %s left in place" % LOCK
+        # keep the lock dir for good: pid=0 never counts as dead, so nobody removes it
+        ML.leave_blocked("game processes survived the sweep of %s" % pattern)
+        res["lock_left"] = "game processes survived the sweep; lock %s left in place" % ML.LOCK_DIR
     res["forced_kill"] = not res["exited"]
     res["clean_exit"] = res["rc"] == 0
     # artifacts
