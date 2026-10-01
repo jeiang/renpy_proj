@@ -95,6 +95,8 @@ struct State {
     audio_finished: bool,
     video_finished: bool,
     has_video: bool,
+    /// Decoder, hardware or software path and plane layout of the first frame, for logs and tools.
+    video_path: String,
     total_duration: f64,
     error: Option<String>,
 
@@ -166,6 +168,11 @@ impl Shared {
         rv
     }
 
+    /// Decoder, path (hardware name or software) and plane layout of the first video frame; empty before it.
+    pub fn video_path(&self) -> String {
+        self.st.lock().video_path.clone()
+    }
+
     /// Returns the next due frame, if any. Waits for the file to open. Call
     /// with the GIL released.
     pub fn read_video(&self) -> Result<Option<Arc<VideoFrame>>, String> {
@@ -233,6 +240,7 @@ impl Media {
                 audio_finished: false,
                 video_finished: false,
                 has_video: false,
+                video_path: String::new(),
                 total_duration: 0.0,
                 error: None,
                 audio_q: VecDeque::new(),
@@ -480,15 +488,62 @@ impl Pkt {
 
 // ---------------------------------------------------------------- decoder
 
-unsafe extern "C" fn get_fmt_vt(
+/// The platform hardware decode path. VideoToolbox on macOS; VA-API on Linux (the render node of the
+/// GPU, `RENPY_PLAYER_VAAPI_DEVICE` overrides it). NVDEC is not used: it needs the GPL-free
+/// `nv-codec-headers` build and NVIDIA hardware, and the player has no way to test it. Other
+/// targets decode in software.
+mod hw {
+    use ffmpeg_sys_next as ffi;
+    use std::ffi::CString;
+
+    #[cfg(target_os = "macos")]
+    pub const TYPE: ffi::AVHWDeviceType = ffi::AVHWDeviceType::AV_HWDEVICE_TYPE_VIDEOTOOLBOX;
+    #[cfg(target_os = "macos")]
+    pub const FORMAT: ffi::AVPixelFormat = ffi::AVPixelFormat::AV_PIX_FMT_VIDEOTOOLBOX;
+    #[cfg(target_os = "macos")]
+    pub const NAME: &str = "videotoolbox";
+
+    #[cfg(target_os = "linux")]
+    pub const TYPE: ffi::AVHWDeviceType = ffi::AVHWDeviceType::AV_HWDEVICE_TYPE_VAAPI;
+    #[cfg(target_os = "linux")]
+    pub const FORMAT: ffi::AVPixelFormat = ffi::AVPixelFormat::AV_PIX_FMT_VAAPI;
+    #[cfg(target_os = "linux")]
+    pub const NAME: &str = "vaapi";
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    pub const TYPE: ffi::AVHWDeviceType = ffi::AVHWDeviceType::AV_HWDEVICE_TYPE_NONE;
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    pub const FORMAT: ffi::AVPixelFormat = ffi::AVPixelFormat::AV_PIX_FMT_NONE;
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    pub const NAME: &str = "none";
+
+    /// The device argument of `av_hwdevice_ctx_create`: null lets FFmpeg choose.
+    #[cfg(target_os = "linux")]
+    pub fn device() -> Option<CString> {
+        let path = std::env::var("RENPY_PLAYER_VAAPI_DEVICE")
+            .unwrap_or_else(|_| "/dev/dri/renderD128".to_string());
+        if std::path::Path::new(&path).exists() {
+            CString::new(path).ok()
+        } else {
+            None
+        }
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    pub fn device() -> Option<CString> {
+        None
+    }
+}
+
+unsafe extern "C" fn get_fmt_hw(
     _: *mut ffi::AVCodecContext,
     mut f: *const ffi::AVPixelFormat,
 ) -> ffi::AVPixelFormat {
-    // Hardware formats come first and software fallbacks last: take VideoToolbox if offered, else the last entry.
+    // Hardware formats come first and software fallbacks last: take the platform format if offered, else the last entry.
     let mut last = ffi::AVPixelFormat::AV_PIX_FMT_NONE;
     unsafe {
         while *f != ffi::AVPixelFormat::AV_PIX_FMT_NONE {
-            if *f == ffi::AVPixelFormat::AV_PIX_FMT_VIDEOTOOLBOX {
+            if *f == hw::FORMAT {
                 return *f;
             }
             last = *f;
@@ -950,8 +1005,9 @@ impl Decoder {
             return false;
         }
         log::warn!(
-            "{}: hardware decode failed before the first frame; using software",
-            self.sh.name
+            "{}: {} decode failed or unsupported before the first frame; using software",
+            self.sh.name,
+            hw::NAME
         );
         unsafe {
             ffi::avcodec_free_context(&mut self.vctx);
@@ -1043,9 +1099,20 @@ impl Decoder {
                 });
                 return None;
             }
+            // The driver does not support this codec or profile: FFmpeg chose a software format
+            // although a hardware device exists. Reopen with software threading before the first frame.
+            if self.hw_on
+                && !self.got_video_frame
+                && unsafe { (*self.vframe).format } != hw::FORMAT as c_int
+                && self.fall_back_to_software()
+            {
+                unsafe { ffi::av_frame_unref(self.vframe) };
+                continue;
+            }
             break;
         }
 
+        let first_frame = !self.got_video_frame;
         self.got_video_frame = true;
         self.replay.clear();
 
@@ -1082,7 +1149,7 @@ impl Decoder {
 
         // Bring a hardware frame to system memory.
         let src: *mut ffi::AVFrame = unsafe {
-            if (*self.vframe).format == ffi::AVPixelFormat::AV_PIX_FMT_VIDEOTOOLBOX as c_int {
+            if (*self.vframe).format == hw::FORMAT as c_int {
                 ffi::av_frame_unref(self.sw_frame);
                 let r = ffi::av_hwframe_transfer_data(self.sw_frame, self.vframe, 0);
                 if r < 0 {
@@ -1100,7 +1167,18 @@ impl Decoder {
         };
 
         match unsafe { build_frame(src, pts) } {
-            Ok(f) => Some(Arc::new(f)),
+            Ok(f) => {
+                if first_frame {
+                    let codec = unsafe {
+                        std::ffi::CStr::from_ptr((*(*self.vctx).codec).name).to_string_lossy()
+                    };
+                    let path = if self.hw_on { hw::NAME } else { "software" };
+                    let info = format!("{codec} via {path}, {:?}", f.layout);
+                    log::info!("{}: {info}", self.sh.name);
+                    self.sh.st.lock().video_path = info;
+                }
+                Some(Arc::new(f))
+            }
             Err(e) => {
                 self.set_video_finished(Some(e));
                 None
@@ -1149,7 +1227,7 @@ fn av_err(code: c_int) -> String {
 }
 
 /// Opens the decoder of `stream`. Pass the decoder state for video, which
-/// enables VideoToolbox when the device can be created.
+/// enables the platform hardware decoder when its device can be created.
 unsafe fn open_codec(
     stream: *mut ffi::AVStream,
     video: Option<&mut Decoder>,
@@ -1174,18 +1252,24 @@ unsafe fn open_codec(
         match video {
             Some(d) => {
                 let mut hw = false;
-                if std::env::var_os("RENPY_PLAYER_NO_HWDEC").is_none() {
+                if hw::TYPE != ffi::AVHWDeviceType::AV_HWDEVICE_TYPE_NONE
+                    && std::env::var_os("RENPY_PLAYER_NO_HWDEC").is_none()
+                {
                     let mut dev: *mut ffi::AVBufferRef = ptr::null_mut();
+                    let device = hw::device();
                     let r = ffi::av_hwdevice_ctx_create(
                         &mut dev,
-                        ffi::AVHWDeviceType::AV_HWDEVICE_TYPE_VIDEOTOOLBOX,
-                        ptr::null(),
+                        hw::TYPE,
+                        device.as_ref().map_or(ptr::null(), |d| d.as_ptr()),
                         ptr::null_mut(),
                         0,
                     );
+                    if r < 0 {
+                        log::info!("{}: no hardware device ({})", hw::NAME, av_err(r));
+                    }
                     if r >= 0 {
                         (*ctx).hw_device_ctx = ffi::av_buffer_ref(dev);
-                        (*ctx).get_format = Some(get_fmt_vt);
+                        (*ctx).get_format = Some(get_fmt_hw);
                         d.hw_dev = dev;
                         hw = true;
                     }
