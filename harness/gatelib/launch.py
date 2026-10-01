@@ -421,6 +421,10 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
                 rel = d.relative_to(seed_saves).as_posix()
                 dest = data / "saves" / (re.sub(r"[^A-Za-z0-9._ -]+", "_", rel) if rel != "." else "")
                 shutil.copytree(d, dest, dirs_exist_ok=True, ignore=lambda _d, names: [n for n in names if (d / n).is_dir()])
+    if seed_saves and engine == "stock" and stock_is_py2(ctx):
+        # Ren'Py 7 reads its saves from --savedir (saves/_stock7), flat: seed the files of every seeded folder there too
+        for d in sorted({p.parent for p in pathlib.Path(seed_saves).rglob("*") if p.is_file()}):
+            shutil.copytree(d, saves / STOCK7_SAVEDIR, dirs_exist_ok=True, ignore=lambda _d, names: [n for n in names if (d / n).is_dir()])
     for fname, fsrc in (extra_files or {}).items():   # into the scratch clone only
         shutil.copy(fsrc, base / "game" / fname)
     if inject and engine == "stock":
@@ -499,5 +503,7 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
         shutil.copytree(saves, out / "saves", dirs_exist_ok=True)
         if engine == "player" and (data / "saves").exists():
             shutil.copytree(data / "saves", out / "saves-player", dirs_exist_ok=True)
+    if engine == "player" and (data / "reports").exists():   # pre-flight and runtime reports of the player
+        shutil.copytree(data / "reports", out / "reports", dirs_exist_ok=True)
     safe_rmtree(root)
     return res

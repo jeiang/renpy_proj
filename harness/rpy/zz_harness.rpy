@@ -261,7 +261,16 @@ init 999 python:
         _hz_write("movie-begin %s" % path)
         renpy.scene()
         renpy.show("hz_black", what=Solid("#000"))
-        renpy.show("hz_movie", what=Movie(play=path, size=(config.screen_width, config.screen_height), loop=True))
+        try:
+            mv = Movie(play=path, size=(config.screen_width, config.screen_height), loop=True)
+        except Exception as e:
+            # Ren'Py 7 cannot register the per-movie channel that config.auto_movie_channel asks for after init
+            if "outside of init" not in str(e):
+                raise
+            config.auto_movie_channel = False
+            _hz_write("movie-note auto_movie_channel off: " + str(e))
+            mv = Movie(play=path, size=(config.screen_width, config.screen_height), loop=True)
+        renpy.show("hz_movie", what=mv)
         renpy.with_statement(None)
         renpy.pause(warm + secs + 0.5)
         ta, tb = t_start + warm, t_start + warm + secs

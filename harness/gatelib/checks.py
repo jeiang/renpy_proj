@@ -17,6 +17,12 @@ def _launch_summary(r):
     return {k: r.get(k) for k in keys}
 
 
+def _opt(ctx, name):
+    """A per-game key of corpus.toml (probe_lines, save_after, resume_lines) wins over the command-line default: some
+    games run out of story before the default (a click hub after the intro)."""
+    return ctx.game.get(name, ctx.opts[name])
+
+
 def _hygiene(r):
     """Convention failures every launch is gated on. -> list of problem strings."""
     p = []
@@ -63,7 +69,7 @@ def check_lint(ctx):
 
 # ---------------------------------------------------------------- probe
 def check_probe(ctx):
-    n = ctx.opts["probe_lines"]
+    n = _opt(ctx, "probe_lines")
     tmo = ctx.opts["probe_timeout"]
     plan = L.parse_plan((L.HARNESS / "plans" / "probe.plan.tmpl").read_text().format(lines=n, timeout=tmo))
     r = L.launch(ctx, "probe", plan=plan, timeout=tmo + 120)
@@ -111,7 +117,7 @@ def _tags_lines(progress, lo, hi):
 
 
 def check_saveresume(ctx):
-    n_play, n_resume = ctx.opts["save_after"], ctx.opts["resume_lines"]
+    n_play, n_resume = _opt(ctx, "save_after"), _opt(ctx, "resume_lines")
     notes = []
     seed = ctx.opts.get("stock_saves")
     launches = []
