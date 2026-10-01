@@ -5,6 +5,7 @@
 # Runs on Ren'Py 7 (py2) and 8 (py3): keep it valid in both (no f-strings, no annotations, unicode-safe I/O).
 # Inert unless $HARNESS_DIR is set.
 #
+# Deep runs (harness/gatelib/deep.py) add: deep SEED BUDGET STALL [SAVE_GAP [STOP_SAY]] | verify LINE SECS FILE (see the end of this file).
 # Commands: start | load SLOT | save SLOT | auto on|off | click on|off | advance N | advance-to N | jump LABEL | exec CODE | movie FPS SECS WARM HOLD PATH | quit
 #   auto     answer input screens ("Tester") and take the first menu choice
 #   click    end any non-menu interaction every 1 s (splash screens, pauses)
@@ -14,7 +15,14 @@
 # "cmd-error LINE REPR" and "cmd-error-trace ...". start, load, jump, movie and quit do not return normally.
 # Events: boot | loaded | save-directory NAME | say N | text N HASH | label NAME | menu True|False | tags a b c | movie-channel NAME | cmd ... | video-result {json}
 init 999 python:
-    import os, io, time, json, hashlib, collections
+    import os, io, time, json, hashlib, collections, sys, types
+    _hz_D = sys.modules.get("_hz_deep")
+    if _hz_D is None:
+        _hz_D = types.ModuleType("_hz_deep")
+        sys.modules["_hz_deep"] = _hz_D
+        _hz_D.on = False
+        _hz_D.started = False
+        _hz_D.start_t = 0.0
     _hz_dir = os.environ.get("HARNESS_DIR")
     _hz_st = collections.OrderedDict(say=0, tags=None, menu=None, movie="-", auto=False, click=False, adv=None,
                                      n=0, prefs=False, inputs=0)   # OrderedDict: not a Revertable type, so load/rollback keep it
@@ -41,7 +49,7 @@ init 999 python:
         orig = cls.__dict__["do_show"]
 
         def do_show(self, who, what, *a, **kw):
-            if _hz_st.get("text") != _hz_st["say"]:
+            if _hz_st.get("text") != _hz_st["say"] and not sys.modules["_hz_deep"].on:
                 _hz_st["text"] = _hz_st["say"]
                 raw = what if isinstance(what, bytes) else what.encode("utf-8", "replace")
                 h = hashlib.sha1(raw).hexdigest()[:8] if what else "-"
@@ -95,6 +103,8 @@ init 999 python:
         w = line.split(None, 1)
         c, a = w[0], (w[1] if len(w) > 1 else "")
         if c == "start":
+            _hz_D.started = True
+            _hz_D.start_t = time.time()
             renpy.run(Start())
         elif c == "load":
             renpy.load(a)
@@ -124,6 +134,10 @@ init 999 python:
                 renpy.jump("hz_movie")
         elif c == "quit":
             renpy.quit(save=False)
+        elif c == "deep":
+            _hz_deep_begin(a)
+        elif c == "verify":
+            _hz_verify_begin(a)
         else:
             raise Exception("unknown harness command %r" % (c,))
 
@@ -157,6 +171,8 @@ init 999 python:
                         import traceback
                         _hz_write("cmd-error %s %r" % (line.split()[0], e))
                         _hz_write("cmd-error-trace " + " | ".join(l.strip() for l in traceback.format_exc().splitlines()[-8:]))
+        if _hz_D.on:
+            return   # the deep driver (_hz_deep_tick) answers choices and inputs
         mm = bool(renpy.get_screen("main_menu"))
         if mm != st["menu"]:
             st["menu"] = mm
@@ -333,3 +349,492 @@ init 999 python:
 screen _hz_poll_screen():
     zorder 10000
     timer 0.2 repeat True action Function(_hz_poll)
+
+
+# ======================================================================================================================
+# Deep runs (M6). `deep SEED BUDGET STALL [SAVE_GAP [STOP_SAY]]` turns on a seeded driver; `start` then runs the story. The driver:
+#   - answers choices and inputs from random.Random(SEED), one draw per decision (the same seed gives the same route on
+#     any engine, as long as the story is deterministic); custom screens use HZ_SCREEN_ACTIONS as the gate does;
+#   - ends every other interaction (no waiting for text);
+#   - makes every executed node a checkpoint and saves before each PyCode (`$`, `python:`) node: rolling slots deep-0..7.
+#     A save resumes at the latest checkpoint, so a save made at node X resumes at X;
+#   - counts node lines and labels (coverage), and records every uncaught error as $HARNESS_DIR/deep/err-N.json;
+#   - stops at: story end (the main menu again), BUDGET seconds, STALL seconds with no new script line, or the first error.
+# Progress lines: deep-start SEED | deep-error N TYPE | deep-done REASON. `verify LINE SECS FILE` (after a load) runs on: it
+# writes verify-ok once the node at FILE:LINE ran and the next node began, verify-fail REASON on any error.
+# State lives in the module sys.modules["_hz_deep"], not in the store: loads and rollbacks must not touch it.
+# ======================================================================================================================
+init 999 python:
+    import re, random, traceback as _hz_traceback
+
+    _HZ_NAMES = ["Alex", "Sam", "Jordan", "Taylor", "Morgan", "Riley", "Casey", "Jamie", "Robin", "Drew"]
+    _HZ_RING = 8
+
+    def _hz_s(x):
+        if isinstance(x, bytes):
+            return x.decode("utf-8", "replace")
+        try:
+            return u"%s" % (x,)
+        except Exception:
+            return repr(x)
+
+    def _hz_json_write(path, obj):
+        txt = json.dumps(obj, ensure_ascii=True, indent=1, sort_keys=True)
+        if isinstance(txt, bytes):
+            txt = txt.decode("ascii")
+        tmp = path + ".tmp"
+        with io.open(tmp, "w", encoding="utf-8") as f:
+            f.write(txt)
+        if os.path.exists(path):
+            os.remove(path)
+        os.rename(tmp, path)
+
+    def _hz_is_engine_file(fn):
+        fn = (fn or "").replace("\\", "/")
+        return fn.startswith("renpy/") or fn.startswith("common/") or "/renpy/" in fn or fn.startswith("<") or fn.startswith("_player") or "zz_harness" in fn or "zzz_harness" in fn or "/lib/python" in fn or "/lib/py" in fn
+
+    def _hz_sha1(src):
+        raw = src if isinstance(src, bytes) else _hz_s(src).encode("utf-8")
+        return hashlib.sha1(raw).hexdigest()
+
+    def _hz_code_file(code):
+        f = getattr(code, "filename", None)
+        if f is None:
+            f = code.location[0]
+        return f
+
+    def _hz_code_line(code):
+        f = getattr(code, "linenumber", None)
+        if f is None:
+            f = code.location[1]
+        return f
+
+    def _hz_is_pycode(code):
+        return isinstance(code, renpy.ast.PyCode)
+
+    def _hz_deep_begin(args):
+        w = args.split()
+        D = _hz_D
+        D.seed = int(w[0])
+        D.budget = float(w[1])
+        D.stall = float(w[2])
+        D.save_gap = float(w[3]) if len(w) > 3 else 0.0
+        D.stop_say = int(w[4]) if len(w) > 4 else 0
+        D.rng = random.Random(D.seed)
+        D.verify = None
+        D.verify_state = None
+        D.verify_deadline = 0.0
+        D.on = True
+        D.done = False
+        D.t0 = time.time()
+        D.last_new = D.t0
+        D.last_tick = 0.0
+        D.n = 0
+        D.say = 0
+        D.nodes = 0
+        D.exec_n = 0
+        D.saves = 0
+        D.save_s = 0.0
+        D.save_err = None
+        D.last_save_t = 0.0
+        D.last_presave = None
+        D.lines = collections.OrderedDict()
+        D.labels = collections.OrderedDict()
+        D.trail = collections.deque(maxlen=12)
+        D.errors = 0
+        D.menu_ticks = 0
+        D.last_flush = 0.0
+        D.inputs = 0
+        D.decisions = 0
+        D.code_index = None
+        os.path.isdir(os.path.join(_hz_dir, "deep")) or os.makedirs(os.path.join(_hz_dir, "deep"))
+        tot_lines = collections.OrderedDict()
+        tot_labels = collections.OrderedDict()
+        for n in renpy.game.script.namemap.values():
+            fn = getattr(n, "filename", None)
+            if not fn or _hz_is_engine_file(fn):
+                continue
+            tot_lines[(fn, n.linenumber)] = 1
+            if isinstance(n, renpy.ast.Label) and not _hz_s(n.name).startswith("_"):
+                tot_labels[_hz_s(n.name)] = 1
+        D.tot_lines = len(tot_lines)
+        D.tot_labels = tot_labels
+        _hz_write("deep-start %d" % D.seed)
+
+    def _hz_verify_begin(args):
+        w = args.split(None, 2)
+        D = _hz_D
+        D.line = int(w[0])
+        D.file = w[2]
+        _hz_deep_begin("0 %s 1000000 0" % w[1])
+        D.verify = (w[2], int(w[0]))
+        D.verify_state = "wait"
+        D.verify_deadline = time.time() + float(w[1])
+        D.save_gap = 1e9   # a verify run makes no saves
+
+    def _hz_find_pycode(filename, lineno):
+        """(node, code) of the PyCode that covers filename:lineno, or None."""
+        D = _hz_D
+        if D.code_index is None:
+            idx = {}
+            for node in renpy.game.script.namemap.values():
+                code = getattr(node, "code", None)
+                if not _hz_is_pycode(code):
+                    continue
+                n = _hz_s(code.source).count("\n") + 1
+                idx.setdefault(_hz_code_file(code).replace("\\", "/"), []).append((_hz_code_line(code), n, node, code))
+            D.code_index = idx
+        best = None
+        for start, n, node, code in D.code_index.get((filename or "").replace("\\", "/"), []):
+            if start <= lineno < start + n + 1 and (best is None or start > best[0]):
+                best = (start, node, code)
+        return (best[1], best[2]) if best else None
+
+    def _hz_finish(reason):
+        D = _hz_D
+        if D.done:
+            return
+        D.done = True
+        D.on = False if reason != "error" else D.on
+        _hz_flush(True)
+        _hz_write("deep-done %s" % reason)
+
+    def _hz_flush(final=False):
+        D = _hz_D
+        d = os.path.join(_hz_dir, "deep")
+        hit_labels = [k for k in D.labels if k in D.tot_labels]
+        cov = {"seed": D.seed, "elapsed_s": round(time.time() - D.t0, 1), "say": D.say, "nodes": D.nodes,
+               "lines_hit": len(D.lines), "lines_total": D.tot_lines, "labels_hit": len(hit_labels),
+               "labels_total": len(D.tot_labels), "saves": D.saves, "save_s": round(D.save_s, 2),
+               "save_error": D.save_err, "decisions": D.decisions, "inputs": D.inputs, "errors": D.errors,
+               "renpy": renpy.version_only, "final": final}
+        _hz_json_write(os.path.join(d, "coverage.json"), cov)
+        if final:
+            _hz_json_write(os.path.join(d, "lines.json"), {"lines": ["%s:%d" % k for k in D.lines], "labels": hit_labels})
+
+    def _hz_before(node):
+        D = _hz_D
+        ctx = renpy.game.context()
+        if ctx.init_phase:
+            return
+        fn = getattr(node, "filename", None)
+        if not fn or _hz_is_engine_file(fn):
+            return
+        D.exec_n += 1
+        D.nodes += 1
+        key = (fn, node.linenumber)
+        if key not in D.lines:
+            D.lines[key] = 1
+            D.last_new = time.time()
+        if D.verify is not None:
+            if D.verify_state == "entered":
+                D.verify_state = "ok"
+                _hz_write("verify-ok")
+                _hz_finish("verify")
+                return
+            if D.verify_state == "wait" and key == D.verify:
+                D.verify_state = "entered"
+            return
+        code = getattr(node, "code", None)
+        if not (_hz_is_pycode(code) and code.mode == "exec"):
+            return
+        now = time.time()
+        if now - D.last_save_t < D.save_gap:
+            return
+        try:
+            log = renpy.game.log
+            if ctx.rollback and log is not None and log.current is not None:
+                log.checkpoint(hard=False)   # make this node the resume point of the save
+            slot = "deep-%d" % (D.saves % _HZ_RING)
+            renpy.save(slot, extra_info="deep")
+            D.saves += 1
+            D.last_save_t = now
+            D.save_s += time.time() - now
+            D.last_presave = {"slot": slot, "exec_n": D.exec_n, "file": fn, "line": node.linenumber, "say": D.say}
+        except _hz_ctl:
+            raise
+        except Exception as e:
+            D.save_err = repr(e)[:200]
+
+    def _hz_after(node):
+        D = _hz_D
+        try:
+            renpy.game.context().force_checkpoint = True   # the next node starts its own rollback entry
+        except Exception:
+            pass
+
+    def _hz_wrap_execute(cls):
+        orig = cls.__dict__["execute"]
+
+        def execute(self, *a, **kw):
+            if _hz_D.on:
+                _hz_before(self)
+                try:
+                    return orig(self, *a, **kw)
+                finally:
+                    _hz_after(self)
+            return orig(self, *a, **kw)
+
+        cls.execute = execute
+
+    if _hz_dir:
+        _hz_todo2 = [renpy.ast.Node]
+        _hz_seen2 = set()
+        while _hz_todo2:
+            _hz_cls2 = _hz_todo2.pop()
+            if _hz_cls2 in _hz_seen2:
+                continue
+            _hz_seen2.add(_hz_cls2)
+            _hz_todo2.extend(_hz_cls2.__subclasses__())
+            if "execute" in _hz_cls2.__dict__:
+                _hz_wrap_execute(_hz_cls2)
+
+    _hz_old_label_cb2 = config.label_callback
+
+    def _hz_label_deep(name, abnormal):
+        D = _hz_D
+        if D.on:
+            D.labels[_hz_s(name)] = 1
+            D.trail.append(_hz_s(name))
+        if _hz_old_label_cb2:
+            _hz_old_label_cb2(name, abnormal)
+
+    if _hz_dir:
+        config.label_callback = _hz_label_deep
+
+    def _hz_say_count(event, interact=True, **kw):
+        if event == "begin" and _hz_D.on:
+            _hz_D.say += 1
+
+    if _hz_dir:
+        config.all_character_callbacks.append(_hz_say_count)
+
+    # ---- the driver
+    def _hz_deep_tick():
+        D = _hz_D
+        if not D.on or D.done:
+            return
+        now = time.time()
+        if now - D.last_tick < 0.04:
+            return
+        D.last_tick = now
+        D.n += 1
+        try:
+            if D.verify is not None:
+                if now > D.verify_deadline:
+                    _hz_write("verify-fail timeout: the node did not finish (state %s)" % D.verify_state)
+                    _hz_finish("verify-timeout")
+                    return
+            else:
+                if D.stop_say and D.say >= D.stop_say:
+                    _hz_finish("stop-say")
+                    return
+                if now - D.t0 > D.budget:
+                    _hz_finish("budget")
+                    return
+                if now - D.last_new > D.stall:
+                    _hz_finish("loop")
+                    return
+                if now - D.last_flush > 10:
+                    D.last_flush = now
+                    _hz_flush()
+            if renpy.get_screen("main_menu"):
+                D.menu_ticks += 1
+                if D.started and D.menu_ticks > 15 and D.verify is None:
+                    _hz_finish("story-end")
+                return
+            D.menu_ticks = 0
+            D.started = True
+            for _scr, _act in _HZ_SCREEN_ACTIONS:
+                if renpy.get_screen(_scr) and D.n % 4 == 0:
+                    rv = renpy.run(eval(_act, renpy.store.__dict__))
+                    if rv is not None:
+                        renpy.end_interaction(rv)
+                    return
+            if renpy.get_screen("input"):
+                if D.n % 4 == 0:
+                    D.inputs += 1
+                    if os.environ.get("HZ_INPUT_EXPLICIT") == "1" and D.inputs <= _HZ_INPUT_LIMIT:
+                        ans = _HZ_INPUT
+                    else:
+                        ans = _HZ_NAMES[int(D.rng.random() * len(_HZ_NAMES))] + (str(D.inputs) if D.inputs > 3 else "")
+                    renpy.end_interaction(ans)
+                return
+            ch = renpy.get_screen("choice")
+            if ch:
+                if D.n % 4 == 0:
+                    items = ch.scope["items"]
+                    it = items[int(D.rng.random() * len(items))]
+                    D.decisions += 1
+                    rv = renpy.run(it.action)
+                    if rv is not None:
+                        renpy.end_interaction(rv)
+                return
+            if not _hz_busy():
+                renpy.end_interaction(True)
+        except _hz_ctl:
+            raise
+        except Exception as e:
+            _hz_write("poll-error %r" % (e,))
+
+    if _hz_dir:
+        try:
+            config.always_shown_screens.append("_hz_deep_screen")
+        except Exception:
+            config.periodic_callbacks.append(_hz_deep_tick)   # Ren'Py 7: 20 Hz
+
+    # ---- the error record
+    _hz_prev_handler = config.exception_handler
+
+    def _hz_resolve_names(text, f_locals, f_globals, out, seen):
+        for m in re.finditer(r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*", text):
+            parts = m.group(0).split(".")
+            obj = f_locals.get(parts[0], f_globals.get(parts[0]))
+            if obj is None:
+                continue
+            cands = [(parts[0], obj)]
+            cur = obj
+            for p in parts[1:]:
+                cur = getattr(cur, p, None)
+                if cur is None:
+                    break
+                cands.append((".".join(parts[:len(cands) + 1]), cur))
+            for name, o in cands:
+                import types as _t
+                if isinstance(o, (_t.FunctionType, _t.MethodType)):
+                    fo = getattr(o, "__func__", o)
+                    co = fo.__code__
+                elif isinstance(o, type):
+                    co = None
+                    for v in o.__dict__.values():
+                        v = getattr(v, "__func__", v)
+                        c = getattr(v, "__code__", None)
+                        if c is not None and (co is None or c.co_firstlineno < co.co_firstlineno):
+                            co = c
+                elif not isinstance(o, (int, float, bytes, type(u""), list, tuple, dict, bool)) and hasattr(type(o), "__dict__"):
+                    o = type(o)
+                    co = None
+                    for v in o.__dict__.values():
+                        v = getattr(v, "__func__", v)
+                        c = getattr(v, "__code__", None)
+                        if c is not None and (co is None or c.co_firstlineno < co.co_firstlineno):
+                            co = c
+                else:
+                    continue
+                if co is None or _hz_is_engine_file(co.co_filename) or id(co) in seen:
+                    continue
+                seen[id(co)] = 1
+                hit = _hz_find_pycode(co.co_filename, co.co_firstlineno)
+                if hit is None:
+                    continue
+                out.append({"name": name, "kind": "class" if isinstance(o, type) else "function",
+                            "file": co.co_filename, "line": co.co_firstlineno, "block_file": _hz_code_file(hit[1]),
+                            "block_line": _hz_code_line(hit[1]), "block_source": _hz_s(hit[1].source)})
+
+    def _hz_record_error(args):
+        D = _hz_D
+        ctx = renpy.game.context()
+        exc = sys.exc_info()[1]
+        te = args[0] if len(args) == 1 else None
+        full = _hz_s(getattr(te, "full", None) if te is not None else (args[1] if len(args) > 1 else ""))
+        D.errors += 1
+        n = D.errors
+        node = None
+        try:
+            node = renpy.game.script.lookup(ctx.current)
+        except Exception:
+            pass
+        rec = {"id": "err-%d" % n, "seed": D.seed, "say": D.say, "nodes": D.nodes, "elapsed_s": round(time.time() - D.t0, 1),
+               "renpy": renpy.version_only, "labels_trail": list(D.trail),
+               "exception": {"type": type(exc).__name__ if exc is not None else "?", "message": _hz_s(exc)[:2000]},
+               "traceback": full[-12000:], "save_directory": config.save_directory}
+        try:
+            import _player.compat.errors as _pe
+            rec["player"] = True
+            rec["classify"] = _pe.classify(rec["exception"]["message"])
+            import _player.compat
+            rec["fingerprint"] = _player.compat.fingerprint()
+        except Exception:
+            rec["player"] = False
+        if node is not None:
+            nd = {"class": type(node).__name__, "file": node.filename, "line": node.linenumber, "name": _hz_s(node.name)}
+            code = getattr(node, "code", None)
+            if _hz_is_pycode(code):
+                nd["pycode"] = {"file": _hz_code_file(code), "line": _hz_code_line(code), "mode": code.mode,
+                                "py": getattr(code, "py", None), "sha1": _hz_sha1(code.source), "source": _hz_s(code.source)}
+            rec["node"] = nd
+        frames = []
+        seen = {}
+        used = []
+        target = None
+        tb = sys.exc_info()[2]
+        while tb is not None:
+            fr = tb.tb_frame
+            co = fr.f_code
+            fn = co.co_filename
+            e = {"file": fn, "line": tb.tb_lineno, "func": co.co_name, "game": not _hz_is_engine_file(fn)}
+            if e["game"]:
+                hit = _hz_find_pycode(fn, tb.tb_lineno)
+                loc = fr.f_locals
+                e["locals_types"] = dict((k, type(v).__name__) for k, v in list(loc.items())[:60] if not k.startswith("__"))
+                if hit is not None:
+                    node2, code2 = hit
+                    src = _hz_s(code2.source).splitlines()
+                    i = tb.tb_lineno - _hz_code_line(code2)
+                    e["pycode"] = {"file": _hz_code_file(code2), "line": _hz_code_line(code2), "sha1": _hz_sha1(code2.source), "mode": code2.mode,
+                                "source": _hz_s(code2.source)[:30000]}
+                    e["stmt"] = src[i] if 0 <= i < len(src) else ""
+                    _hz_resolve_names(e["stmt"], loc, fr.f_globals, used, seen)
+                    target = {"file": _hz_code_file(code2), "line": _hz_code_line(code2), "node_line": node2.linenumber,
+                              "mode": code2.mode, "sha1": _hz_sha1(code2.source), "source": _hz_s(code2.source),
+                              "frame_line": tb.tb_lineno, "func": co.co_name}
+                else:
+                    e["pycode"] = None
+            frames.append(e)
+            tb = tb.tb_next
+        rec["frames"] = frames
+        rec["used_defs"] = used[:12]
+        rec["patch_target"] = target
+        # saves: the rolling save made at this node, if any, else a save made now (the node is a checkpoint)
+        pre = D.last_presave
+        if pre is not None and pre["exec_n"] == D.exec_n:
+            rec["pre_save"] = pre
+        try:
+            log = renpy.game.log
+            if ctx.rollback and log is not None and log.current is not None:
+                log.checkpoint(hard=False)
+            slot = "deep-err%d" % n
+            renpy.save(slot, extra_info="deep error")
+            rec["error_save"] = slot
+        except _hz_ctl:
+            raise
+        except Exception as e:
+            rec["error_save_failed"] = repr(e)[:200]
+        rec["tracesave"] = "_tracesave-1"
+        rec["coverage_lines"] = len(D.lines)
+        _hz_json_write(os.path.join(_hz_dir, "deep", "err-%d.json" % n), rec)
+        _hz_write("deep-error %d %s" % (n, rec["exception"]["type"]))
+        return rec
+
+    def _hz_exc_handler(*args):
+        D = _hz_D
+        if D.on and not D.done:
+            try:
+                rec = _hz_record_error(args)
+                if D.verify is not None:
+                    _hz_write("verify-fail %s: %s" % (rec["exception"]["type"], rec["exception"]["message"][:200].replace("\n", " ")))
+            except _hz_ctl:
+                raise
+            except Exception:
+                _hz_write("deep-record-failed " + _hz_s(_hz_traceback.format_exc())[-400:].replace("\n", " | "))
+            _hz_finish("error" if D.verify is None else "verify-error")
+        if _hz_prev_handler:
+            return _hz_prev_handler(*args)
+        return False
+
+    if _hz_dir:
+        config.exception_handler = _hz_exc_handler
+
+screen _hz_deep_screen():
+    zorder 10001
+    timer 0.05 repeat True action Function(_hz_deep_tick)
