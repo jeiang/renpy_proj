@@ -3,6 +3,10 @@
 let
   inherit (pkgs) lib;
   linuxLibs = with pkgs; [ vulkan-loader wayland libxkbcommon libx11 libxcursor libxrandr libxi libxcb alsa-lib systemdLibs libdrm ];
+  # The window-system, Vulkan and audio libraries are opened with dlopen. fixupPhase shrinks the runpath to the
+  # NEEDED libraries, so postFixup puts the dlopen directories back.
+  dlopenRpath = lib.optionalString pkgs.stdenv.hostPlatform.isLinux
+    "${lib.makeLibraryPath linuxLibs}:/run/opengl-driver/lib";
 in
 pkgs.rustPlatform.buildRustPackage {
   pname = "player";
@@ -32,8 +36,11 @@ pkgs.rustPlatform.buildRustPackage {
   PLAYER_PYWHEELS = sources.pywheels;
   FFMPEG_LGPL = "${ffmpegLgpl}";
   PYO3_CONFIG_FILE = "/build/source/player/crates/pyhost/pyo3-config.txt";
-  PLAYER_DLOPEN_RPATH = lib.optionalString pkgs.stdenv.hostPlatform.isLinux
-    "${lib.makeLibraryPath linuxLibs}:/run/opengl-driver/lib";
+  PLAYER_DLOPEN_RPATH = dlopenRpath;
+
+  postFixup = lib.optionalString pkgs.stdenv.hostPlatform.isLinux ''
+    patchelf --add-rpath "${dlopenRpath}" $out/bin/player
+  '';
 
   preBuild = ''
     mkdir -p build-out
