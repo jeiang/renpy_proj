@@ -34,13 +34,13 @@ PYSHA = "c909157bb25ec114e5869124cc2a9c4a4d4c1e957ca4ff553f1edc692101154e"
 TRIPLET = "x64-windows-static"
 
 # Extension modules that become builtin (win-spike section 3.3, plus _lzma). Names are PCbuild project files.
-EXT = ["_socket", "select", "pyexpat", "_elementtree", "_asyncio", "_queue", "_zoneinfo", "_uuid",
+EXT = ["_socket", "select", "unicodedata", "pyexpat", "_elementtree", "_asyncio", "_queue", "_zoneinfo", "_uuid",
        "_multiprocessing", "_overlapped", "_decimal", "_ctypes", "_bz2", "_lzma", "_ssl", "_hashlib"]
 # Sources that live outside the project file of the module that needs them.
 EXTRA_PROJECTS = {"_lzma": ["liblzma"]}
 SKIP_SOURCES = {"applink.c"}
 # Bump when the compile flags in compile_all change: the objects are rebuilt only when this or the source list changes.
-RECIPE_VERSION = "1"
+RECIPE_VERSION = "2"
 
 
 def log(*a):
@@ -122,16 +122,31 @@ def vcxproj_sources(src: Path, name: str):
     return out
 
 
-def sources(src: Path):
+def builtin_config(src: Path, scratch: Path) -> Path:
+    """PC/config.c with the extension modules added to the builtin table. Stock Windows builds them as .pyd
+    files; here they are linked in, so the interpreter must know their init functions."""
+    text = (src / "PC" / "config.c").read_text(encoding="utf-8")
+    externs = "".join(f"extern PyObject* PyInit_{m}(void);\n" for m in EXT)
+    entries = "".join(f'    {{"{m}", PyInit_{m}}},\n' for m in EXT)
+    for marker, add in (("/* -- ADDMODULE MARKER 1 -- */", externs), ("/* -- ADDMODULE MARKER 2 -- */", entries)):
+        assert marker in text, marker
+        text = text.replace(marker, marker + "\n" + add, 1)
+    out = scratch / "config.c"
+    out.write_text(text, encoding="utf-8")
+    return out
+
+
+def sources(src: Path, scratch: Path):
     jobs = []  # (group, path)
     seen = set()
+    config = (src / "PC" / "config.c").resolve()
     for grp, projs in [("core", ["pythoncore"])] + [(m, [m, *EXTRA_PROJECTS.get(m, [])]) for m in EXT]:
         for proj in projs:
             for p in vcxproj_sources(src, proj):
                 if p in seen:
                     continue  # pyexpat and _elementtree both list the expat sources
                 seen.add(p)
-                jobs.append((grp, p))
+                jobs.append((grp, builtin_config(src, scratch) if p == config else p))
     return jobs
 
 
@@ -191,7 +206,7 @@ def main():
     vcpkg = vcpkg_dir(env)
     externals_and_headers(src, env, scratch)
 
-    jobs = sources(src)
+    jobs = sources(src, scratch)
     recipe = hashlib.sha256(("\n".join(f"{g} {p}" for g, p in jobs) + RECIPE_VERSION).encode()).hexdigest()
     lib = scratch / "python312.lib"
     stale = not lib.exists() or not (scratch / "recipe").exists() or (scratch / "recipe").read_text() != recipe
