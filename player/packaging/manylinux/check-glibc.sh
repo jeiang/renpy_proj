@@ -22,6 +22,7 @@ while IFS= read -r f; do
   done
   echo "$line"
 done < <(find "$@" -type f \( -name player -o -name '*.so*' \))
+for k in GLIBC GLIBCXX CXXABI GCC; do [ "${MAX[$k]}" != 0 ] || MAX[$k]=none; done
 echo "max: GLIBC=${MAX[GLIBC]} (limit $LIM_GLIBC) GLIBCXX=${MAX[GLIBCXX]} (limit $LIM_GLIBCXX) CXXABI=${MAX[CXXABI]} (limit $LIM_CXXABI) GCC=${MAX[GCC]} (limit $LIM_GCC)"
 [ $rc = 0 ] && echo "check-glibc: OK (manylinux_2_28)" || echo "check-glibc: FAILED" >&2
 exit $rc
