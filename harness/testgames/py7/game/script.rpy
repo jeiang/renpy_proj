@@ -34,6 +34,7 @@ label start:
         call case_classes
         call case_exec
         call case_syntax_values
+        call case_ordering_init
         call case_ordering
         call case_legacy
         call case_syntax_loose

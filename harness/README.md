@@ -20,6 +20,7 @@ evidence of each launch (`<launch>/stdout.log`, `progress.txt`, `plan.log`, `log
 |---|---|
 | `m1` | `lint`, `probe`, `route` |
 | `full` | `lint`, `probe`, `route`, `saveresume`, `video` |
+| `synth` | `lint`, `probe`, `route`, `saveresume` (the synthetic CI games: [`testgames/README.md`](testgames/README.md)) |
 
 `--only lint,probe` runs a subset. Every check launches games through one function (`gatelib/launch.py`) that enforces
 `research/CONVENTIONS.md`, see [Every launch](#every-launch).
@@ -44,7 +45,7 @@ evidence of each launch (`<launch>/stdout.log`, `progress.txt`, `plan.log`, `log
 
 ## Every launch
 
-`gatelib/launch.py` does, for each game process: take the machine lock (see Machine lock; poll 0.1 s); APFS-clone (`/bin/cp -Rc`) the corpus source into `harness/work/` (never `~/Games`, never the source in place); strip `game/saves`; scratch saves via `RENPY_PATH_TO_SAVES`; hash the sorted listing of `~/Library/RenPy` before and after (inside the lock); record `vm.loadavg`; run; `SIGKILL` by clone path and confirm with `pgrep -f` (the lock stays if a process survived); collect `traceback.txt`/`errors.txt`/`log.txt`; delete the clone. Games run outside the Nix shell's toolchain environment. Any traceback file, a surviving process or a changed `~/Library/RenPy` fails the check.
+`gatelib/launch.py` does, for each game process: take the machine lock (see Machine lock; poll 0.1 s); APFS-clone (`/bin/cp -Rc`) the corpus source into `harness/work/` (never `~/Games`, never the source in place); strip `game/saves`; scratch saves via `RENPY_PATH_TO_SAVES`; hash the sorted listing of `~/Library/RenPy` before and after (inside the lock); record `vm.loadavg`; run; `SIGKILL` by clone path and confirm with `pgrep -f` (the lock stays if a process survived); collect `traceback.txt`/`errors.txt`/`log.txt`; delete the clone. Games run outside the Nix shell's toolchain environment. Any traceback file, a surviving process or a changed `~/Library/RenPy` fails the check. Every launch sets `RENPY_DISABLE_BACKUPS="I take responsibility for this."`: Ren'Py compiles loose `.rpy` files and then copies them into `~/Library/RenPy/backups/<game>` (`~/.renpy/backups`), outside every scratch save dir; `--savedir` and `RENPY_PATH_TO_SAVES` do not move it. A relative corpus path that starts with `harness/` resolves against the checkout that holds the harness (the synthetic games are committed there); other relative paths resolve against the main checkout.
 
 ## Stages
 
