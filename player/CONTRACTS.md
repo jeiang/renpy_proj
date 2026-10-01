@@ -208,7 +208,7 @@ Added for "M4: Linux and Windows on real GPUs" (issue #37). Scope now (user, 202
 - Linux host: glibc-dynamic binary; static libpython; Vulkan, VA-API and the audio stack are loaded from the system at run time. Package: a directory `player-linux-x86_64/` with the binary and the LGPL FFmpeg shared libraries in `lib/` (rpath `$ORIGIN/lib`), plus a tarball.
 - Windows host: `/MT`, static libpython (research/win-spike), LGPL FFmpeg shared DLLs beside the exe, nothing appended after signing, `PYTHONUTF8=1` for the build.
 - Platform-specific code uses `cfg(target_os)`; macOS-only pieces (objc2-metal, CoreFoundation locale) must not break other targets.
-- `gfx` (anisotropy): a sampler without mips may carry an anisotropy clamp (no mips, all filters linear, anisotropy > 1: mipmap_filter Linear with lod_max_clamp 0). The sampler tuple's anisotropy element is passed for GL_LINEAR too.
+- `gfx` (anisotropy): a sampler without mips may carry an anisotropy clamp (no mips, all filters linear, anisotropy > 1: mipmap_filter Linear with lod_max_clamp 0). The sampler tuple's anisotropy element is passed for GL_LINEAR too. On AMD Linux this differs from stock Mesa radeonsi (no-mip filter state, which Vulkan cannot express) by 0.2 to 1.5 mean in the anisotropy-on half of strongly anisotropic `linear` screens; measured and closest available, see harness/testgames/aniso/README.md.
 
 # M6 contracts
 

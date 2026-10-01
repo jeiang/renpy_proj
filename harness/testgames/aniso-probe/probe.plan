@@ -1,0 +1,110 @@
+settle 3
+cmd jump case_tilt_checker_linear_on
+settle 2.5
+shot tilt_checker_linear_on
+cmd jump case_tilt_checker_linear_off
+settle 2.5
+shot tilt_checker_linear_off
+cmd jump case_tilt_checker_mip_on
+settle 2.5
+shot tilt_checker_mip_on
+cmd jump case_tilt_checker_mip_off
+settle 2.5
+shot tilt_checker_mip_off
+cmd jump case_tilt_grating_linear_on
+settle 2.5
+shot tilt_grating_linear_on
+cmd jump case_tilt_grating_linear_off
+settle 2.5
+shot tilt_grating_linear_off
+cmd jump case_tilt_grating_mip_on
+settle 2.5
+shot tilt_grating_mip_on
+cmd jump case_tilt_grating_mip_off
+settle 2.5
+shot tilt_grating_mip_off
+cmd jump case_tilt_text_linear_on
+settle 2.5
+shot tilt_text_linear_on
+cmd jump case_tilt_text_linear_off
+settle 2.5
+shot tilt_text_linear_off
+cmd jump case_tilt_text_mip_on
+settle 2.5
+shot tilt_text_mip_on
+cmd jump case_tilt_text_mip_off
+settle 2.5
+shot tilt_text_mip_off
+cmd jump case_mina_checker_linear_on
+settle 2.5
+shot mina_checker_linear_on
+cmd jump case_mina_checker_linear_off
+settle 2.5
+shot mina_checker_linear_off
+cmd jump case_mina_checker_mip_on
+settle 2.5
+shot mina_checker_mip_on
+cmd jump case_mina_checker_mip_off
+settle 2.5
+shot mina_checker_mip_off
+cmd jump case_mina_grating_linear_on
+settle 2.5
+shot mina_grating_linear_on
+cmd jump case_mina_grating_linear_off
+settle 2.5
+shot mina_grating_linear_off
+cmd jump case_mina_grating_mip_on
+settle 2.5
+shot mina_grating_mip_on
+cmd jump case_mina_grating_mip_off
+settle 2.5
+shot mina_grating_mip_off
+cmd jump case_mina_text_linear_on
+settle 2.5
+shot mina_text_linear_on
+cmd jump case_mina_text_linear_off
+settle 2.5
+shot mina_text_linear_off
+cmd jump case_mina_text_mip_on
+settle 2.5
+shot mina_text_mip_on
+cmd jump case_mina_text_mip_off
+settle 2.5
+shot mina_text_mip_off
+cmd jump case_minu_checker_linear_on
+settle 2.5
+shot minu_checker_linear_on
+cmd jump case_minu_checker_linear_off
+settle 2.5
+shot minu_checker_linear_off
+cmd jump case_minu_checker_mip_on
+settle 2.5
+shot minu_checker_mip_on
+cmd jump case_minu_checker_mip_off
+settle 2.5
+shot minu_checker_mip_off
+cmd jump case_minu_grating_linear_on
+settle 2.5
+shot minu_grating_linear_on
+cmd jump case_minu_grating_linear_off
+settle 2.5
+shot minu_grating_linear_off
+cmd jump case_minu_grating_mip_on
+settle 2.5
+shot minu_grating_mip_on
+cmd jump case_minu_grating_mip_off
+settle 2.5
+shot minu_grating_mip_off
+cmd jump case_minu_text_linear_on
+settle 2.5
+shot minu_text_linear_on
+cmd jump case_minu_text_linear_off
+settle 2.5
+shot minu_text_linear_off
+cmd jump case_minu_text_mip_on
+settle 2.5
+shot minu_text_mip_on
+cmd jump case_minu_text_mip_off
+settle 2.5
+shot minu_text_mip_off
+quit

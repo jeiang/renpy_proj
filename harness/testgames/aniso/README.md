@@ -45,3 +45,43 @@ python3 tools/compare_page.py --out out/aniso/index.html \
 `gate.py` takes the machine lock, clones the game, sets nothing else (the game needs no menu: it starts in `label start` and the plan jumps to each case). The shots are window captures that include the macOS title bar; `compare_page.py` crops the title bar and the caption strip. On Linux run the same two commands on artemis (see `harness/README.md`, Linux), with the 8.5.3 Linux SDK at `research/shared-engine-launcher/sdk/renpy-8.5.3-sdk` and `--player-bin` set. The gate sets the window opaque and uses `grim` there.
 
 `out/` is gitignored: screenshots, the page and the logs stay local.
+
+## Why Linux differs for `linear` with anisotropy on
+
+After the sampler fix (`gl_anisotropic` now reaches textures without mips) macOS matches stock in all 27 rows. On Linux (stock 8.5.3 on Mesa 26.2.3 radeonsi, OpenGL 4.6; player on wgpu Vulkan, RADV, RX 9070 XT) the `linear` rows with anisotropy on still differ (mean difference 0.21 to 2.18; `mip` and `nearest` rows and every anisotropy-off half match within 0.26). The cause is a sampler state that GL can program on AMD hardware and Vulkan cannot. The player already uses the closest sampler Vulkan has, so the engine code is unchanged (only its comment).
+
+### Evidence
+
+All numbers are the mean absolute difference over all channels, 0 to 255, on the whole picture. Tools: `harness/testgames/aniso-probe/` (a game with one centered panel per case, so the "on" and "off" shots of one engine have the same geometry; `gl_probe.c`, a raw OpenGL program; `compare_ppm.py`) and `player/crates/gfx/examples/aniso_probe.rs` (raw wgpu). Mesa source is read from `research/mesa-src/mesa-26.2.3` (gitignored; `curl -fL https://archive.mesa3d.org/mesa-26.2.3.tar.xz`).
+
+1. **GL applies anisotropy to a non-mipmapped sampler. Candidate "GL ignores it" is wrong.** In the probe game, on-versus-off on the same geometry, stock radeonsi: `tilt_grating_linear` 8.26, `tilt_checker_linear` 4.64, `mina_grating_linear` 3.97, `mina_checker_linear` 2.76. Raw GL: `GL_LINEAR` with anisotropy 16 against 1: 8.43 (checker) and 13.62 (grating). Mesa's GL layer does not turn it off (`st_atom_sampler.c` copies `max_anisotropy`; `si_create_sampler_state` sets `ANISO_BILINEAR`). `minu` (same scale in X and Y) is 0.000 in every engine, as expected.
+2. **The engine and the GL semantics are not the cause: zink equals the player.** Stock under zink (`MESA_LOADER_DRIVER_OVERRIDE=zink`, GL over RADV) and the player give identical pictures: 0.000 on the `mina` and `minu` rows and at most 0.013 on the `tilt` rows. Stock radeonsi against either of them is 1.09 (`mina_checker_linear`), 1.34 (`mina_grating_linear`), 0.22 (`mina_text_linear`), 0.91 (`tilt_checker_linear`), 1.61 (`tilt_grating_linear`), 0.19 (`tilt_text_linear`) with anisotropy on, and 0.003 to 0.036 with it off. The same Ren'Py code, the same textures and the same GL calls give different pictures only when the driver below changes from radeonsi to RADV.
+3. **The player's sampler is the radeonsi hardware path with a LOD clamp.** In the raw GL program a sampler with a mip filter and `GL_TEXTURE_MAX_LOD 0` (`GL_LINEAR_MIPMAP_LINEAR`, anisotropy 16) is what Vulkan's `mipmap_filter Linear`, `lod_max_clamp 0` becomes. It matches the raw wgpu picture with that sampler to 0.10 (checker) and 0.14 (grating). That residual is the derivative and rasterization difference of the two APIs (the anisotropy-off halves of the 27 rows match to the same size, at most 0.139). So texel centers, derivatives, sRGB (both sides sample `Rgba8` and `GL_RGBA8` as plain values) and premultiplication are not the cause.
+4. **The difference is the mip filter state.** `GL_LINEAR` makes radeonsi write `MIP_FILTER` none (`si_tex_mipfilter` with `PIPE_TEX_MIPFILTER_NONE`) with `max_lod` unclamped. RADV writes `POINT` or `LINEAR` (`radv_tex_mipfilter`); Vulkan has no "none", and wgpu allows anisotropy only with a Linear mipmap filter. With the same level-0 texture the two states give: raw GL `GL_LINEAR` a16 against the Vulkan-style sampler `1.65` (checker) and `2.51` (grating), against `gl_lml_lod0_a16` `1.64` and `2.50`. The picture with "none" is slightly smoother: mean horizontal and vertical gradient 14.67 and 26.88 against 14.86 and 27.75 (checker). The sample count itself is not the whole story: anisotropy 16, 8 and 4 are within 0.3 to 0.5 of each other for both states.
+5. **Other descriptor fields do not explain it.** `ANISO_OVERRIDE` (RADV `aniso_single_level`, radeonsi leaves it 0) only acts on one-level images; raw wgpu with a one-level texture, a one-level view of a mipmapped texture and the full texture give identical pictures (0.000). Zink on RADV, which sets `radv_disable_aniso_single_level`, still equals the player. A GL LOD bias (`GL_TEXTURE_LOD_BIAS` -1 to +1) changes neither state's picture.
+
+### What was tried to get closer (raw wgpu picture against raw GL `GL_LINEAR` a16, checker / grating)
+
+| Player sampler or shader | Difference |
+|---|---|
+| current: Linear mip filter, `lod_max_clamp 0`, anisotropy 16 | 1.65 / 2.51 |
+| anisotropy 8 | 1.83 / 2.55 |
+| anisotropy 4 | 1.85 / 2.61 |
+| anisotropy 2 | 3.13 / 5.18 |
+| `lod_max_clamp` 0.5 or 1 (raw GL, `GL_TEXTURE_MAX_LOD`) | 1.89 or 2.33 / 2.80 or 3.43 |
+| trilinear anisotropy (the `mip` look) | 2.59 / 3.74 |
+| shader taps (N bilinear taps of level 0 along the long axis, `emu_ceil` in `aniso_probe.rs`) | 2.17 / 3.04 |
+
+No state that wgpu can express is closer than the current one, and a shader model of the hardware is worse than the hardware sampler. A better model would need the undocumented behavior of the "none" filter and would be a radeonsi-only fit (NVIDIA and Intel GL drivers differ again), so the player keeps the plain sampler. Decision: **keep `mipmap_filter Linear`, `lod_max_clamp 0`, anisotropy 16 for a non-mipmapped texture with all filters linear** (`gpu.rs`, `Shared::sampler`). Expected Linux residual: 0.2 to 1.5 on screens with strongly anisotropic footprints, only in the anisotropy-on half of `linear` rows. It is a driver difference between radeonsi and RADV, not a flag leak.
+
+### How to reproduce
+
+```sh
+# artemis, in a checkout with the gitignored textures (python3 harness/testgames/aniso{,-probe}/build.py)
+python3 harness/tools/runlock.py -- gcc ... harness/testgames/aniso-probe/gl_probe.c    # see the header of gl_probe.c
+cargo run --release -p gfx --example aniso_probe -- out/probe-raw
+python3 harness/testgames/aniso-probe/compare_ppm.py out/probe-gl out/probe-raw
+python3 gate.py run --engine stock --game testgames/aniso-probe --tier m1 --only route --route-runs 1 \
+    --plan testgames/aniso-probe/probe.plan --out out/probe/stock                            # radeonsi
+python3 gate.py run ... --env MESA_LOADER_DRIVER_OVERRIDE=zink --out out/probe/zink          # zink
+```
