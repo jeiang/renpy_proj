@@ -127,7 +127,7 @@ pub(crate) fn answer_offer(st: &State, sdp: &str) -> anyhow::Result<String> {
     let answer = rtc.sdp_api().accept_offer(offer)?;
     let text = unify_stream_id(&answer.to_sdp_string());
     st.tx
-        .send(crate::Msg::Session(rtc))
+        .send(crate::Msg::Session(Box::new(rtc)))
         .map_err(|_| anyhow::anyhow!("media thread is gone"))?;
     Ok(text)
 }

@@ -47,7 +47,13 @@ impl OpusEncoder {
         fr.set_rate(48000);
         fr.set_pts(Some(self.pts));
         self.pts += FRAME as i64;
-        for (dst, s) in fr.data_mut(0).chunks_exact_mut(4).zip(pcm_stereo_48k) {
+        for (dst, s) in fr
+            .data_mut(0)
+            .as_chunks_mut::<4>()
+            .0
+            .iter_mut()
+            .zip(pcm_stereo_48k)
+        {
             dst.copy_from_slice(&s.to_ne_bytes());
         }
         self.enc.send_frame(&fr).context("opus send_frame")?;

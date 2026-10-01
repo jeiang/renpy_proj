@@ -316,7 +316,6 @@ player serve <game-dir> [--bind <addr>] [--port <n>] [--size <WxH>] [--fps <n>] 
 
 Headless (no window, no audio device): prints `Stream URL: http://<ip>:<port>/` for each LAN address, runs until the game quits or Ctrl-C. The library window's Stream button launches `player serve` as a child process, shows the URL and a Stop button.
 
-- `gfx` (anisotropy): a sampler without mips may carry an anisotropy clamp (no mips, all filters linear, anisotropy > 1: mipmap_filter Linear with lod_max_clamp 0). The sampler tuple's anisotropy element is passed for GL_LINEAR too.
 
 ## M5 integration notes (orchestrator)
 

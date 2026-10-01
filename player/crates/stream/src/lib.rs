@@ -98,7 +98,7 @@ pub(crate) struct Shared {
 /// Messages to the media thread.
 pub(crate) enum Msg {
     Wake,
-    Session(str0m::Rtc),
+    Session(Box<str0m::Rtc>),
     Packet {
         at: Instant,
         src: SocketAddr,

@@ -132,7 +132,7 @@ pub(crate) fn run(sh: Arc<Shared>, socks: Vec<UdpSocket>, rx: Receiver<Msg>) {
         while let Some(msg) = next {
             match msg {
                 Msg::Wake => {}
-                Msg::Session(rtc) => m.replace_session(rtc),
+                Msg::Session(rtc) => m.replace_session(*rtc),
                 Msg::Packet { at, src, dst, data } => m.receive(at, src, dst, &data),
             }
             next = rx.try_recv().ok();
@@ -194,9 +194,7 @@ impl Media {
     fn drive(&mut self) -> Option<Instant> {
         let timeout;
         loop {
-            let Some(s) = self.sess.as_mut() else {
-                return None;
-            };
+            let s = self.sess.as_mut()?;
             if !s.rtc.is_alive() {
                 self.end_session();
                 return None;

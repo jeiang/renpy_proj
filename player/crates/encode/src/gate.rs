@@ -83,7 +83,10 @@ pub fn burn_timecode(f: &mut RawFrame) {
             PixelFormat::Rgba | PixelFormat::Bgra => {
                 let v = if one { 255 } else { 0 };
                 for y in 0..rows {
-                    for px in f.data[(y * w + x0) * 4..(y * w + x1) * 4].chunks_exact_mut(4) {
+                    for px in f.data[(y * w + x0) * 4..(y * w + x1) * 4]
+                        .as_chunks_mut::<4>()
+                        .0
+                    {
                         px.copy_from_slice(&[v, v, v, 255]);
                     }
                 }

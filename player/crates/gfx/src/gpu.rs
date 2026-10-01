@@ -1077,7 +1077,7 @@ impl Renderer {
                 let f = frame.take();
                 (f.as_ref().filter(|_| capture).map(|f| f.texture.clone()), f)
             }
-            Screen::Headless { tex } => (Some(tex.clone()).filter(|_| capture), None),
+            Screen::Headless { tex } => (capture.then(|| tex.clone()), None),
         };
         if let Some(t) = &tex {
             self.capture_tex(t);

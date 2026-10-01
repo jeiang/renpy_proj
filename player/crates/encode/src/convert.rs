@@ -86,7 +86,7 @@ impl Converter {
             // VUI the encoders write (bt709, tv range). The default would be BT.601.
             unsafe {
                 use ffmpeg_sys_next as sys;
-                let tab = sys::sws_getCoefficients(sys::SWS_CS_ITU709 as i32);
+                let tab = sys::sws_getCoefficients(sys::SWS_CS_ITU709 as _);
                 sys::sws_setColorspaceDetails(sc.as_mut_ptr(), tab, 1, tab, 0, 0, 1 << 16, 1 << 16);
             }
             self.scaler = Some(sc);
