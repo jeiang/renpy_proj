@@ -65,6 +65,20 @@ the game key (`PLAYER_PATCHES_APPLY_TEST=1`), reads the fingerprint and the node
 patch to a seed folder `patches/<fingerprint>/patch.toml` that the gate copies into the data folder (`--seed-data`). Without
 the patch the player run fails at that node with `'str' object has no attribute 'decode'`.
 
+## Known open items
+
+- `Synth7Patch` `saveresume` fails on the stock 7.4.11 engine too (macOS and artemis): after `load` the game shows one line and
+  returns to the main menu. The cause is not found; lint, probe and route pass on stock and on the player, and the player applies
+  the port patch. Until it is fixed, run this game with `--only lint,probe,route`.
+- The rollback path of the ordering fix is not in the gate: with rollback allowed the player goes back to the last checkpoint and
+  the line before the failing node shows twice, so its dialogue hashes differ from stock. `rules_ordering.rpy` calls
+  `renpy.block_rollback()` to test the in-place retry path.
+- `print >>f, x,` followed by a bare `print >>f`: Python 2 writes `x` and a newline, the token fixer's output may write a space
+  before the newline [INFERENCE, not confirmed]. The case is not in the game.
+- Two failing blocks with Python 2 ordering in one file: the compat module treats the second as "fixed once and failed again"
+  (all module-level code objects have `co_firstlineno` 1 in `errors.fix_ordering`). `rules_ordering_init.rpy` and `rules_ordering.rpy`
+  are split to avoid it. [INFERENCE from the stdout log of the first Synth7 player run; not fixed here.]
+
 ## Build
 
 ```sh
