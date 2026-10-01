@@ -145,7 +145,7 @@ init 999 python:
                         _hz_write("cmd-done " + line)
                     except _hz_ctl:
                         raise
-                    except BaseException as e:   # BaseException: a failing command must never vanish silently
+                    except Exception as e:   # not BaseException: Ren'Py's own context jumps (UnfreezeException of load) must pass
                         import traceback
                         _hz_write("cmd-error %s %r" % (line.split()[0], e))
                         _hz_write("cmd-error-trace " + " | ".join(l.strip() for l in traceback.format_exc().splitlines()[-8:]))
