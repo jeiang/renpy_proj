@@ -634,6 +634,9 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
     # Games run outside the Nix shell's toolchain environment: its SDKROOT, PYTHON* and NIX_* would leak into them.
     env = {k: v for k, v in os.environ.items() if not k.startswith(("NIX_", "PYTHON", "DYLD_", "LD_")) and k not in ("SDKROOT", "DEVELOPER_DIR")}
     env.update(PATH=CLEAN_ENV_PATH, RENPY_PATH_TO_SAVES=str(saves), HARNESS_DIR=str(hz))
+    # The compat notice is drawn over the game; stock has none, so it would show up in frame diffs. The fix is
+    # still recorded in the player's runtime.jsonl.
+    env["PLAYER_COMPAT_NOTICE"] = "off"
     if not inject:
         env.pop("HARNESS_DIR")
     res = {"name": name, "engine": engine, "stripped_game_cache": strip, "argv": [a.replace(str(top), "<run>") for a in argv], "plan_log": []}

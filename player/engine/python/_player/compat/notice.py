@@ -1,5 +1,6 @@
 """The in-game notice shown when the compatibility module fixes a run-time error."""
 
+import os
 import time
 
 import renpy
@@ -10,7 +11,15 @@ SECONDS = 10.0
 _notice = [None, 0.0]  # text, time
 
 
+def enabled():
+    """`PLAYER_COMPAT_NOTICE=off` hides the notice; the event stays in runtime.jsonl."""
+    return os.environ.get("PLAYER_COMPAT_NOTICE", "on").lower() not in ("off", "0", "no")
+
+
 def notify(text):
+    if not enabled():
+        return
+
     _notice[0] = text
     _notice[1] = time.time()
 

@@ -89,3 +89,5 @@ A plan is a text file of ops, one per line: `cmd TEXT` sends a command to the ga
 ## Where each check came from
 
 `lint` from `research/test-corpus/lint_released.sh`; `probe` from `research/renpy7-on-8/probe/zz_probe.rpy`; `route` from `research/visual-confirm` (`run.py`, `zz_vc.rpy`, `winid_all.swift`); `saveresume` from `research/savecompat`; `video` from `research/perf-baseline/zz_perf.rpy`; the launcher rules from `research/shared-engine-launcher/run_game.sh` and `research/CONVENTIONS.md`.
+
+- The player runs with `PLAYER_COMPAT_NOTICE=off`: the Ren'Py 7 compatibility notice would otherwise be in the screenshots. Fixes stay in `reports/<key>/runtime.jsonl`.
