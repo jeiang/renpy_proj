@@ -9,7 +9,7 @@ pkgs.rustPlatform.buildRustPackage {
   version = "0.1.0";
   src = lib.fileset.toSource {
     root = ../.;
-    fileset = lib.fileset.difference ../player (lib.fileset.unions [ ../player/target ../player/upstream ../player/build-out ]);
+    fileset = lib.fileset.difference ../player (lib.fileset.unions (map lib.fileset.maybeMissing [ ../player/target ../player/upstream ../player/build-out ]));
   };
   sourceRoot = "source/player";
   cargoLock.lockFile = ../player/Cargo.lock;
