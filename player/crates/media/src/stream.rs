@@ -567,6 +567,8 @@ struct Decoder {
     actx: *mut ffi::AVCodecContext,
     hw_dev: *mut ffi::AVBufferRef,
     hw_on: bool,
+    /// Hardware decode failed once for this file: reopen in software and keep it there.
+    hw_failed: bool,
     got_video_frame: bool,
     replay: Vec<Pkt>,
     replay_ok: bool,
@@ -630,6 +632,7 @@ impl Decoder {
             actx: ptr::null_mut(),
             hw_dev: ptr::null_mut(),
             hw_on: false,
+            hw_failed: false,
             got_video_frame: false,
             replay: Vec::new(),
             replay_ok: true,
@@ -1013,6 +1016,7 @@ impl Decoder {
             ffi::avcodec_free_context(&mut self.vctx);
             ffi::av_buffer_unref(&mut self.hw_dev);
             self.hw_on = false;
+            self.hw_failed = true;
             let s = *(*self.fmt).streams.add(self.vstream as usize);
             self.vctx = open_codec(s, Some(self));
         }
@@ -1252,7 +1256,8 @@ unsafe fn open_codec(
         match video {
             Some(d) => {
                 let mut hw = false;
-                if hw::TYPE != ffi::AVHWDeviceType::AV_HWDEVICE_TYPE_NONE
+                if !d.hw_failed
+                    && hw::TYPE != ffi::AVHWDeviceType::AV_HWDEVICE_TYPE_NONE
                     && std::env::var_os("RENPY_PLAYER_NO_HWDEC").is_none()
                 {
                     let mut dev: *mut ffi::AVBufferRef = ptr::null_mut();
