@@ -455,6 +455,8 @@ init 999 python:
         D.restart_t = 0.0
         D.last_flush = 0.0
         D.inputs = 0
+        D.inp_run = 0
+        D.inp_mark = None
         D.decisions = 0
         D.code_index = None
         os.path.isdir(os.path.join(_hz_dir, "deep")) or os.makedirs(os.path.join(_hz_dir, "deep"))
@@ -717,7 +719,11 @@ init 999 python:
             if renpy.get_screen("input"):
                 if D.n % 4 == 0:
                     D.inputs += 1
-                    if os.environ.get("HZ_INPUT_EXPLICIT") == "1" and D.inputs <= _HZ_INPUT_LIMIT:
+                    if D.last_new != D.inp_mark:   # a new line ran since the last answer: not a rejection loop
+                        D.inp_mark = D.last_new
+                        D.inp_run = 0
+                    D.inp_run += 1
+                    if os.environ.get("HZ_INPUT_EXPLICIT") == "1" and D.inp_run <= _HZ_INPUT_LIMIT:
                         ans = _HZ_INPUT
                     else:
                         ans = _HZ_NAMES[int(D.rng.random() * len(_HZ_NAMES))] + (str(D.inputs) if D.inputs > 3 else "")
