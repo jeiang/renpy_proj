@@ -102,7 +102,8 @@ def check_reachable(cfg):
             r.read(1)
         return None
     except urllib.error.HTTPError as e:
-        return None if e.code in (401, 403, 404, 405) and e.code != 401 else "HTTP %d from %s/models" % (e.code, base)
+        # 404/405: a server without /models still answers chat; 401/403 and 5xx are real problems
+        return None if e.code in (404, 405) else "HTTP %d from %s/models" % (e.code, base)
     except Exception as e:  # noqa: BLE001
         return "%s: %s" % (type(e).__name__, e)
 
