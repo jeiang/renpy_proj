@@ -248,12 +248,16 @@ impl Shared {
                 FilterMode::Nearest
             }
         };
+        // wgpu allows anisotropy only with all three filters linear. A sampler with no mip levels (`mip == 0`, GL_LINEAR)
+        // samples level 0 only (lod_max_clamp 0), so a Linear mipmap filter changes nothing there and lets the clamp
+        // through; GL applies anisotropy to such a texture too.
+        let all_linear = k.mag_linear && k.min_linear;
         let mipf = match k.mip {
             2 => MipmapFilterMode::Linear,
+            0 if all_linear && k.aniso > 1 => MipmapFilterMode::Linear,
             _ => MipmapFilterMode::Nearest,
         };
-        // wgpu allows anisotropy only with all filters linear.
-        let aniso = if k.mag_linear && k.min_linear && k.mip == 2 {
+        let aniso = if all_linear && matches!(mipf, MipmapFilterMode::Linear) {
             k.aniso.max(1)
         } else {
             1
