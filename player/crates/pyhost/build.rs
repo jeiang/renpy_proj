@@ -10,7 +10,12 @@ fn main() {
     let manifest = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
     let player = manifest.join("../..").canonicalize().unwrap();
     let out = player.join("build-out/cpython");
-    let script = manifest.join("cpython/build.sh");
+    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    let script = manifest.join(if target_os == "linux" {
+        "cpython/build_linux.sh"
+    } else {
+        "cpython/build.sh"
+    });
     for f in ["build.sh", "mkzip.py", "mkboot.py"] {
         println!("cargo:rerun-if-changed=cpython/{f}");
     }
@@ -47,8 +52,15 @@ fn main() {
     for lib in ["ffi", "bz2", "lzma", "expat", "z", "ssl", "crypto"] {
         println!("cargo:rustc-link-lib=static={lib}");
     }
-    for fw in ["CoreFoundation", "SystemConfiguration"] {
-        println!("cargo:rustc-link-lib=framework={fw}");
+    if target_os == "macos" {
+        for fw in ["CoreFoundation", "SystemConfiguration"] {
+            println!("cargo:rustc-link-lib=framework={fw}");
+        }
+    }
+    if target_os == "linux" {
+        for lib in ["m", "dl", "util", "pthread"] {
+            println!("cargo:rustc-link-lib={lib}");
+        }
     }
     println!("cargo:rustc-env=PYHOST_OUT={}", out.display());
 }
