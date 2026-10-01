@@ -22,13 +22,22 @@ pub fn pass(src: &str) -> (String, Vec<Rewrite>) {
     let Ok(t) = lex(src) else {
         return (src.to_string(), Vec::new());
     };
-    let mut c = Ctx { src, t, edits: Vec::new(), log: Vec::new() };
+    let mut c = Ctx {
+        src,
+        t,
+        edits: Vec::new(),
+        log: Vec::new(),
+    };
     c.run();
     c.finish()
 }
 
-const COMPOUND: [&str; 10] = ["if", "for", "while", "try", "with", "def", "class", "else", "elif", "async"];
-const NOT_EXPR_START: [&str; 10] = ["if", "else", "in", "is", "and", "or", "for", "as", "from", "import"];
+const COMPOUND: [&str; 10] = [
+    "if", "for", "while", "try", "with", "def", "class", "else", "elif", "async",
+];
+const NOT_EXPR_START: [&str; 10] = [
+    "if", "else", "in", "is", "and", "or", "for", "as", "from", "import",
+];
 
 impl<'a> Ctx<'a> {
     fn txt(&self, i: usize) -> &'a str {
@@ -45,16 +54,28 @@ impl<'a> Ctx<'a> {
     }
 
     fn ins(&mut self, at: usize, text: &str) {
-        self.edits.push(Edit { s: at, e: at, text: text.to_string() });
+        self.edits.push(Edit {
+            s: at,
+            e: at,
+            text: text.to_string(),
+        });
     }
 
     fn rep(&mut self, s: usize, e: usize, text: &str) {
-        self.edits.push(Edit { s, e, text: text.to_string() });
+        self.edits.push(Edit {
+            s,
+            e,
+            text: text.to_string(),
+        });
     }
 
     fn note(&mut self, i: usize, rule: &'static str) {
         let t = self.t[i];
-        self.log.push(Rewrite { line: t.line, col: t.col, rule });
+        self.log.push(Rewrite {
+            line: t.line,
+            col: t.col,
+            rule,
+        });
     }
 
     fn opener(&self, i: usize) -> bool {
@@ -146,7 +167,10 @@ impl<'a> Ctx<'a> {
         match self.t[f].kind {
             Kind::Num | Kind::Str => true,
             Kind::Name => !NOT_EXPR_START.contains(&self.txt(f)),
-            Kind::Op => matches!(self.txt(f), "(" | "[" | "{" | "-" | "+" | "~" | "`" | ">>" | "..."),
+            Kind::Op => matches!(
+                self.txt(f),
+                "(" | "[" | "{" | "-" | "+" | "~" | "`" | ">>" | "..."
+            ),
             Kind::Newline => false,
         }
     }
@@ -247,7 +271,11 @@ impl<'a> Ctx<'a> {
             body = &body[..body.len() - 1];
         }
         let b = body.as_bytes();
-        if b.len() > 1 && b[0] == b'0' && b.iter().all(|c| (b'0'..=b'7').contains(c)) && b.iter().any(|&c| c != b'0') {
+        if b.len() > 1
+            && b[0] == b'0'
+            && b.iter().all(|c| (b'0'..=b'7').contains(c))
+            && b.iter().any(|&c| c != b'0')
+        {
             self.ins(s + 1, "o");
             self.note(i, "octal");
         }
@@ -316,7 +344,11 @@ impl<'a> Ctx<'a> {
                 let (s, e) = (self.t[end - 1].s, self.t[end - 1].e);
                 self.rep(s, e, "");
             }
-            let close = if tail.is_empty() { ")".to_string() } else { format!(", {tail})") };
+            let close = if tail.is_empty() {
+                ")".to_string()
+            } else {
+                format!(", {tail})")
+            };
             self.ins(last_end, &close);
         }
         self.note(i, "print");
@@ -331,7 +363,10 @@ impl<'a> Ctx<'a> {
         if self.is_op(f, "(") && self.close_of(f) == Some(end - 1) {
             return;
         }
-        let inn = self.top_level(f, end, |c, k| c.is_name(k, "in")).first().copied();
+        let inn = self
+            .top_level(f, end, |c, k| c.is_name(k, "in"))
+            .first()
+            .copied();
         self.open_call(i, f);
         if let Some(k) = inn {
             let (s, e) = (self.t[k].s, self.t[k].e);
@@ -416,7 +451,9 @@ impl<'a> Ctx<'a> {
             return;
         }
         let open = i + 2;
-        let Some(close) = self.close_of(open) else { return };
+        let Some(close) = self.close_of(open) else {
+            return;
+        };
         let tuples = self.tuple_params(&self.split(open + 1, close));
         if tuples.is_empty() || !self.is_op(close + 1, ":") {
             return;
@@ -496,7 +533,11 @@ impl<'a> Ctx<'a> {
         for (k, &(a, b)) in tuples.iter().enumerate() {
             let name = format!("__py2l{k}");
             let (s, e) = (self.t[a].s, self.t[b - 1].e);
-            let inner = if b - 1 > a + 1 { self.src[self.t[a + 1].s..self.t[b - 2].e].to_string() } else { String::new() };
+            let inner = if b - 1 > a + 1 {
+                self.src[self.t[a + 1].s..self.t[b - 2].e].to_string()
+            } else {
+                String::new()
+            };
             let single = b - 1 == a + 2 && self.t[a + 1].kind == Kind::Name;
             if single {
                 self.rep(s, e, &inner);
@@ -551,7 +592,11 @@ impl<'a> Ctx<'a> {
             }
             self.rep(ls, at, &" ".repeat(col));
             let t = self.t[i];
-            self.log.push(Rewrite { line: t.line, col: 0, rule: "tabs" });
+            self.log.push(Rewrite {
+                line: t.line,
+                col: 0,
+                rule: "tabs",
+            });
         }
     }
 }

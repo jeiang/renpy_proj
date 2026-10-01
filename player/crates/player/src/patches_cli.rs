@@ -68,9 +68,7 @@ fn note_fingerprint(fp: &Option<String>) {
 }
 
 pub fn run(args: &[String], data: &Path, exe: &Path) -> Result<i32> {
-    let [game, sub] = args else {
-        bail!("{USAGE}")
-    };
+    let [game, sub] = args else { bail!("{USAGE}") };
     let key = game_key_of(game)?;
 
     match sub.as_str() {

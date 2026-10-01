@@ -33,8 +33,8 @@ pub struct LexError;
 
 const OPS3: [&[u8]; 5] = [b"**=", b"//=", b">>=", b"<<=", b"..."];
 const OPS2: [&[u8]; 19] = [
-    b"**", b"//", b">>", b"<<", b"<=", b">=", b"==", b"!=", b"<>", b"+=", b"-=", b"*=", b"/=", b"%=", b"&=",
-    b"|=", b"^=", b"->", b":=",
+    b"**", b"//", b">>", b"<<", b"<=", b">=", b"==", b"!=", b"<>", b"+=", b"-=", b"*=", b"/=",
+    b"%=", b"&=", b"|=", b"^=", b"->", b":=",
 ];
 
 fn is_ident_start(c: u8) -> bool {
@@ -46,7 +46,11 @@ fn is_ident(c: u8) -> bool {
 }
 
 fn is_prefix(word: &[u8]) -> bool {
-    !word.is_empty() && word.len() <= 2 && word.iter().all(|c| matches!(c.to_ascii_lowercase(), b'r' | b'u' | b'b'))
+    !word.is_empty()
+        && word.len() <= 2
+        && word
+            .iter()
+            .all(|c| matches!(c.to_ascii_lowercase(), b'r' | b'u' | b'b'))
 }
 
 /// End of the string that starts at `i` (`i` is at the opening quote).
@@ -95,7 +99,11 @@ fn number_end(b: &[u8], i: usize) -> usize {
             }
         }
         if matches!(at(j), b'e' | b'E') {
-            let k = if matches!(at(j + 1), b'+' | b'-') { j + 2 } else { j + 1 };
+            let k = if matches!(at(j + 1), b'+' | b'-') {
+                j + 2
+            } else {
+                j + 1
+            };
             if at(k).is_ascii_digit() {
                 integer = false;
                 j = k;
@@ -142,7 +150,14 @@ pub fn lex(src: &str) -> Result<Vec<Tok>, LexError> {
         match c {
             b'\n' => {
                 if depth == 0 && in_line {
-                    toks.push(Tok { kind: Kind::Newline, s: i, e: i + 1, line, col: col_of(src, line_start, i), first: false });
+                    toks.push(Tok {
+                        kind: Kind::Newline,
+                        s: i,
+                        e: i + 1,
+                        line,
+                        col: col_of(src, line_start, i),
+                        first: false,
+                    });
                     in_line = false;
                 }
                 i += 1;
@@ -173,7 +188,9 @@ pub fn lex(src: &str) -> Result<Vec<Tok>, LexError> {
                 if c == b'"' || c == b'\'' {
                     i = string_end(b, i)?;
                     kind = Kind::Str;
-                } else if c.is_ascii_digit() || (c == b'.' && i + 1 < n && b[i + 1].is_ascii_digit()) {
+                } else if c.is_ascii_digit()
+                    || (c == b'.' && i + 1 < n && b[i + 1].is_ascii_digit())
+                {
                     i = number_end(b, i);
                     kind = Kind::Num;
                 } else if is_ident_start(c) {
@@ -203,19 +220,37 @@ pub fn lex(src: &str) -> Result<Vec<Tok>, LexError> {
                         _ => {}
                     }
                 }
-                toks.push(Tok { kind, s, e: i, line, col: col_of(src, line_start, s), first: !in_line });
+                toks.push(Tok {
+                    kind,
+                    s,
+                    e: i,
+                    line,
+                    col: col_of(src, line_start, s),
+                    first: !in_line,
+                });
                 in_line = true;
                 skip_lines!(s, i);
             }
         }
     }
     if in_line {
-        toks.push(Tok { kind: Kind::Newline, s: n, e: n, line, col: 0, first: false });
+        toks.push(Tok {
+            kind: Kind::Newline,
+            s: n,
+            e: n,
+            line,
+            col: 0,
+            first: false,
+        });
     }
     Ok(toks)
 }
 
 fn col_of(src: &str, line_start: usize, at: usize) -> u32 {
     let seg = &src.as_bytes()[line_start..at];
-    if seg.is_ascii() { seg.len() as u32 } else { src[line_start..at].chars().count() as u32 }
+    if seg.is_ascii() {
+        seg.len() as u32
+    } else {
+        src[line_start..at].chars().count() as u32
+    }
 }

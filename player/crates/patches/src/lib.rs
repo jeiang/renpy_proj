@@ -91,7 +91,12 @@ fn line_col(text: &str, offset: usize) -> (usize, usize) {
     let offset = offset.min(text.len());
     let before = &text.as_bytes()[..offset];
     let line = before.iter().filter(|&&b| b == b'\n').count() + 1;
-    let col = offset - before.iter().rposition(|&b| b == b'\n').map_or(0, |p| p + 1) + 1;
+    let col = offset
+        - before
+            .iter()
+            .rposition(|&b| b == b'\n')
+            .map_or(0, |p| p + 1)
+        + 1;
     (line, col)
 }
 
@@ -152,10 +157,7 @@ pub fn parse_str(text: &str, origin: &Path) -> (Vec<Patch>, Vec<PatchError>) {
             errors.push(err(
                 n,
                 None,
-                format!(
-                    "unknown field `{key}` (fields: {})",
-                    FIELDS.join(", ")
-                ),
+                format!("unknown field `{key}` (fields: {})", FIELDS.join(", ")),
             ));
             bad = true;
         }
@@ -194,9 +196,7 @@ pub fn parse_str(text: &str, origin: &Path) -> (Vec<Patch>, Vec<PatchError>) {
         let mut rv_file = None;
         if let Some(f) = file {
             let f = f.replace('\\', "/");
-            if f.is_empty()
-                || f.starts_with('/')
-                || f.split('/').any(|p| p == ".." || p.is_empty())
+            if f.is_empty() || f.starts_with('/') || f.split('/').any(|p| p == ".." || p.is_empty())
             {
                 errors.push(err(
                     n,
@@ -215,7 +215,11 @@ pub fn parse_str(text: &str, origin: &Path) -> (Vec<Patch>, Vec<PatchError>) {
                 rv_line = Some(*l as u32);
             }
             Some(toml::Value::Integer(l)) => {
-                errors.push(err(n, Some("line"), format!("{l} is not a line number (1 or more)")));
+                errors.push(err(
+                    n,
+                    Some("line"),
+                    format!("{l} is not a line number (1 or more)"),
+                ));
                 bad = true;
             }
             Some(other) => {
@@ -243,9 +247,7 @@ pub fn parse_str(text: &str, origin: &Path) -> (Vec<Patch>, Vec<PatchError>) {
                     errors.push(err(
                         n,
                         Some("original_hash"),
-                        format!(
-                            "`{h}` is not `sha1:` and {MIN_HASH_DIGITS} to 40 hex digits"
-                        ),
+                        format!("`{h}` is not `sha1:` and {MIN_HASH_DIGITS} to 40 hex digits"),
                     ));
                     bad = true;
                 }
@@ -293,7 +295,10 @@ pub fn parse_file(path: &Path) -> (Vec<Patch>, Vec<PatchError>) {
                     index: None,
                     field: None,
                     position: None,
-                    message: format!("not UTF-8 text (invalid byte at offset {})", e.utf8_error().valid_up_to()),
+                    message: format!(
+                        "not UTF-8 text (invalid byte at offset {})",
+                        e.utf8_error().valid_up_to()
+                    ),
                 }],
             ),
         },
@@ -322,7 +327,11 @@ pub fn load_dirs(dirs: &[PathBuf]) -> Library {
             lib.files.push(path);
             lib.errors.extend(errors);
             for p in patches {
-                let key = (p.file.clone(), p.line, p.original_hash[..MIN_HASH_DIGITS].to_string());
+                let key = (
+                    p.file.clone(),
+                    p.line,
+                    p.original_hash[..MIN_HASH_DIGITS].to_string(),
+                );
                 if let Some((o, i)) = seen.get(&key) {
                     lib.errors.push(PatchError {
                         file: p.origin.clone(),
@@ -387,7 +396,9 @@ mod patches_py {
         for e in &lib.errors {
             errors.append(error_dict(py, e)?)?;
         }
-        (files, patches, errors).into_pyobject(py).map(|t| t.into_any())
+        (files, patches, errors)
+            .into_pyobject(py)
+            .map(|t| t.into_any())
     }
 }
 

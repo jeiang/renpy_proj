@@ -38,15 +38,24 @@ fn exec_statement_forms() {
 
 #[test]
 fn exception_syntax() {
-    assert_eq!(out("try:\n    pass\nexcept (A, B), e:\n    pass\n"), "try:\n    pass\nexcept (A, B) as e:\n    pass\n");
+    assert_eq!(
+        out("try:\n    pass\nexcept (A, B), e:\n    pass\n"),
+        "try:\n    pass\nexcept (A, B) as e:\n    pass\n"
+    );
     assert_eq!(out("raise E, 'm'\n"), "raise E( 'm')\n");
     assert_eq!(out("raise E, (1, 2)\n"), "raise E( *(1, 2))\n");
-    assert_eq!(out("raise E, 'm', tb\n"), "raise E( 'm').with_traceback( tb)\n");
+    assert_eq!(
+        out("raise E, 'm', tb\n"),
+        "raise E( 'm').with_traceback( tb)\n"
+    );
 }
 
 #[test]
 fn literals_and_operators() {
-    assert_eq!(out("x = 0777 + 10L + 0xFFL + 00 + 7\n"), "x = 0o777 + 10 + 0xFF + 00 + 7\n");
+    assert_eq!(
+        out("x = 0777 + 10L + 0xFFL + 00 + 7\n"),
+        "x = 0o777 + 10 + 0xFF + 00 + 7\n"
+    );
     assert_eq!(out("x = ur'a\\b' + u'c'\n"), "x = r'a\\b' + u'c'\n");
     assert_eq!(out("if a <> b: pass\n"), "if a != b: pass\n");
     assert_eq!(out("x = `a` + `b`\n"), "x = repr(a) + repr(b)\n");
@@ -54,8 +63,14 @@ fn literals_and_operators() {
 
 #[test]
 fn tuple_parameters() {
-    assert_eq!(out("def f(a, (b, c)):\n    return a\n"), "def f(a, __py2p0):\n    (b, c) = __py2p0; return a\n");
-    assert_eq!(out("x = lambda (k, v): k\n"), "x = lambda __py2l0: (lambda k, v: k)(*__py2l0)\n");
+    assert_eq!(
+        out("def f(a, (b, c)):\n    return a\n"),
+        "def f(a, __py2p0):\n    (b, c) = __py2p0; return a\n"
+    );
+    assert_eq!(
+        out("x = lambda (k, v): k\n"),
+        "x = lambda __py2l0: (lambda k, v: k)(*__py2l0)\n"
+    );
     assert_eq!(
         out("x = lambda (a, (b, c)): b\n"),
         "x = lambda __py2l0: (lambda a, __py2l0: (lambda b, c: b)(*__py2l0))(*__py2l0)\n"

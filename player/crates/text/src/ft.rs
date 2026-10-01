@@ -372,8 +372,8 @@ impl FTFont {
         let fn_obj = self.face_obj.bind(py).borrow().r#fn.clone_ref(py);
         let vext = glue::config_scale(py, "ftfont_vertical_extent_scale", fn_obj.bind(py))? as f64;
 
-        self.ascent = metrics::ceil(((asc as f64 * vext) as i64)) as i32;
-        self.descent = metrics::floor(((desc as f64 * vext) as i64)) as i32;
+        self.ascent = metrics::ceil((asc as f64 * vext) as i64) as i32;
+        self.descent = metrics::floor((desc as f64 * vext) as i64) as i32;
         if self.descent > 0 {
             self.descent = -self.descent;
         }
