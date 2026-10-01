@@ -189,7 +189,10 @@ impl Dev {
 
 impl Pads {
     fn build(&self) -> Result<Gilrs, Box<gilrs::Error>> {
-        GilrsBuilder::new().add_mappings(&self.mappings).build().map_err(Box::new)
+        GilrsBuilder::new()
+            .add_mappings(&self.mappings)
+            .build()
+            .map_err(Box::new)
     }
 
     /// Creates the gilrs context on first use and lists the devices already present.
