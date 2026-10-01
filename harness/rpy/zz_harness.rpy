@@ -649,6 +649,8 @@ init 999 python:
             return False
         if type(act).__name__ in _HZ_SKIP_ACTIONS:
             return False
+        if type(act).__name__ == "SetField" and getattr(act, "object", None) is getattr(renpy.store, "_preferences", 0):
+            return False   # quick menu toggles (auto-forward, skip): not the game's choice
         try:
             return bool(renpy.is_sensitive(act))
         except Exception:
@@ -938,7 +940,7 @@ screen _hz_deep_screen():
 #     comes back 3 times in a row ends the run: `deep-done stuck`. A loop is never an error record.
 #   Driver (HZ_DRIVER=<path of harness/drivers/<game>.py>, corpus.toml key `driver`): Python 2 and 3 source with optional
 #     NAME, HUBS (screen names or fnmatch patterns of the game's free-roam screens), hub(h) -> candidate or None and
-#     choice(h, captions) -> index or None. h is a _HzHub: h.cands (clickable actions of the screen, with .key, .kind,
+#     choice(h, captions) -> index or None, AVOID_CAPTIONS (menu captions never taken while another exists). h is a _HzHub: h.cands (clickable actions of the screen, with .key, .kind,
 #     .label, .args), h.expr("python expression", default), h.v("variable", default), h.visits(c), h.least(cands),
 #     h.rng, h.note(text). Without a driver answer the driver clicks the least visited candidate.
 # ======================================================================================================================
@@ -1168,7 +1170,8 @@ init 999 python:
     class _HzCand(object):
         def __init__(self, act):
             self.act = act
-            first = act[0] if isinstance(act, (list, tuple)) and act else act
+            parts = list(act) if isinstance(act, (list, tuple)) else [act]
+            first = next((x for x in parts if getattr(x, "label", None) is not None), parts[0] if parts else act)   # the Jump or Call of a list
             self.kind = type(first).__name__
             lab = getattr(first, "label", None)
             self.label = _hz_s(lab) if lab is not None else None
@@ -1329,6 +1332,12 @@ init 999 python:
                 D.drv = None
         if k is None:
             k = 0
+        if D.drv is not None:
+            bad = tuple(D.drv.ns.get("AVOID_CAPTIONS", ()))
+            if bad and caps[k].startswith(bad):
+                alt = [i for i in range(len(caps)) if not caps[i].startswith(bad)]
+                if alt:
+                    k = alt[int((D.rng if D.on else D.nrng).random() * len(alt))]
         if D.on:
             if D.avoid and ("C:" + caps[k]) in D.avoid:
                 alt = [i for i in range(len(caps)) if ("C:" + caps[i]) not in D.avoid]
