@@ -541,13 +541,7 @@ impl Renderer {
             height: size.height.max(1),
             present_mode: PresentMode::Fifo,
             desired_maximum_frame_latency: 2,
-            // Opaque when offered: on Wayland/Vulkan the first mode can be PreMultiplied, which lets the
-            // compositor blend the window with what is behind it wherever the frame has alpha < 1.
-            alpha_mode: if caps.alpha_modes.contains(&CompositeAlphaMode::Opaque) {
-                CompositeAlphaMode::Opaque
-            } else {
-                caps.alpha_modes[0]
-            },
+            alpha_mode: caps.alpha_modes[0],
             color_space: SurfaceColorSpace::Auto,
             view_formats: vec![],
         };

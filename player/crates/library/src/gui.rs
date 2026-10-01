@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result, anyhow};
 use egui::{Color32, RichText};
 use wgpu::{
-    CompositeAlphaMode, CurrentSurfaceTexture, DeviceDescriptor, Instance, InstanceDescriptor, Limits, LoadOp,
+    CurrentSurfaceTexture, DeviceDescriptor, Instance, InstanceDescriptor, Limits, LoadOp,
     Operations, PowerPreference, PresentMode, RenderPassColorAttachment, RenderPassDescriptor,
     RequestAdapterOptions, StoreOp, Surface, SurfaceColorSpace, SurfaceConfiguration,
     TextureFormat, TextureUsages, TextureViewDescriptor,
@@ -354,13 +354,7 @@ impl App {
             height: size.height.max(1),
             present_mode: PresentMode::Fifo,
             desired_maximum_frame_latency: 2,
-            // Opaque when offered: on Wayland/Vulkan the first mode can be PreMultiplied, which lets the
-            // compositor blend the window with what is behind it wherever the frame has alpha < 1.
-            alpha_mode: if caps.alpha_modes.contains(&CompositeAlphaMode::Opaque) {
-                CompositeAlphaMode::Opaque
-            } else {
-                caps.alpha_modes[0]
-            },
+            alpha_mode: caps.alpha_modes[0],
             color_space: SurfaceColorSpace::Auto,
             view_formats: vec![],
         };
