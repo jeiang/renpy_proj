@@ -15,21 +15,38 @@ struct Ctx<'a> {
     t: Vec<Tok>,
     edits: Vec<Edit>,
     log: Vec<Rewrite>,
+    /// Print statements go through `_py2c_print`, which keeps Python 2's softspace between statements.
+    soft: bool,
+    /// A trailing-comma print statement was seen.
+    saw_trailing: bool,
 }
 
 /// One rewrite pass over `src`.
+///
+/// Plain `print(...)` calls are enough unless the file has a trailing-comma print (`print x,`). Python 2 then
+/// writes the pending space only if another item follows, so a later bare `print` writes the newline alone.
+/// A file with such a statement is rewritten again with every print statement going through `_py2c_print`.
 pub fn pass(src: &str) -> (String, Vec<Rewrite>) {
     let Ok(t) = lex(src) else {
         return (src.to_string(), Vec::new());
     };
-    let mut c = Ctx {
-        src,
-        t,
-        edits: Vec::new(),
-        log: Vec::new(),
-    };
-    c.run();
-    c.finish()
+    let mut soft = false;
+    loop {
+        let mut c = Ctx {
+            src,
+            t: t.clone(),
+            edits: Vec::new(),
+            log: Vec::new(),
+            soft,
+            saw_trailing: false,
+        };
+        c.run();
+        if c.saw_trailing && !soft {
+            soft = true;
+            continue;
+        }
+        return c.finish();
+    }
 }
 
 const COMPOUND: [&str; 10] = [
@@ -294,8 +311,13 @@ impl<'a> Ctx<'a> {
     fn print(&mut self, i: usize) {
         let end = self.stmt_end(i + 1);
         let f = i + 1;
+        let call = if self.soft { "_py2c_print" } else { "print" };
         if f == end {
             let at = self.t[i].e;
+            if self.soft {
+                let (s, e) = (self.t[i].s, self.t[i].e);
+                self.rep(s, e, call);
+            }
             self.ins(at, "()");
             self.note(i, "print");
             return;
@@ -319,16 +341,21 @@ impl<'a> Ctx<'a> {
             args = comma.map_or(end, |c| c + 1);
         }
         let trailing = end > args && self.commas(args, end).last() == Some(&(end - 1));
+        self.saw_trailing |= trailing;
         let argend = if trailing { end - 1 } else { end };
         let mut tail: Vec<String> = Vec::new();
         if trailing {
-            tail.push("end=\" \"".to_string());
+            tail.push(if self.soft { "soft=True" } else { "end=\" \"" }.to_string());
         }
         if let Some(fl) = file {
             tail.push(format!("file={fl}"));
         }
         let tail = tail.join(", ");
         let last_end = self.t[end - 1].e;
+        if self.soft {
+            let (s, e) = (self.t[i].s, self.t[i].e);
+            self.rep(s, e, call);
+        }
         if args >= argend {
             // `print >>f` and `print >>f,`: nothing to print but the options.
             let from = self.t[i].e;

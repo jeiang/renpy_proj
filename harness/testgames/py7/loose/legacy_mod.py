@@ -21,5 +21,10 @@ def printed():
     print >>buf, "b",
     print >>buf, "c"
     print >>buf
+    print >>buf, "d",
+    print >>buf
+    for n in (1, 2, 3):
+        print >>buf, n,
+    print >>buf
     print
     return buf.getvalue().replace("\n", "|")

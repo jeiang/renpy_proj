@@ -37,6 +37,41 @@ def _py2c_div(a, b):
         raise
 
 
+_soft_fallback = {}
+
+
+def _py2c_softspace(f, value=None):
+    """The `softspace` flag of a Python 2 file: set by `print x,`, read by the next print statement."""
+    if value is None:
+        try:
+            return bool(f.softspace)
+        except AttributeError:
+            return _soft_fallback.get(id(f), False)
+    try:
+        f.softspace = value
+    except (AttributeError, TypeError):
+        _soft_fallback[id(f)] = value
+
+
+def _py2c_print(*args, file=None, soft=False):
+    """The rewritten Python 2 `print` statement of a file that has a trailing-comma print. `print x,` writes no space
+    at once: it sets softspace, and the next print statement to the same file writes the space first, so a bare
+    `print` after it writes only the newline."""
+    if file is None:
+        file = sys.stdout
+        if file is None:
+            return
+    for a in args:
+        if _py2c_softspace(file):
+            file.write(" ")
+        text = str(a)
+        file.write(text)
+        _py2c_softspace(file, (not text) or (not text[-1].isspace()) or text[-1] == " ")
+    if not soft:
+        file.write("\n")
+        _py2c_softspace(file, False)
+
+
 def _py2c_round(x, n=0):
     """Python 2 round: half away from zero, returns a float."""
     import math

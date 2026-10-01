@@ -284,7 +284,8 @@ SYNC_CLIP = L.SYNC_CLIP_NAME
 
 def make_sync_clip():
     """A 20 s VP9 + Opus test clip (60 fps test pattern, 440 Hz tone), built once with the ffmpeg on PATH. It is only
-    a media generator: nothing links it. The corpus videos have no audio track, so they cannot measure A/V sync."""
+    a media generator: nothing links it. The check builds it only when the game movie gives no audio position (a corpus
+    video without an audio track), so that A/V sync can still be measured."""
     dest = L.work_dir() / "synthetic" / SYNC_CLIP
     if dest.exists():
         return dest
@@ -348,13 +349,17 @@ def check_video(ctx):
     launches = [_launch_summary(r)]
     out = {"check": "video", "presented_fps": v["presented_fps"], "frames_ratio": ratio, "presented_ratio_raw": raw_ratio, "decoded_fps": v["fps"],
            "decoded_ratio": dec_ratio, "shot": next((x["file"] for x in r["shots"] if x["file"]), None), "metrics": v}
-    # A/V sync is measured on the synthetic clip (VP9 + Opus, known frame rate, no loop wrap). The corpus movies carry
-    # no audio track: their position is the video's own clock, so it cannot show a sync error.
+    # A/V sync is measured on the game movie when the movie channel reports an audio position (the movie has an audio
+    # track). Without one the position is the video's own clock and cannot show a sync error: then the check measures a
+    # synthetic clip (VP9 + Opus, known frame rate, no loop wrap).
     sync = v
-    if o.get("sync_clip", True):
+    if "av_offset_ms_max" in v:
+        out["sync_source"] = "game movie (audio position from the movie channel)"
+    elif o.get("sync_clip", True):
         clip = make_sync_clip()
         if clip is None:
-            warnings.append("A/V sync not measured: the game movie has no audio and ffmpeg is not on PATH to build the sync clip")
+            warnings.append("A/V sync not measured: the game movie gave no audio position (%s) and ffmpeg is not on PATH to build the sync clip"
+                            % v.get("av_sync", "no audio track"))
             sync = None
         else:
             r2, sync = _video_run(ctx, "video-sync", SYNC_CLIP, 60, extra={SYNC_CLIP: str(clip)})
@@ -363,7 +368,7 @@ def check_video(ctx):
             out["sync_metrics"] = sync
             if not sync:
                 problems.append("video-sync: no result written: %s" % r2["aborted"])
-            out["sync_source"] = "synthetic clip %s (game movie has no audio)" % SYNC_CLIP
+            out["sync_source"] = "synthetic clip %s (game movie gave no audio position)" % SYNC_CLIP
     else:
         out["sync_source"] = "game movie (its position is the video clock when there is no audio)"
     if sync and "av_offset_ms_max" in sync:
