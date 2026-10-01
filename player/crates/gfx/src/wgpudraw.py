@@ -1234,7 +1234,12 @@ class WgpuDraw(object):
             transform = Matrix.screen_projection(surf.width, surf.height)
         else:
             target = None
-            x, y, w, h = self.drawable_viewport
+            # Stock passes these floats to glViewport, which takes integers and truncates them. An odd padding at
+            # draw_per_phys 1 (a 1896x1056 window around 16:9) gives a .5 box origin: stock draws from the integer below,
+            # a float viewport would sit half a pixel further right. glViewport counts y from the bottom, so the extra
+            # pixel of an odd padding lands at the top; this pass counts from the top.
+            x, y, w, h = (int(i) for i in self.drawable_viewport)
+            y = self.drawable_size[1] - y - h
             self.gpu.begin_pass(None, (x, y, w, h), (clear_r, clear_g, clear_b, 1.0))
             transform = Matrix.screen_projection(self.virtual_size[0], self.virtual_size[1])
 
