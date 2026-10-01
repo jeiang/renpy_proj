@@ -374,11 +374,11 @@ fn emit(toks: &[T], start_line: usize) -> String {
 
 fn matching_paren(toks: &[T], open: usize) -> usize {
     let mut d = 0;
-    for j in open..toks.len() {
-        if is_p(&toks[j], "(") {
+    for (j, t) in toks.iter().enumerate().skip(open) {
+        if is_p(t, "(") {
             d += 1;
         }
-        if is_p(&toks[j], ")") {
+        if is_p(t, ")") {
             d -= 1;
             if d == 0 {
                 return j;
@@ -599,14 +599,14 @@ fn num(s: &str, line: usize) -> T {
 fn split_args(toks: &[T], open: usize) -> (Vec<(usize, usize)>, usize) {
     let close = matching_paren(toks, open);
     let (mut args, mut start, mut d) = (vec![], open + 1, 0);
-    for k in open + 1..close {
-        if is_p(&toks[k], "(") || is_p(&toks[k], "[") {
+    for (k, t) in toks.iter().enumerate().take(close).skip(open + 1) {
+        if is_p(t, "(") || is_p(t, "[") {
             d += 1;
         }
-        if is_p(&toks[k], ")") || is_p(&toks[k], "]") {
+        if is_p(t, ")") || is_p(t, "]") {
             d -= 1;
         }
-        if d == 0 && is_p(&toks[k], ",") {
+        if d == 0 && is_p(t, ",") {
             args.push((start, k));
             start = k + 1;
         }

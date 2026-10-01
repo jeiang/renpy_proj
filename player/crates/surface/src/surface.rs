@@ -84,6 +84,8 @@ fn masks_from(flags: u64, masks: Option<[u32; 4]>, sample: Option<Format>) -> Fo
 }
 
 impl Surface {
+    // One argument per field of the block layout.
+    #[allow(clippy::too_many_arguments)]
     fn build(
         shared: Arc<Shared>,
         owns: bool,
@@ -910,6 +912,8 @@ impl Surface {
         self.generation()
     }
 
+    // Python API name (pygame_sdl2 Surface.from_data) takes self.
+    #[allow(clippy::wrong_self_convention)]
     fn from_data(&self, data: PyBackedBytes) -> PyResult<()> {
         let row = self.w as usize * 4;
         if data.len() != row * self.h as usize {

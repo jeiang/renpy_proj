@@ -480,6 +480,8 @@ pub enum Cmd {
 }
 
 /// The window surface, or a stand-in texture when running headless.
+// One Screen per Renderer, never in a collection: boxing the window variant gains nothing.
+#[allow(clippy::large_enum_variant)]
 enum Screen {
     Window {
         surface: Surface<'static>,
@@ -1133,9 +1135,12 @@ impl Renderer {
     }
 }
 
+/// One standard layout: stride in floats, attribute offsets, is the text layout.
+pub type StdLayout = (u32, Vec<(&'static str, u32)>, bool);
+
 /// The mesh attribute layouts of `renpy.gl2.gl2mesh` (`TEXTURE_LAYOUT`, `TEXT_LAYOUT`) used to warm pipelines:
 /// (stride in floats, attribute offsets, is the text layout).
-pub fn standard_layouts() -> Vec<(u32, Vec<(&'static str, u32)>, bool)> {
+pub fn standard_layouts() -> Vec<StdLayout> {
     vec![
         (0, vec![], false),
         (2, vec![("a_tex_coord", 0)], false),

@@ -57,7 +57,9 @@ pub static IMPORT_MAPPING: &[(&str, &str)] = &[
     ("xmlrpclib", "xmlrpc.client"),
 ];
 
-pub static NAME_MAPPING: &[((&str, &str), (&str, &str))] = &[
+type NamePair = (&'static str, &'static str);
+
+pub static NAME_MAPPING: &[(NamePair, NamePair)] = &[
     (
         ("UserDict", "IterableUserDict"),
         ("collections", "UserDict"),
