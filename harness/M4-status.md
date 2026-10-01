@@ -98,7 +98,7 @@ Final state. Evidence is on artemis in `~/Projects/renpy_proj-remote/m4-corpus/h
 
 ### Final Linux table (stock = the game's engine, player = `--tier full --baseline <stock>`)
 
-Player binary: release build of `build/m4-corpus` (main `4d8b88a`) on artemis. A "pass" has exit code 0 for lint, probe, route, saveresume and video. "video skipped" means `corpus.toml` configures no video for the game. All 24 games pass on stock and on the player, with the two notes below the table.
+Player binary: release build of `build/m4-corpus` (main `4d8b88a`) on artemis. A "pass" has exit code 0 for lint, probe, route, saveresume and video. "video skipped" means `corpus.toml` configures no video for the game. All 24 games pass on stock. On the player, 22 pass at once. Bumpkin 0.15 passes its route check only against an 8.5.3 stock baseline (note 1); BraveheartAcademy passed saveresume on a rerun (note 2).
 
 | Game (Ren'Py of the stock engine) | Stock | Player | Notes |
 |---|---|---|---|
@@ -106,14 +106,14 @@ Player binary: release build of `build/m4-corpus` (main `4d8b88a`) on artemis. A
 | WaifuAcademy (8.2.x) | pass | pass | `02-say-12` volatile (not gated) |
 | BlackRose (7.7.3) | pass | pass | `03-say-40` volatile (not gated) |
 | HaremHotel (7.4.11) | pass | pass | |
-| AHouseInTheRift (7.x) | pass | pass | video 60 / 30 fps |
+| AHouseInTheRift | pass | pass | video 60 / 30 fps |
 | AlexsVantasticAdventure | pass | pass | no video configured |
 | AstralLust (7.8.2) | pass | pass | |
 | AWorldBetweenUs (7.4.8) | pass | pass | |
 | BloomWar | pass | pass | video 20 fps nominal |
 | BraveheartAcademy (7.4.8) | pass | pass | note 2 |
 | Bumpkin 0.14 (7.5.3) | pass | pass | player saveresume state match False (the load runs and the story continues) |
-| Bumpkin 0.15 (8.1.3) | pass | pass | note 1 |
+| Bumpkin 0.15 (8.1.3) | pass | pass on route only against an 8.5.3 baseline | note 1 |
 | CabinByTheLake | pass | pass | no video configured |
 | DFraction | pass | pass | no video configured |
 | DOF (8.3.2) | pass | pass | no video configured |
@@ -134,10 +134,10 @@ Per-check detail (player rows; every route baseline diff is inside the limits of
 
 Notes.
 
-1. Bumpkin 0.15: the first full player run failed the route check only (`01-menu`: mean 0.0025, 0.73% changed pixels against a 0.5% limit). The differing pixels are the outline edges of the menu text. The stock baseline is the game's bundled Ren'Py 8.1.3. A second stock run with the 8.5.3 SDK (`--stock-engine sdk-853-linux`) differs from the 8.1.3 baseline by the same 0.784% and from the player by 0.001%. So the player matches Ren'Py 8.5.3 and the difference is the text outline rendering of 8.1.3 against 8.5.3; it is not a player fault. Against the 8.5.3 stock baseline the player route passes (`out/Bumpkin015-route853`: `01-menu` 0.00004, 0.002%; `02-say-12` 0.00054, 0.085%; `03-say-40` 0.00038, 0.085%). The shipped `corpus.toml` entry is unchanged: the table counts the 8.1.3 baseline as the failing comparison and the 8.5.3 baseline as the passing one.
-2. BraveheartAcademy: the first full player run failed saveresume at `save-create`. That stage runs the stock engine, which wrote `traceback.txt` (`script.rpy:565`, `IndexError`; the intro year screen was not answered in time). The same check passed on a rerun with the player (`out/BraveheartAcademy-sr2`: 21 lines after load, state match True) and on the earlier stock run. This is a harness timing flake of the stock save step, not a player fault.
+1. Bumpkin 0.15: the first full player run failed the route check only (`01-menu`: mean 0.0025, 0.73% changed pixels against a 0.5% limit). The differing pixels are the outline edges of the menu text. The stock baseline is the game's bundled Ren'Py 8.1.3. A second stock run with the 8.5.3 SDK (`--stock-engine sdk-853-linux`) differs from the 8.1.3 baseline by the same 0.784% and from the player by 0.001%. So the player matches Ren'Py 8.5.3 and the difference is the text outline rendering of 8.1.3 against 8.5.3; it is not a player fault. Against the 8.5.3 stock baseline the player route passes (`out/Bumpkin015-route853`: `01-menu` 0.00004, 0.002%; `02-say-12` 0.00054, 0.085%; `03-say-40` 0.00038, 0.085%). `corpus.toml` is unchanged.
+2. BraveheartAcademy: the first full player run failed saveresume at `save-create`. That stage runs the stock engine, which wrote `traceback.txt` (`script.rpy:565`, `IndexError`). The same check passed on a rerun with the player (`out/BraveheartAcademy-sr2`: 21 lines after load, state match True) and on the earlier stock run. The failing step is the stock engine, so this is a harness flake of the stock save step and not a player fault.
 
-DOF and Dreamscape each have an earlier failed pair in `batch3.status` and `batch4.status` (exit 1). Those came from the earlier archive faults; the reruns in `batch5.status` pass and are the results in `out/`.
+DOF and Dreamscape each have an earlier failed pair in `batch3.status` and `batch4.status` (exit 1). The reruns in `batch5.status` pass and replaced them in `out/`.
 
 ### Harness fix: machine lock takeover (commit 42a17b1, also on main)
 
@@ -155,7 +155,7 @@ The exe is built from this branch on the Windows VM (`C:\spike\m4`, bundle of `b
 | backend | Vulkan (Wine's native Vulkan on RADV); `log.txt`: `Backend: 'Vulkan'` |
 | probe | pass, exit code 0, 65 of 60 lines |
 | route | pass; self diff 0; baseline diff `01-menu` 0.00001 (0.000%), `02-say-12` 0.00014 (0.011%), `03-say-40` 0.00014 (0.011%), all inside the limits. The half-pixel offset of the older exe is gone. |
-| video | pass (60.0 presented / 60.0 decoded fps, A/V offset max 27 ms; earlier run `out/wine-si-video`) |
+| video | pass with the earlier exe (60.0 presented / 60.0 decoded fps, A/V offset max 27 ms; `out/wine-si-video`); not repeated with the new exe |
 
 Evidence: `out/wine-si-m1b` (after the fix), `out/wine-si-m1` (before the fix, probe exit 9), `out/wine-bt` (the backtrace).
 
