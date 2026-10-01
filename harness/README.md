@@ -46,13 +46,45 @@ evidence of each launch (`<launch>/stdout.log`, `progress.txt`, `plan.log`, `log
 
 `gatelib/launch.py` does, for each game process: take the machine lock `/tmp/renpy_proj.run.lock` (poll 0.1 s); APFS-clone (`/bin/cp -Rc`) the corpus source into `harness/work/` (never `~/Games`, never the source in place); strip `game/saves`; scratch saves via `RENPY_PATH_TO_SAVES`; hash the sorted listing of `~/Library/RenPy` before and after (inside the lock); record `vm.loadavg`; run; `SIGKILL` by clone path and confirm with `pgrep -f` (the lock stays if a process survived); collect `traceback.txt`/`errors.txt`/`log.txt`; delete the clone. Games run outside the Nix shell's toolchain environment. Any traceback file, a surviving process or a changed `~/Library/RenPy` fails the check.
 
+## Stages
+
+Every launch is a sequence of **stages**. Each stage is confirmed by a line that the injected script writes to `progress.txt` (lint injects nothing: its stages are the engine's own output) and has its own short timeout. A missed stage fails at once: the error names the stage, the expected line, the last line seen and its age, the gate kills the game (SIGKILL sweep) and releases the lock. The failure is in `res["aborted"]` (shown in the check's problems) and in `stage_failed` of the launch summary; the measured time of each stage is in `stage_times`.
+
+| Stage | Starts at | Confirmed by | Default |
+|---|---|---|---|
+| `boot` | process start | `boot` (init blocks ran) | 60 s |
+| `menu` | after boot | `menu True` | 60 s |
+| `ack` | a command is sent | `cmd-ack <cmd>` | 10 s |
+| `done` | ack of auto, click, advance, advance-to, exec | `cmd-done <cmd>` | 10 s |
+| `save` | ack of `save` | `saved <slot>` | 30 s |
+| `start` | ack of `start` | `label start` | 30 s |
+| `jump` | ack of `jump X` | `label X` | 30 s |
+| `loaded` | ack of `load` | `loaded` (`config.after_load_callbacks`) | 30 s |
+| `first-say` | `wait say` | first `say N` | 30 s |
+| `say` | `advance` | a new `say N` at least every 15 s, then `advance-done` | 15 s per line |
+| `movie-begin` | ack of `movie` | `movie-begin` | 30 s |
+| `movie-slack` | ack of `movie` | `video-result done` within warm + secs + slack | 30 s |
+| `quit` | `quit` | the process exits | 45 s |
+| `lint-boot` | process start | lint's first output (stdout or `log.txt`) | 60 s |
+| `lint` | first output | the `Statistics:` line | 900 s |
+
+The table is `gatelib/stages.py` (`DEFAULTS`). A game overrides single entries in `corpus.toml`, for example `stages = { boot = 240 }` (a first launch of a signed `.app` pays Gatekeeper; a game with thousands of scripts boots slowly: set the measured value, not a guess). `--stage-scale F` multiplies the table. Every command the script receives writes `cmd-ack <cmd>` first, then `cmd-done <cmd>` when it returns, or `cmd-error <cmd> <exception repr>` and `cmd-error-trace ...` (Ren'Py 7 and 8). `start`, `load`, `jump`, `movie` and `quit` end in a context jump and write no `cmd-done`. A `cmd-error` line ends the stage at once.
+
+## Machine lock
+
+`/tmp/renpy_proj.run.lock` is a directory. The holder writes `owner` into it (`pid=`, `start=`, `cmd=`) and removes `owner` and then the directory in a `finally`. A taker that finds the lock with an owner pid that is dead, or with no `owner` file and an age over 30 min, logs `machine lock taken over: <reason>` and takes it over. A launch whose game processes survived the sweep keeps the lock with `pid=0` (never stale): remove it by hand after killing them.
+
+## Ren'Py 7 stock engines
+
+The Ren'Py 7 games ship no macOS engine (their `lib/` has linux and windows only), so stock is the SDK of the game's own version (`research/test-corpus/sdk/renpy-7.x-sdk`, x86_64 Python 2, run under Rosetta) or, for the two `.app` games, the app's bundled engine. Ren'Py 7 ignores `RENPY_PATH_TO_SAVES`: the gate passes `--savedir <scratch>/saves/_stock7` and renames that folder to `<save_directory>` after the run, so the saves keep the layout of Ren'Py 8 (the player's first-open import and the `saveresume` check read it). Without this a Ren'Py 7 launch writes `persistent` into `~/Library/RenPy`. `rpy/zz_harness.rpy` stays valid Python 2 and 3. Released clones (`.rpyc` only) of Ren'Py 7 games are made with `tools/make_released7.py`: `research/test-corpus/make_released.py` rewrites a Python 2 RPA index with a `unicode` prefix field, which breaks Ren'Py 7's loader ("Could not load from archive").
+
 ## Plans
 
-A plan is a text file of ops, one per line: `cmd TEXT` sends a command to the game (`start`, `load SLOT`, `save SLOT`, `auto on|off`, `click on|off`, `advance N`, `advance-to N`, `jump LABEL`, `exec CODE`, `movie FPS SECS WARM HOLD PATH` (PATH last, spaces allowed; works from the menu and from the story; the movie stays up HOLD s after the measured window, for a screenshot), `quit`), `wait TOKEN SECS` waits for a progress line after the last `cmd` (`menu True`, `advance-done`, `label`, `saved`, `video-result`), `settle SECS`, `after_start` (sends the game's `after_start` commands from `corpus.toml`), `shot NAME [volatile]`, `note TEXT`, `quit`. The game side is `rpy/zz_harness.rpy`; its control files sit in a per-launch dir outside the game folder.
+A plan is a text file of ops, one per line: `cmd TEXT` sends a command to the game (`start`, `load SLOT`, `save SLOT`, `auto on|off`, `click on|off`, `advance N`, `advance-to N`, `jump LABEL`, `exec CODE`, `movie FPS SECS WARM HOLD PATH` (PATH last, spaces allowed; works from the menu and from the story; the movie stays up HOLD s after the measured window, for a screenshot), `quit`), `wait TOKEN` waits for a progress line (`menu True`, `advance-done`, `say`, `saved`, `video-result`) under its stage timeout (see Stages), `settle SECS`, `after_start` (sends the game's `after_start` commands from `corpus.toml`), `shot NAME [volatile]`, `note TEXT`, `quit`. The game side is `rpy/zz_harness.rpy`; its control files sit in a per-launch dir outside the game folder.
 
 ## Corpus
 
-`corpus.toml` lists the Ren'Py 8 macOS corpus (SecretIsland, WaifuAcademy, Ripples released copies in the main checkout's `corpus/`, plus TheStormWithinUs, DOF-Ep3 and Bumpkin 0.15 straight from `~/Games`, read-only clone sources). Relative paths resolve against the main checkout, so a worktree finds the ignored `corpus/` and SDKs.
+`corpus.toml` lists the Ren'Py 8 macOS corpus and the 17 Ren'Py 7 games of M3 (released clones `corpus/*-released*`; engine: the SDK of the game's own 7.x version, or the app's bundled engine). The Ren'Py 8 games (SecretIsland, WaifuAcademy, Ripples released copies in the main checkout's `corpus/`, plus TheStormWithinUs, DOF-Ep3 and Bumpkin 0.15 straight from `~/Games`, read-only clone sources). Per-game keys `stages`, `probe_lines`, `save_after`, `resume_lines` and `plan` adapt the gate to a game (see the comments in `corpus.toml`). Relative paths resolve against the main checkout, so a worktree finds the ignored `corpus/` and SDKs.
 
 ## Where each check came from
 

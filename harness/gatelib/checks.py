@@ -13,8 +13,14 @@ from . import savescan
 
 def _launch_summary(r):
     keys = ("name", "engine", "argv", "rc", "exited", "forced_kill", "clean_exit", "timed_out", "aborted", "wall_s",
-            "loadavg", "stripped_game_cache", "stdout_tracebacks_ignored", "sweep_ok", "library_unchanged", "traceback_files", "stdout_traceback")
+            "loadavg", "stage_times", "stage_failed", "stripped_game_cache", "stdout_tracebacks_ignored", "sweep_ok", "library_unchanged", "traceback_files", "stdout_traceback")
     return {k: r.get(k) for k in keys}
+
+
+def _opt(ctx, name):
+    """A per-game key of corpus.toml (probe_lines, save_after, resume_lines) wins over the command-line default: some
+    games run out of story before the default (a click hub after the intro)."""
+    return ctx.game.get(name, ctx.opts[name])
 
 
 def _hygiene(r):
@@ -51,6 +57,8 @@ def check_lint(ctx):
     m = LINT_BLOCKS.search(text)
     stat = LINT_STAT.search(text)
     problems = _hygiene(r)
+    if r["aborted"]:
+        problems.append(r["aborted"])
     if r["rc"] != 0:
         problems.append("lint rc=%s" % r["rc"])
     if not stat:
@@ -63,7 +71,7 @@ def check_lint(ctx):
 
 # ---------------------------------------------------------------- probe
 def check_probe(ctx):
-    n = ctx.opts["probe_lines"]
+    n = _opt(ctx, "probe_lines")
     tmo = ctx.opts["probe_timeout"]
     plan = L.parse_plan((L.HARNESS / "plans" / "probe.plan.tmpl").read_text().format(lines=n, timeout=tmo))
     r = L.launch(ctx, "probe", plan=plan, timeout=tmo + 120)
@@ -111,7 +119,7 @@ def _tags_lines(progress, lo, hi):
 
 
 def check_saveresume(ctx):
-    n_play, n_resume = ctx.opts["save_after"], ctx.opts["resume_lines"]
+    n_play, n_resume = _opt(ctx, "save_after"), _opt(ctx, "resume_lines")
     notes = []
     seed = ctx.opts.get("stock_saves")
     launches = []
@@ -121,8 +129,8 @@ def check_saveresume(ctx):
         seed = pathlib.Path(seed)
         notes.append("using saves from %s" % seed)
     else:   # a save made by the game's own stock engine
-        plan = L.parse_plan("cmd auto on\ncmd click on\nwait menu True 180\ncmd start\ncmd advance %d\n"
-                            "wait advance-done 400\nsettle 2\ncmd save harness\nwait saved 30\nsettle 1\nquit\n" % n_play)
+        plan = L.parse_plan("cmd auto on\ncmd click on\nwait menu True\ncmd start\ncmd advance %d\n"
+                            "wait advance-done\nsettle 2\ncmd save harness\nwait saved\nsettle 1\nquit\n" % n_play)
         a = L.launch(ctx, "save-create", engine="stock", plan=plan, timeout=600, keep_saves=True)
         launches.append(_launch_summary(a))
         problems += ["save-create: " + p for p in _hygiene(a)]
@@ -145,14 +153,14 @@ def check_saveresume(ctx):
                      "n_globals": len(rec.get("globals") or {}), "error": rec.get("error")})
     named = [p for p in saves if p.name.startswith("harness-")] or [p for p in saves if not p.name.startswith(("auto", "quick"))] or saves
     slot = named[0].name.split("-")[0]
-    plan = L.parse_plan("cmd auto on\ncmd click on\nwait menu True 180\ncmd click off\nsettle 1\ncmd load %s\n"
-                        "wait say 120\nsettle 1\ncmd advance %d\nwait advance-done 400\nsettle 1\nquit\n" % (slot, n_resume))
+    plan = L.parse_plan("cmd auto on\ncmd click on\nwait menu True\ncmd click off\nsettle 1\ncmd load %s\n"
+                        "wait say\nsettle 1\ncmd advance %d\nwait advance-done\nsettle 1\nquit\n" % (slot, n_resume))
     r = L.launch(ctx, "resume", plan=plan, timeout=600, seed_saves=seed)
     launches.append(_launch_summary(r))
     problems += _hygiene(r)
     prog = r["progress"]
     try:
-        i = prog.index("cmd load %s" % slot)
+        i = prog.index("cmd-ack load %s" % slot)
     except ValueError:
         i = 0
     after = prog[i:]
@@ -202,13 +210,17 @@ def check_route(ctx):
     steps = L.parse_plan(pf.read_text())
     runs = []
     problems = []
+    shot_errors = []
     for i in range(ctx.opts["route_runs"]):
         r = L.launch(ctx, "route-%d" % (i + 1), plan=steps, timeout=ctx.opts["route_timeout"])
         runs.append(r)
         problems += ["run %d: %s" % (i + 1, p) for p in _hygiene(r)]
         if r["aborted"]:
             problems.append("run %d aborted: %s" % (i + 1, r["aborted"]))
-        missing = [s["name"] for s in r["shots"] if not s["file"]]
+        covered = [s for s in r["shots"] if s.get("error")]
+        for s in covered:   # an error of the machine, not a diff
+            shot_errors.append("run %d, shot %s: %s" % (i + 1, s["name"], s["error"]))
+        missing = [s["name"] for s in r["shots"] if not s["file"] and not s.get("error")]
         if missing:
             problems.append("run %d: no screenshot for %s" % (i + 1, ", ".join(missing)))
         if r["forced_kill"]:
@@ -245,6 +257,12 @@ def check_route(ctx):
                 out["baseline_dialogue_equal"] = bs[:k] == seqs[0][:k]
                 if not out["baseline_dialogue_equal"]:
                     problems.append("executed dialogue differs from baseline")
+    if shot_errors:   # no diff is judged for a shot the gate could not take
+        out["status"] = "error"
+        out["error"] = "; ".join(shot_errors)
+        out["problems"] = problems + shot_errors
+        out["shot_errors"] = shot_errors
+        return out
     out["problems"] = problems
     out["status"] = "fail" if problems else "pass"
     return out
@@ -285,11 +303,10 @@ VIDEO_HOLD = 6   # seconds the movie stays up after the measured window, for the
 
 def _video_run(ctx, name, path, fps, extra=None):
     o = ctx.opts
-    plan = L.parse_plan("cmd auto on\ncmd click on\nwait menu True 180\ncmd click off\nsettle 2\ncmd movie %s %s %s %s %s\n"
-                        "wait video-result %d\nshot video volatile\nquit\n" % (fps, o["video_secs"], o["video_warm"], VIDEO_HOLD, path,
-                                                                                 o["video_secs"] + o["video_warm"] + 120))
+    plan = L.parse_plan("cmd auto on\ncmd click on\nwait menu True\ncmd click off\nsettle 2\ncmd movie %s %s %s %s %s\n"
+                        "wait video-result\nshot video volatile\nquit\n" % (fps, o["video_secs"], o["video_warm"], VIDEO_HOLD, path))
     r = L.launch(ctx, name, plan=plan, timeout=o["video_secs"] + o["video_warm"] + 400, extra_files=extra)
-    if not any(x["file"] for x in r["shots"]) and not r["aborted"]:
+    if not any(x["file"] or x.get("error") for x in r["shots"]) and not r["aborted"]:
         r["aborted"] = "no screenshot of the video window"
     vj = ctx.out / name / "video.json"
     return r, (json.loads(vj.read_text()) if vj.exists() else None)
@@ -356,6 +373,9 @@ def check_video(ctx):
     elif sync:
         warnings.append(sync.get("av_sync", "A/V sync not measured"))
     out.update(status="fail" if problems else "pass", problems=problems, warnings=warnings, launches=launches)
+    shot_err = [x["error"] for x in r["shots"] if x.get("error")]
+    if shot_err:   # the window was covered: a machine error, not a player or engine failure
+        out.update(status="error", error="; ".join(shot_err))
     return out
 
 

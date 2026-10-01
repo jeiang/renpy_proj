@@ -13,6 +13,8 @@ import sys
 import time
 import tomllib
 
+from . import stages as ST
+
 HARNESS = pathlib.Path(__file__).resolve().parents[1]
 LOCK = "/tmp/renpy_proj.run.lock"
 SYNC_CLIP_NAME = "harness_av_sync.webm"
@@ -91,12 +93,85 @@ def ensure_wintool():
     return WINTOOL
 
 
+STALE_NO_OWNER_S = 1800   # a lock dir with no owner file (an older harness, a shell user) is stale after 30 min
+
+
+def _read_owner():
+    try:
+        txt = (pathlib.Path(LOCK) / "owner").read_text()
+    except OSError:
+        return None
+    m = re.search(r"pid=(\d+)", txt)
+    return {"pid": int(m.group(1)) if m else None, "text": txt.strip()}
+
+
+def _pid_alive(pid):
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _stale_reason():
+    """-> why the existing lock is stale, or None when its holder may still be running."""
+    owner = _read_owner()
+    if owner and owner["pid"] is not None:
+        return None if _pid_alive(owner["pid"]) else "owner pid %d is dead (%s)" % (owner["pid"], owner["text"].replace("\n", " "))
+    try:
+        age = time.time() - os.stat(LOCK).st_mtime
+    except OSError:
+        return None   # gone meanwhile
+    return "no owner file and the lock is %.0f min old" % (age / 60) if age > STALE_NO_OWNER_S else None
+
+
+def _take_over(reason):
+    """Move the stale lock aside (one taker wins the rename), then check it was the lock we judged stale."""
+    aside = "%s.stale.%d" % (LOCK, os.getpid())
+    try:
+        os.rename(LOCK, aside)
+    except OSError:
+        return False   # someone else took it over first
+    pre = pathlib.Path(aside) / "owner"
+    owner = None
+    try:
+        m = re.search(r"pid=(\d+)", pre.read_text())
+        owner = int(m.group(1)) if m else None
+    except OSError:
+        pass
+    if owner is not None and _pid_alive(owner):   # a live holder's fresh lock: put it back
+        try:
+            os.rename(aside, LOCK)
+        except OSError:
+            pass
+        return False
+    print("[gate] machine lock taken over: %s" % reason, flush=True)
+    shutil.rmtree(aside, ignore_errors=True)
+    return True
+
+
 def take_lock(timeout):
+    """mkdir the lock, write `owner` (pid, start time, command) into it. A lock whose owner pid is dead, or that has no
+    owner file and is older than 30 min, is logged and taken over."""
     t0 = time.time()
-    while subprocess.run(["mkdir", LOCK], capture_output=True).returncode != 0:
+    while True:
+        if subprocess.run(["mkdir", LOCK], capture_output=True).returncode == 0:
+            (pathlib.Path(LOCK) / "owner").write_text("pid=%d\nstart=%s\ncmd=%s\n" % (
+                os.getpid(), time.strftime("%Y-%m-%dT%H:%M:%S%z"), " ".join(sys.argv)[:200]))
+            return
+        reason = _stale_reason()
+        if reason and _take_over(reason):
+            continue
         if time.time() - t0 > timeout:
             raise TimeoutError("machine lock %s held for more than %d s" % (LOCK, timeout))
         time.sleep(0.1)   # 0.1 s: a slower poll starves behind siblings that retake the lock at once
+
+
+def release_lock():
+    (pathlib.Path(LOCK) / "owner").unlink(missing_ok=True)
+    subprocess.run(["rmdir", LOCK], capture_output=True)
 
 
 def safe_rmtree(path):
@@ -135,10 +210,35 @@ def engine_argv(ctx, engine, clone, base, data_dir, saves, renpy_args):
         return [str(binary), str(game_arg), "--data", str(data_dir), "--logdir", str(data_dir / "logs"),
                 "--harness-script", str(RPY)] + list(renpy_args)
     eng = ctx.corpus["engines"][ctx.stock_engine_id()]
+    # Ren'Py 7 ignores RENPY_PATH_TO_SAVES (added in 8.0) and would write to ~/Library/RenPy: give it --savedir instead.
+    extra = ["--savedir", str(saves / STOCK7_SAVEDIR)] if stock_is_py2(ctx) else []
+    if stock_is_py2(ctx):
+        (saves / STOCK7_SAVEDIR).mkdir(parents=True, exist_ok=True)
     if eng["kind"] == "sdk":
-        return [str(resolve(eng["path"]) / "renpy.sh"), str(base)] + list(renpy_args)
+        return [str(resolve(eng["path"]) / "renpy.sh"), str(base)] + list(renpy_args) + extra
     exe = clone / ctx.game["exe"]
-    return [str(exe), str(base)] + list(renpy_args)
+    return [str(exe), str(base)] + list(renpy_args) + extra
+
+
+STOCK7_SAVEDIR = "_stock7"   # the save dir of a Ren'Py 7 stock run, renamed to <save_directory> after the run
+
+
+def stock_is_py2(ctx):
+    """True when the stock engine of this run is Ren'Py 7 (Python 2)."""
+    eng = ctx.corpus["engines"][ctx.stock_engine_id()]
+    return str(eng.get("version") or ctx.game.get("renpy", "")).startswith("7.")
+
+
+def nest_stock7_saves(ctx, engine, saves, progress):
+    """A Ren'Py 7 stock run wrote to saves/_stock7; Ren'Py 8 (and the player's import) use saves/<save_directory>/."""
+    src = saves / STOCK7_SAVEDIR
+    if engine != "stock" or not stock_is_py2(ctx) or not src.exists():
+        return
+    name = next((ln.split(None, 1)[1] for ln in progress if ln.startswith("save-directory ")), None)
+    if name:
+        dest = saves / re.sub(r"[^A-Za-z0-9._ -]+", "_", name)
+        if not dest.exists():
+            src.rename(dest)
 
 
 def strip_game_cache(ctx, engine):
@@ -177,8 +277,16 @@ def parse_plan(text):
 class Run:
     """State shared by the plan ops of one launch."""
 
-    def __init__(self, proc, hz, base, shots_dir, pattern, log, after_start=()):
+    def __init__(self, proc, hz, base, shots_dir, pattern, log, after_start=(), min_visible=0.8, stages=None, volatile_shots=()):
         self.proc, self.hz, self.base, self.shots_dir, self.pattern, self.log = proc, hz, base, shots_dir, pattern, log
+        self.min_visible = min_visible
+        self.volatile_shots = set(volatile_shots)   # corpus.toml `volatile_shots`: shots of this game that hold an animation
+        self.stages = stages or ST.table({})
+        self.stage_times = {}      # stage -> seconds it took (the measured values behind the stage table)
+        self.stage_failed = None   # {"stage", "expected", "timeout_s", "last_line", "last_age_s"} of the missed stage
+        self.movie_budget = None
+        self._seen = 0
+        self._last_t = time.time()
         self.after_start = list(after_start)
         self.mark = 0
         self.t0 = time.time()
@@ -186,29 +294,96 @@ class Run:
         self.size = None   # pixel size of this run's first screenshot: every later shot must match
         self.aborted = None
 
-    def progress(self):
-        p = self.hz / "progress.txt"
-        return p.read_text(errors="replace").splitlines() if p.exists() else []
-
     def dead(self):
         return self.proc.poll() is not None or (self.base / "traceback.txt").exists()
 
-    def op_wait(self, arg):
-        tok, secs = arg.rsplit(" ", 1)
-        end = time.time() + float(secs)
-        while time.time() < end:
-            lines = self.progress()[self.mark:]
-            if any(ln == tok or ln.startswith(tok + " ") for ln in lines):
-                self.log.append("wait '%s': seen after %.0f s" % (tok, time.time() - self.t0))
-                return True
-            if self.dead():
-                self.aborted = "process ended or traceback while waiting for '%s'" % tok
-                break
-            time.sleep(0.25)
-        else:
-            self.aborted = "timeout waiting for '%s' (%s s)" % (tok, secs)
-        self.log.append("wait '%s': NOT seen (%s)" % (tok, self.aborted))
+    # ---- stages
+    def progress(self):
+        p = self.hz / "progress.txt"
+        lines = p.read_text(errors="replace").splitlines() if p.exists() else []
+        if len(lines) != self._seen:   # remember when the last new line came: a missed stage reports its age
+            self._seen, self._last_t = len(lines), time.time()
+        return lines
+
+    def last_line(self):
+        lines = self.progress()
+        return (lines[-1] if lines else "<no progress line yet>"), time.time() - self._last_t
+
+    def fail_stage(self, stage, expected, secs, why=None):
+        last, age = self.last_line()
+        self.stage_failed = {"stage": stage, "expected": expected, "timeout_s": round(secs, 1), "last_line": last, "last_age_s": round(age, 1)}
+        self.aborted = "stage '%s': %s; last line '%s' (%.0f s ago)" % (
+            stage, why or "'%s' not seen within %.0f s" % (expected, secs), last[:160], age)
+        self.log.append("STAGE FAILED: " + self.aborted)
         return False
+
+    def expect(self, stage, pred, expected, secs=None, since=None):
+        """Wait until pred(progress lines from `since`) holds. A `cmd-error` line, the process ending or a traceback ends it at once."""
+        secs = self.stages[stage] if secs is None else secs
+        since = self.mark if since is None else since
+        t0 = time.time()
+        while True:
+            lines = self.progress()[since:]
+            if pred(lines):
+                self.stage_times[stage] = round(time.time() - t0, 2)
+                self.log.append("stage %s: '%s' after %.1f s" % (stage, expected, time.time() - t0))
+                return True
+            err = next((ln for ln in lines if ln.startswith("cmd-error ")), None)
+            if err:
+                return self.fail_stage(stage, expected, secs, "the game reported %s" % err[:200])
+            if self.dead():
+                return self.fail_stage(stage, expected, secs, "process ended or traceback written before '%s'" % expected)
+            if time.time() - t0 > secs:
+                return self.fail_stage(stage, expected, secs)
+            time.sleep(0.1)
+
+    def op_boot(self):
+        """Every launch with a plan starts here: the injected script writes "boot" once init has run."""
+        self.mark = 0
+        return self.expect("boot", lambda ls: "boot" in ls, "boot", since=0)
+
+    def op_wait(self, arg):
+        tok = arg.strip()
+        for known in ("menu True", "advance-done", "saved", "say", "video-result"):   # a trailing "SECS" of older plans is ignored
+            if tok == known or (tok.startswith(known + " ") and tok[len(known):].strip().isdigit()):
+                tok = known
+        if tok == "menu True":
+            # since=0: the menu may come up while the first commands are still being acknowledged
+            return self.expect("menu", lambda ls: "menu True" in ls, "menu True", since=0)
+        if tok == "advance-done":
+            return self.wait_advance()
+        if tok == "saved":
+            return self.expect("save", lambda ls: any(ln.startswith("saved ") for ln in ls), "saved")
+        if tok == "say":
+            return self.expect("first-say", lambda ls: any(ln.startswith("say ") for ln in ls), "say")
+        if tok == "video-result":
+            secs = self.movie_budget if self.movie_budget is not None else self.stages["movie-slack"]
+            return self.expect("movie-slack", lambda ls: "video-result done" in ls, "video-result", secs=secs)
+        return self.expect("done", lambda ls: any(ln == tok or ln.startswith(tok + " ") for ln in ls), tok, secs=self.stages["done"])
+
+    def wait_advance(self):
+        """advance-done, with a stall watch: a new "say N" line (or the done line) at least every `say` seconds."""
+        gap = self.stages["say"]
+        t0 = last = time.time()
+        n = 0
+        while True:
+            lines = self.progress()[self.mark:]
+            if any(ln.startswith("advance-done") for ln in lines):
+                self.stage_times["say"] = max(self.stage_times.get("say", 0), round(self._max_gap, 2) if hasattr(self, "_max_gap") else 0)
+                self.log.append("advance-done after %.0f s (%d say lines)" % (time.time() - t0, n))
+                return True
+            says = [ln for ln in lines if ln.startswith("say ")]
+            if len(says) != n:
+                self._max_gap = max(getattr(self, "_max_gap", 0), time.time() - last)
+                n, last = len(says), time.time()
+            err = next((ln for ln in lines if ln.startswith("cmd-error ")), None)
+            if err:
+                return self.fail_stage("say", "advance-done", gap, "the game reported %s" % err[:200])
+            if self.dead():
+                return self.fail_stage("say", "advance-done", gap, "process ended or traceback written after %d say lines" % n)
+            if time.time() - last > gap:
+                return self.fail_stage("say", "say %d" % (n + 1), gap, "no 'say %d' within %.0f s of the previous line (%d seen since the command)" % (n + 1, gap, n))
+            time.sleep(0.1)
 
     def _pick_window(self):
         """-> (window id, pids). Largest window of the run's pids: on-screen ones first, else any titled one."""
@@ -234,16 +409,53 @@ class Run:
         r = subprocess.run(["/usr/bin/sips", "-g", "pixelWidth", "-g", "pixelHeight", str(f)], capture_output=True, text=True).stdout.split()
         return (r[-3], r[-1]) if len(r) >= 4 else None
 
+    def window_state(self, wid):
+        """-> dict from `wintool info`: pid, onscreen (0|1), front (windows in front), visible (0..1), covered_by."""
+        out = subprocess.run([str(ensure_wintool()), "info", str(wid)], capture_output=True, text=True).stdout.split()
+        if len(out) < 2 or out[0] == "gone":
+            return {"onscreen": 0, "visible": 0.0, "covered_by": "", "gone": True}
+        st = dict(zip(out[0::2], out[1::2]))
+        return {"pid": int(st["pid"]), "onscreen": int(st["onscreen"]), "front": int(st["front"]),
+                "visible": float(st["visible"]), "covered_by": st.get("covered_by", "")}
+
+    def window_problem(self, wid):
+        """-> None when the window is on screen and not hidden, else a short reason. The player skips presents while its
+        window is covered, so a capture of a covered window shows an old frame."""
+        st = self.window_state(wid)
+        if not st["onscreen"]:
+            return "window %s is not on screen" % wid
+        if st["visible"] < self.min_visible:
+            return "window %s is %.0f%% visible (min %.0f%%), covered by %s" % (wid, 100 * st["visible"], 100 * self.min_visible, st["covered_by"] or "?")
+        return None
+
+    def raise_window(self, wid):
+        """Bring the game's own process to the front (System Events, by unix id; no input is sent)."""
+        st = self.window_state(wid)
+        if st.get("pid"):
+            subprocess.run(["/usr/bin/osascript", "-e", 'tell application "System Events" to set frontmost of (first process whose unix id is %d) to true' % st["pid"]],
+                           capture_output=True, timeout=20)
+            time.sleep(1.5)
+
     def op_shot(self, arg):
         name, _, flag = arg.partition(" ")
-        rec = {"name": name, "volatile": flag == "volatile", "file": None}
+        rec = {"name": name, "volatile": flag == "volatile" or name in self.volatile_shots, "file": None, "error": None}
         f = self.shots_dir / (name + ".png")
         self.shots_dir.mkdir(parents=True, exist_ok=True)
+        raised = False
         for attempt in range(6):
             wid, pids = self._pick_window()
             if not wid:
                 time.sleep(1)
                 continue
+            why = self.window_problem(wid)
+            if why and not raised:   # retry once, after bringing the game to the front
+                self.log.append("shot %s: %s: bringing the game to the front" % (name, why))
+                raised = True
+                self.raise_window(wid)
+                why = self.window_problem(wid)
+            if why:
+                rec["error"] = "window covered: " + why
+                break
             f.unlink(missing_ok=True)
             subprocess.run(["/usr/sbin/screencapture", "-x", "-o", "-l" + wid, str(f)])
             if not (f.exists() and f.stat().st_size > 0):
@@ -257,20 +469,71 @@ class Run:
             self.log.append("shot %s: window %s is %s, the run's window is %s: retrying" % (name, wid, size, self.size))
             time.sleep(1.5)
         self.shots.append(rec)
-        self.log.append("shot %s: %s" % (name, rec["file"] or "NO WINDOW CAPTURED"))
+        self.log.append("shot %s: %s" % (name, rec["file"] or rec["error"] or "NO WINDOW CAPTURED"))
 
     def op_quit(self):
+        self.mark = len(self.progress())
         send_cmd(self.hz, "quit")
+        t0 = time.time()
         try:
-            self.proc.wait(timeout=45)
+            self.proc.wait(timeout=self.stages["quit"])
+            self.stage_times["quit"] = round(time.time() - t0, 2)
         except subprocess.TimeoutExpired:
-            self.log.append("quit: game still alive after 45 s (will be killed)")
+            self.fail_stage("quit", "process exit", self.stages["quit"], "the game did not exit within %.0f s of 'quit'" % self.stages["quit"])
+
+    def watch_lint(self, stdout_path, log_paths):
+        """Lint injects nothing: its stages are the engine's own output. lint-boot: the first output (stdout or a log.txt);
+        lint: the "Statistics:" line, or the process ending."""
+        def size(pth):
+            try:
+                return pth.stat().st_size
+            except OSError:
+                return 0
+        t0 = time.time()
+        while True:
+            if self.proc.poll() is not None or size(stdout_path) or any(size(q) for q in log_paths()):
+                break
+            if time.time() - t0 > self.stages["lint-boot"]:
+                self.last_line = lambda: ("<no output yet>", time.time() - t0)
+                return self.fail_stage("lint-boot", "first output", self.stages["lint-boot"])
+            time.sleep(0.2)
+        self.stage_times["lint-boot"] = round(time.time() - t0, 2)
+        t1 = time.time()
+        while self.proc.poll() is None:
+            try:
+                txt = stdout_path.read_text(errors="replace")
+            except OSError:
+                txt = ""
+            if "Statistics:" in txt:
+                break
+            if time.time() - t1 > self.stages["lint"]:
+                tail = txt.strip().splitlines()[-1:] or ["<no output>"]
+                self.last_line = lambda: (tail[0], time.time() - t1)
+                return self.fail_stage("lint", "Statistics:", self.stages["lint"])
+            time.sleep(0.5)
+        self.stage_times["lint"] = round(time.time() - t1, 2)
+        return True
+
+    def send(self, line):
+        """Send one command and hold it to its stages: "cmd-ack" (the script got it), then the command's own completion."""
+        self.mark = len(self.progress())
+        if line.split(None, 1)[0] == "movie":
+            a = line.split(None, 5)
+            self.movie_budget = float(a[2]) + float(a[3]) + self.stages["movie-slack"]   # secs + warm + slack
+        t0 = time.time()
+        send_cmd(self.hz, line)
+        if not self.expect("ack", lambda ls: ("cmd-ack " + line) in ls, "cmd-ack " + line, since=self.mark):
+            return False
+        c = ST.completion(line)
+        return c is None or self.expect(c[0], c[1], c[0] + " of '" + line.split()[0] + "'", since=self.mark)
 
     def run(self, steps):
+        if not self.op_boot():
+            return
         for op, arg in steps:
             if op == "cmd":
-                self.mark = len(self.progress())
-                send_cmd(self.hz, arg)
+                if not self.send(arg):
+                    return
             elif op == "wait":
                 if not self.op_wait(arg):
                     return
@@ -278,8 +541,8 @@ class Run:
                 # the game's own setup after New Game (corpus.toml `after_start`), for stories whose intro cannot be clicked through
                 time.sleep(6)
                 for c in self.after_start:
-                    self.mark = len(self.progress())
-                    send_cmd(self.hz, c)
+                    if not self.send(c):
+                        return
                     time.sleep(1)
             elif op == "after_start":
                 pass
@@ -358,6 +621,10 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
                 rel = d.relative_to(seed_saves).as_posix()
                 dest = data / "saves" / (re.sub(r"[^A-Za-z0-9._ -]+", "_", rel) if rel != "." else "")
                 shutil.copytree(d, dest, dirs_exist_ok=True, ignore=lambda _d, names: [n for n in names if (d / n).is_dir()])
+    if seed_saves and engine == "stock" and stock_is_py2(ctx):
+        # Ren'Py 7 reads its saves from --savedir (saves/_stock7), flat: seed the files of every seeded folder there too
+        for d in sorted({p.parent for p in pathlib.Path(seed_saves).rglob("*") if p.is_file()}):
+            shutil.copytree(d, saves / STOCK7_SAVEDIR, dirs_exist_ok=True, ignore=lambda _d, names: [n for n in names if (d / n).is_dir()])
     for fname, fsrc in (extra_files or {}).items():   # into the scratch clone only
         shutil.copy(fsrc, base / "game" / fname)
     if inject and engine == "stock":
@@ -370,6 +637,7 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
     if not inject:
         env.pop("HARNESS_DIR")
     res = {"name": name, "engine": engine, "stripped_game_cache": strip, "argv": [a.replace(str(top), "<run>") for a in argv], "plan_log": []}
+    st_table = ST.table(g, ctx.opts.get("stage_scale", 1.0))
     take_lock(ctx.opts.get("lock_timeout", 7200))
     before = None
     deadline = 0
@@ -380,14 +648,16 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
         stdout = open(out / "stdout.log", "w")
         t0 = time.time()
         proc = subprocess.Popen(argv, stdout=stdout, stderr=subprocess.STDOUT, env=env, cwd=str(clone))
-        run = Run(proc, hz, base, out / "shots", pattern, res["plan_log"], g.get("after_start", ()))
+        run = Run(proc, hz, base, out / "shots", pattern, res["plan_log"], g.get("after_start", ()), ctx.opts.get("min_visible", 0.8), st_table, g.get("volatile_shots", ()))
         try:
             if plan:
                 run.run(plan)
                 if proc.poll() is None:
                     time.sleep(1)
+            else:
+                run.watch_lint(out / "stdout.log", lambda: [base / "log.txt"] + sorted(data.rglob("log.txt")))
             deadline = t0 + timeout
-            while proc.poll() is None and time.time() < deadline and not (plan and run.aborted):
+            while proc.poll() is None and time.time() < deadline and not run.aborted:
                 time.sleep(0.5)
         finally:
             res["exited"] = proc.poll() is not None
@@ -395,14 +665,18 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
             res["wall_s"] = round(time.time() - t0, 1)
             res["aborted"] = run.aborted
             res["shots"] = run.shots
-        res["timed_out"] = (not res["exited"]) and not (plan and run.aborted) and time.time() >= deadline
+            res["stage_times"] = run.stage_times
+            res["stage_failed"] = run.stage_failed
+        res["timed_out"] = (not res["exited"]) and not run.aborted and time.time() >= deadline
         stdout.close()
     finally:
         res["sweep_ok"] = sweep(pattern)
         res["library_unchanged"] = before is not None and library_hash() == before
         if res["sweep_ok"]:
-            subprocess.run(["rmdir", LOCK])
+            release_lock()
     if not res["sweep_ok"]:
+        # keep the lock for good: pid=0 never counts as dead (os.kill(0, 0) signals our own group), so nobody takes it over
+        (pathlib.Path(LOCK) / "owner").write_text("pid=0\nstart=%s\nnote=game processes survived the sweep of %s\n" % (time.strftime("%Y-%m-%dT%H:%M:%S%z"), pattern))
         res["lock_left"] = "game processes survived the sweep; lock %s left in place" % LOCK
     res["forced_kill"] = not res["exited"]
     res["clean_exit"] = res["rc"] == 0
@@ -427,6 +701,7 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
         shutil.copy(logs[0], out / "log.txt")
     prog = hz / "progress.txt"
     res["progress"] = prog.read_text(errors="replace").splitlines() if prog.exists() else []
+    nest_stock7_saves(ctx, engine, saves, res["progress"])
     (out / "progress.txt").write_text("\n".join(res["progress"]) + "\n")
     (out / "plan.log").write_text("\n".join(res["plan_log"]) + "\n")
     if (hz / "video.json").exists():
@@ -435,5 +710,7 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
         shutil.copytree(saves, out / "saves", dirs_exist_ok=True)
         if engine == "player" and (data / "saves").exists():
             shutil.copytree(data / "saves", out / "saves-player", dirs_exist_ok=True)
+    if engine == "player" and (data / "reports").exists():   # pre-flight and runtime reports of the player
+        shutil.copytree(data / "reports", out / "reports", dirs_exist_ok=True)
     safe_rmtree(root)
     return res
