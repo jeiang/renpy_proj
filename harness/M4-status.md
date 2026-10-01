@@ -84,9 +84,9 @@ Evidence: `~/Projects/renpy_proj-remote/m4fix-route/harness/out/{si,wa,br,hh}-fu
 - Hyprland 0.56 has no `hyprctl setprop` (`unknown request`); `hyprctl eval` with the Lua API sets window properties. `harness/README.md` (Linux) says so.
 - Corpus keys: on Linux `linux_<key>` replaces `<key>` of a game (`linux_source`, `linux_engine`, `linux_exe`, `linux_volatile_shots`).
 
-## Rest of the corpus on Linux (branch `build/m4-corpus`, in progress)
+## Rest of the corpus on Linux (branches `build/m4-corpus`, `build/m4-corpus2`)
 
-State at the end of this session. Evidence is on artemis in `~/Projects/renpy_proj-remote/m4-corpus/harness/out/<Game>-{stock,full}/` (`summary.md`, `result.json`); `python3 harness/tools/collect_summary.py <out dir> <Game>...` prints the tables below from them.
+Final state. Evidence is on artemis in `~/Projects/renpy_proj-remote/m4-corpus/harness/out/<Game>-{stock,full}/` (`summary.md`, `result.json`); `python3 harness/tools/collect_summary.py <out dir> <Game>...` prints per-check tables from them. The first four games (rows above) have their stock baselines in `~/Projects/renpy_proj-remote/harness/harness/out/{si,wa,br,hh}-stock`.
 
 ### Corpus copies (artemis `~/Projects/renpy_proj-remote/corpus/`)
 
@@ -96,47 +96,92 @@ State at the end of this session. Evidence is on artemis in `~/Projects/renpy_pr
 - Archive faults found: (1) the archives lost the execute bits of `<Game>.sh` and `lib/py*-linux-*/*`: `chmod +x` after extraction (the stock lint failed with rc 126 otherwise). (2) `research/test-corpus/make_released.py` writes the RPA index prefix as text, which makes Ren'Py 7 fail with "Could not load from archive animations.rpyc" (the reason `tools/make_released7.py` exists). Use `make_released7.py` for Ren'Py 7 games. The three affected archives (AHouseInTheRift, A_World_Between_Us, InterimDomain `scripts.rpa`) were repaired with `harness/tools/repair_rpa7.py`; the repaired A_World `scripts.rpa` is byte-identical to the Mac file.
 - SDKs fetched into the gitignored `research/test-corpus/sdk/` of the artemis checkout: 7.4.5, 7.4.8, 7.5.3, 7.6.1, 7.8.2, 8.5.3 (7.4.11 and 7.7.3 were there).
 
-### Results so far (stock = game's engine, player = `--tier full --baseline <stock>`; a pass has exit code 0 for all five checks)
+### Final Linux table (stock = the game's engine, player = `--tier full --baseline <stock>`)
 
-| Game | Stock | Player |
-|---|---|---|
-| A World Between Us (7.4.8) | pass (video 60/60 fps) | pass, digest equals stock, video 60.0/60.0 |
-| Bumpkin 0.14 (7.5.3) | pass | route, probe, lint, video pass; saveresume state match False (the load runs and the story continues) |
-| DOF (8.3.2, bundled) | pass | pass |
-| Dreamscape (7.4.11) | pass | pass |
-| InterimDomain (7.4.5) | pass (state match False) | pass |
-| AstralLust (7.8.2) | stock pass; player run still queued | - |
-| TheStormWithinUs (8.5.3 SDK) | stock pass; player run queued | - |
+Player binary: release build of `build/m4-corpus` (main `4d8b88a`) on artemis. A "pass" has exit code 0 for lint, probe, route, saveresume and video. "video skipped" means `corpus.toml` configures no video for the game. All 24 games pass on stock. On the player, 22 pass at once. Bumpkin 0.15 passes its route check only against an 8.5.3 stock baseline (note 1); BraveheartAcademy passed saveresume on a rerun (note 2).
 
-Not run yet (queued in `batch3.status`, `batch4.status`, `batch5.status` on artemis, or never started): AHouseInTheRift, AlexsVantasticAdventure, BloomWar, BraveheartAcademy, Bumpkin 0.15, CabinByTheLake, DFraction, DTRemake, LuckyParadox, MaidandMaidens, Ripples, WhiteRussian. No player failure on Linux was seen in the games that finished, so the branch has no player code fix for them.
+| Game (Ren'Py of the stock engine) | Stock | Player | Notes |
+|---|---|---|---|
+| SecretIsland (8.0.1) | pass | pass | rows of the player section above; rerun with the current binary |
+| WaifuAcademy (8.2.x) | pass | pass | `02-say-12` volatile (not gated) |
+| BlackRose (7.7.3) | pass | pass | `03-say-40` volatile (not gated) |
+| HaremHotel (7.4.11) | pass | pass | |
+| AHouseInTheRift | pass | pass | video 60 / 30 fps |
+| AlexsVantasticAdventure | pass | pass | no video configured |
+| AstralLust (7.8.2) | pass | pass | |
+| AWorldBetweenUs (7.4.8) | pass | pass | |
+| BloomWar | pass | pass | video 20 fps nominal |
+| BraveheartAcademy (7.4.8) | pass | pass | note 2 |
+| Bumpkin 0.14 (7.5.3) | pass | pass | player saveresume state match False (the load runs and the story continues) |
+| Bumpkin 0.15 (8.1.3) | pass | pass on route only against an 8.5.3 baseline | note 1 |
+| CabinByTheLake | pass | pass | no video configured |
+| DFraction | pass | pass | no video configured |
+| DOF (8.3.2) | pass | pass | no video configured |
+| Dreamscape (7.4.11) | pass | pass | |
+| DTRemake | pass | pass | |
+| InterimDomain (7.4.5) | pass | pass | stock and player saveresume state match False |
+| LuckyParadox | pass | pass | stock and player saveresume state match False |
+| MaidandMaidens | pass | pass | |
+| Ripples (8.2.1) | pass | pass | |
+| TheStormWithinUs (8.5.3) | pass | pass | stock and player saveresume state match False |
+| WhiteRussian | pass | pass | |
 
-Early runs in this session were thrown away and redone: they used archives without execute bits or with the bad RPA index, and some stock baselines were taken while a second game window was open (Hyprland tiled both, 941 px wide against 1896 px, which breaks every route baseline diff). The table above only holds clean reruns.
+Per-check detail (player rows; every route baseline diff is inside the limits of mean 0.005 and 0.5% changed pixels unless a note says otherwise):
+
+- Lint: every game passes with the same dialogue block count as stock.
+- Probe: the dialogue digest equals stock in every game.
+- Video: 60.0 presented fps (capped at the game rate); decoded fps equals the nominal rate (20, 24, 30 or 60).
+
+Notes.
+
+1. Bumpkin 0.15: the first full player run failed the route check only (`01-menu`: mean 0.0025, 0.73% changed pixels against a 0.5% limit). The differing pixels are the outline edges of the menu text. The stock baseline is the game's bundled Ren'Py 8.1.3. A second stock run with the 8.5.3 SDK (`--stock-engine sdk-853-linux`) differs from the 8.1.3 baseline by the same 0.784% and from the player by 0.001%. So the player matches Ren'Py 8.5.3 and the difference is the text outline rendering of 8.1.3 against 8.5.3; it is not a player fault. Against the 8.5.3 stock baseline the player route passes (`out/Bumpkin015-route853`: `01-menu` 0.00004, 0.002%; `02-say-12` 0.00054, 0.085%; `03-say-40` 0.00038, 0.085%). `corpus.toml` is unchanged.
+2. BraveheartAcademy: the first full player run failed saveresume at `save-create`. That stage runs the stock engine, which wrote `traceback.txt` (`script.rpy:565`, `IndexError`). The same check passed on a rerun with the player (`out/BraveheartAcademy-sr2`: 21 lines after load, state match True) and on the earlier stock run. The failing step is the stock engine, so this is a harness flake of the stock save step and not a player fault.
+
+DOF and Dreamscape each have an earlier failed pair in `batch3.status` and `batch4.status` (exit 1). The reruns in `batch5.status` pass and replaced them in `out/`.
 
 ### Harness fix: machine lock takeover (commit 42a17b1, also on main)
 
 `_take_over` could drop a live holder's lock: the stale directory was renamed away and, when it could not be put back because a third process had already created it, the live lock was gone and two games ran at once. Now the directory that is moved aside must be the inode judged stale and its owner pid must be dead; otherwise it is put back and never deleted. After that a plain `mkdir` decides the winner (a failed `mkdir` means wait), and `release_lock` only removes a lock it owns. 8 processes x 6 takes gave 0 overlaps. Ad-hoc scripts must write `pid=<pid>` in the owner file.
 
-## Wine and X11 lanes
+## Wine and X11 lanes (SecretIsland, `--tier m1`, baseline = the Linux stock run)
 
 ### Wine 11 (`nixpkgs#wineWow64Packages.stable`, prefix `~/Projects/renpy_proj-remote/wine/prefix`)
 
-The packaged `player.exe` (Windows VM `C:\spike\m4\player\build-out\windows\player-windows-x86_64`, older than `9fdc1f3`) was copied to artemis. Wrapper `--player-bin`: sets `WINEPREFIX`, runs `wine player.exe "$@"` with Unix paths (Wine maps them to `Z:`).
+The exe is built from this branch on the Windows VM (`C:\spike\m4`, bundle of `build/m4-corpus2`, `packaging/windows.ps1`) and copied to artemis. Wrapper `--player-bin`: sets `WINEPREFIX`, runs `wine player.exe "$@"` with Unix paths.
 
 | Item | Result |
 |---|---|
-| lint (SecretIsland copy) | pass, 64,793 dialogue blocks (same as stock) |
-| wgpu backend | Vulkan (Wine's native Vulkan on RADV; not DX12 over vkd3d). `log.txt`: `Backend: 'Vulkan'` |
-| window to main menu | yes; harness probe reaches the menu, runs 66 lines, digest `5b3a5b1c65f1ae8d` = stock |
-| video | `video` check pass: 60.0 presented / 60.0 decoded fps, A/V offset max 27 ms (FFmpeg DLLs decode under Wine) |
-| probe exit code | 9: the process aborts at exit (`thread local panicked on drop ... threads should not terminate unexpectedly`) after a game analytics thread raised in a background thread. Not seen on Linux or macOS. Not investigated further; it needs a Windows-side run. |
-| route | the 1896x1056 shots differ from the Linux stock baseline like the pre-`9fdc1f3` player (01-menu mean_abs 0.00435, 1.35%, the old half-pixel offset); the exe predates the fix |
+| lint | pass, 64,793 dialogue blocks |
+| backend | Vulkan (Wine's native Vulkan on RADV); `log.txt`: `Backend: 'Vulkan'` |
+| probe | pass, exit code 0, 65 of 60 lines |
+| route | pass; self diff 0; baseline diff `01-menu` 0.00001 (0.000%), `02-say-12` 0.00014 (0.011%), `03-say-40` 0.00014 (0.011%), all inside the limits. The half-pixel offset of the older exe is gone. |
+| video | pass with the earlier exe (60.0 presented / 60.0 decoded fps, A/V offset max 27 ms; `out/wine-si-video`); not repeated with the new exe |
+
+Evidence: `out/wine-si-m1b` (after the fix), `out/wine-si-m1` (before the fix, probe exit 9), `out/wine-bt` (the backtrace).
+
+#### Cause of exit code 9
+
+`RUST_BACKTRACE=full` gave a backtrace without symbols. Symbolizing it with `llvm-symbolizer` and the `player.pdb` of the same build gave this chain:
+
+`player::main` -> `std::process::exit` -> `std::sys::thread_local::guard::windows::cleanup` (thread-local destructors run inside `exit`) -> `destroy::<RefCell<platform::pad::Pads>>` -> `Drop for Gilrs` (gilrs-core 0.6.8, WGI backend) -> `JoinInner::join` -> `expect("threads should not terminate unexpectedly")`.
+
+The panic happens in a thread-local destructor, so Rust aborts ("thread local panicked on drop"), and Wine reports exit code 9. The gilrs WGI backend joins its worker thread in `Drop`. Under Wine, `join` returns while the thread packet is still shared, so the `Arc::get_mut` in `join` fails. The game exits with the right behavior and the Python side finished; only the pad system teardown at process exit failed. The game analytics `TypeError` in `stdout.log` is unrelated: it is a `ConnectionError` in the game's own handler on a host without network.
+
+Fix (commit `c6fab0d`): `cfg(windows)` `Drop for Pads` leaks the `Gilrs` (`mem::forget`) instead of joining at exit. The OS ends the thread with the process. It was not seen on Linux or macOS because they use other gilrs backends. After the fix the Wine probe exits with 0.
 
 ### X11 (XWayland, `HARNESS_X11_ONLY=1` hides `WAYLAND_DISPLAY`)
 
-- `winit` is now a workspace dependency with `default-features = false, features = ["rwh_06", "x11"]`. `platform` has a default feature `wayland` (winit `wayland`, `wayland-dlopen`, `wayland-csd-adwaita`) and `player` forwards it. X11-only build: `cargo build --release -p player --no-default-features`. The binary is 225 MB against 241 MB. `wayland-client` is still linked through `rfd` (file dialog of the library window), not through winit.
-- Both the X11-only binary and the normal binary with `WAYLAND_DISPLAY` unset start on XWayland, pass lint and the probe on SecretIsland. The route baseline diff of the first runs is not valid (second window open, 941 px). The clean reruns are queued (`harness/out/x11-x11bin`, `x11-nobin`); they are not in this table yet.
+`winit` is a workspace dependency with `default-features = false, features = ["rwh_06", "x11"]`. `platform` has a default feature `wayland` (winit `wayland`, `wayland-dlopen`, `wayland-csd-adwaita`) and `player` forwards it. X11-only build: `cargo build --release -p player --no-default-features`.
+
+| Lane | lint | probe | route |
+|---|---|---|---|
+| X11-only binary (`out/x11-x11bin`) | pass | pass, 66 lines, digest `5b3a5b1c65f1ae8d` = stock | pass; self diff 0; baseline diff `01-menu` 0.00001 (0.000%), `02-say-12` and `03-say-40` 0.00014 (0.011%) |
+| normal binary, `WAYLAND_DISPLAY` unset (`out/x11-nobin`) | pass | pass, 65 lines | pass; same diffs |
+
+Both X11 lanes give the same shots as the Wayland run.
 
 ## Not done
 
-- Stock and player runs for the 12 games listed above, the clean X11 m1 results, and the clean Wine m1 route.
-- Windows exit code 9 (see above).
+- Windows GPU gate: out of scope (recorded gap).
+- The Linux package directory with `--player-game-arg game` was not used; the gate used the dev binary.
+- The Linux player binary is from main `4d8b88a`. The later main merges (anisotropy sampler) were not rerun on Linux.
