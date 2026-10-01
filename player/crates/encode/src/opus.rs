@@ -42,7 +42,9 @@ impl OpusEncoder {
         fr.set_rate(48000);
         fr.set_pts(Some(self.pts));
         self.pts += FRAME as i64;
-        fr.plane_mut::<f32>(0)[..FRAME * 2].copy_from_slice(pcm_stereo_48k);
+        for (dst, s) in fr.data_mut(0).chunks_exact_mut(4).zip(pcm_stereo_48k) {
+            dst.copy_from_slice(&s.to_ne_bytes());
+        }
         self.enc.send_frame(&fr).context("opus send_frame")?;
         let mut pkt = Packet::empty();
         match self.enc.receive_packet(&mut pkt) {

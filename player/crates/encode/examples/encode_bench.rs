@@ -12,17 +12,19 @@ fn main() -> anyhow::Result<()> {
     let names = list_video_encoders();
     println!("available encoders: {names:?}");
     let frames: Vec<_> = (0..n).map(|t| common::frame_from(&base, w, h, PixelFormat::Rgba, t, true)).collect();
+    let nv12: Vec<_> = frames.iter().take(60).map(common::to_nv12).collect();
     for name in &names {
-        for (label, moving) in [("moving", true), ("static", false)] {
+        for (label, moving) in [("moving", true), ("moving-nv12", true), ("static", false)] {
+            let nv = label == "moving-nv12";
             let mut enc = open_video_encoder(w, h, 60, 8000, Some(name))?;
             let mut bytes = 0;
             let mut keys = Vec::new();
             let mut units = 0;
             let mut times = Vec::new();
-            let count = if moving { n } else { 120 };
+            let count = if nv { 60 } else if moving { n } else { 120 };
             let still = common::frame_from(&base, w, h, PixelFormat::Rgba, 0, false);
             for t in 0..count {
-                let f = if moving { &frames[t] } else { &still };
+                let f = if nv { &nv12[t] } else if moving { &frames[t] } else { &still };
                 let t0 = Instant::now();
                 let out = enc.encode(f, false)?;
                 times.push(t0.elapsed().as_secs_f64() * 1000.0);
