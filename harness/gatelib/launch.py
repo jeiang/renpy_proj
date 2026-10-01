@@ -13,6 +13,8 @@ import sys
 import time
 import tomllib
 
+from . import stages as ST
+
 HARNESS = pathlib.Path(__file__).resolve().parents[1]
 LOCK = "/tmp/renpy_proj.run.lock"
 SYNC_CLIP_NAME = "harness_av_sync.webm"
@@ -275,9 +277,15 @@ def parse_plan(text):
 class Run:
     """State shared by the plan ops of one launch."""
 
-    def __init__(self, proc, hz, base, shots_dir, pattern, log, after_start=(), min_visible=0.8):
+    def __init__(self, proc, hz, base, shots_dir, pattern, log, after_start=(), min_visible=0.8, stages=None):
         self.proc, self.hz, self.base, self.shots_dir, self.pattern, self.log = proc, hz, base, shots_dir, pattern, log
         self.min_visible = min_visible
+        self.stages = stages or ST.table({})
+        self.stage_times = {}      # stage -> seconds it took (the measured values behind the stage table)
+        self.stage_failed = None   # {"stage", "expected", "timeout_s", "last_line", "last_age_s"} of the missed stage
+        self.movie_budget = None
+        self._seen = 0
+        self._last_t = time.time()
         self.after_start = list(after_start)
         self.mark = 0
         self.t0 = time.time()
@@ -285,29 +293,96 @@ class Run:
         self.size = None   # pixel size of this run's first screenshot: every later shot must match
         self.aborted = None
 
-    def progress(self):
-        p = self.hz / "progress.txt"
-        return p.read_text(errors="replace").splitlines() if p.exists() else []
-
     def dead(self):
         return self.proc.poll() is not None or (self.base / "traceback.txt").exists()
 
-    def op_wait(self, arg):
-        tok, secs = arg.rsplit(" ", 1)
-        end = time.time() + float(secs)
-        while time.time() < end:
-            lines = self.progress()[self.mark:]
-            if any(ln == tok or ln.startswith(tok + " ") for ln in lines):
-                self.log.append("wait '%s': seen after %.0f s" % (tok, time.time() - self.t0))
-                return True
-            if self.dead():
-                self.aborted = "process ended or traceback while waiting for '%s'" % tok
-                break
-            time.sleep(0.25)
-        else:
-            self.aborted = "timeout waiting for '%s' (%s s)" % (tok, secs)
-        self.log.append("wait '%s': NOT seen (%s)" % (tok, self.aborted))
+    # ---- stages
+    def progress(self):
+        p = self.hz / "progress.txt"
+        lines = p.read_text(errors="replace").splitlines() if p.exists() else []
+        if len(lines) != self._seen:   # remember when the last new line came: a missed stage reports its age
+            self._seen, self._last_t = len(lines), time.time()
+        return lines
+
+    def last_line(self):
+        lines = self.progress()
+        return (lines[-1] if lines else "<no progress line yet>"), time.time() - self._last_t
+
+    def fail_stage(self, stage, expected, secs, why=None):
+        last, age = self.last_line()
+        self.stage_failed = {"stage": stage, "expected": expected, "timeout_s": round(secs, 1), "last_line": last, "last_age_s": round(age, 1)}
+        self.aborted = "stage '%s': %s; last line '%s' (%.0f s ago)" % (
+            stage, why or "'%s' not seen within %.0f s" % (expected, secs), last[:160], age)
+        self.log.append("STAGE FAILED: " + self.aborted)
         return False
+
+    def expect(self, stage, pred, expected, secs=None, since=None):
+        """Wait until pred(progress lines from `since`) holds. A `cmd-error` line, the process ending or a traceback ends it at once."""
+        secs = self.stages[stage] if secs is None else secs
+        since = self.mark if since is None else since
+        t0 = time.time()
+        while True:
+            lines = self.progress()[since:]
+            if pred(lines):
+                self.stage_times[stage] = round(time.time() - t0, 2)
+                self.log.append("stage %s: '%s' after %.1f s" % (stage, expected, time.time() - t0))
+                return True
+            err = next((ln for ln in lines if ln.startswith("cmd-error ")), None)
+            if err:
+                return self.fail_stage(stage, expected, secs, "the game reported %s" % err[:200])
+            if self.dead():
+                return self.fail_stage(stage, expected, secs, "process ended or traceback written before '%s'" % expected)
+            if time.time() - t0 > secs:
+                return self.fail_stage(stage, expected, secs)
+            time.sleep(0.1)
+
+    def op_boot(self):
+        """Every launch with a plan starts here: the injected script writes "boot" once init has run."""
+        self.mark = 0
+        return self.expect("boot", lambda ls: "boot" in ls, "boot", since=0)
+
+    def op_wait(self, arg):
+        tok = arg.strip()
+        for known in ("menu True", "advance-done", "saved", "say", "video-result"):   # a trailing "SECS" of older plans is ignored
+            if tok == known or (tok.startswith(known + " ") and tok[len(known):].strip().isdigit()):
+                tok = known
+        if tok == "menu True":
+            # since=0: the menu may come up while the first commands are still being acknowledged
+            return self.expect("menu", lambda ls: "menu True" in ls, "menu True", since=0)
+        if tok == "advance-done":
+            return self.wait_advance()
+        if tok == "saved":
+            return self.expect("save", lambda ls: any(ln.startswith("saved ") for ln in ls), "saved")
+        if tok == "say":
+            return self.expect("first-say", lambda ls: any(ln.startswith("say ") for ln in ls), "say")
+        if tok == "video-result":
+            secs = self.movie_budget if self.movie_budget is not None else self.stages["movie-slack"]
+            return self.expect("movie-slack", lambda ls: "video-result done" in ls, "video-result", secs=secs)
+        return self.expect("done", lambda ls: any(ln == tok or ln.startswith(tok + " ") for ln in ls), tok, secs=self.stages["done"])
+
+    def wait_advance(self):
+        """advance-done, with a stall watch: a new "say N" line (or the done line) at least every `say` seconds."""
+        gap = self.stages["say"]
+        t0 = last = time.time()
+        n = 0
+        while True:
+            lines = self.progress()[self.mark:]
+            if any(ln.startswith("advance-done") for ln in lines):
+                self.stage_times["say"] = max(self.stage_times.get("say", 0), round(self._max_gap, 2) if hasattr(self, "_max_gap") else 0)
+                self.log.append("advance-done after %.0f s (%d say lines)" % (time.time() - t0, n))
+                return True
+            says = [ln for ln in lines if ln.startswith("say ")]
+            if len(says) != n:
+                self._max_gap = max(getattr(self, "_max_gap", 0), time.time() - last)
+                n, last = len(says), time.time()
+            err = next((ln for ln in lines if ln.startswith("cmd-error ")), None)
+            if err:
+                return self.fail_stage("say", "advance-done", gap, "the game reported %s" % err[:200])
+            if self.dead():
+                return self.fail_stage("say", "advance-done", gap, "process ended or traceback written after %d say lines" % n)
+            if time.time() - last > gap:
+                return self.fail_stage("say", "say %d" % (n + 1), gap, "no 'say %d' within %.0f s of the previous line (%d seen since the command)" % (n + 1, gap, n))
+            time.sleep(0.1)
 
     def _pick_window(self):
         """-> (window id, pids). Largest window of the run's pids: on-screen ones first, else any titled one."""
@@ -396,17 +471,68 @@ class Run:
         self.log.append("shot %s: %s" % (name, rec["file"] or rec["error"] or "NO WINDOW CAPTURED"))
 
     def op_quit(self):
+        self.mark = len(self.progress())
         send_cmd(self.hz, "quit")
+        t0 = time.time()
         try:
-            self.proc.wait(timeout=45)
+            self.proc.wait(timeout=self.stages["quit"])
+            self.stage_times["quit"] = round(time.time() - t0, 2)
         except subprocess.TimeoutExpired:
-            self.log.append("quit: game still alive after 45 s (will be killed)")
+            self.fail_stage("quit", "process exit", self.stages["quit"], "the game did not exit within %.0f s of 'quit'" % self.stages["quit"])
+
+    def watch_lint(self, stdout_path, log_paths):
+        """Lint injects nothing: its stages are the engine's own output. lint-boot: the first output (stdout or a log.txt);
+        lint: the "Statistics:" line, or the process ending."""
+        def size(pth):
+            try:
+                return pth.stat().st_size
+            except OSError:
+                return 0
+        t0 = time.time()
+        while True:
+            if self.proc.poll() is not None or size(stdout_path) or any(size(q) for q in log_paths()):
+                break
+            if time.time() - t0 > self.stages["lint-boot"]:
+                self.last_line = lambda: ("<no output yet>", time.time() - t0)
+                return self.fail_stage("lint-boot", "first output", self.stages["lint-boot"])
+            time.sleep(0.2)
+        self.stage_times["lint-boot"] = round(time.time() - t0, 2)
+        t1 = time.time()
+        while self.proc.poll() is None:
+            try:
+                txt = stdout_path.read_text(errors="replace")
+            except OSError:
+                txt = ""
+            if "Statistics:" in txt:
+                break
+            if time.time() - t1 > self.stages["lint"]:
+                tail = txt.strip().splitlines()[-1:] or ["<no output>"]
+                self.last_line = lambda: (tail[0], time.time() - t1)
+                return self.fail_stage("lint", "Statistics:", self.stages["lint"])
+            time.sleep(0.5)
+        self.stage_times["lint"] = round(time.time() - t1, 2)
+        return True
+
+    def send(self, line):
+        """Send one command and hold it to its stages: "cmd-ack" (the script got it), then the command's own completion."""
+        self.mark = len(self.progress())
+        if line.split(None, 1)[0] == "movie":
+            a = line.split(None, 5)
+            self.movie_budget = float(a[2]) + float(a[3]) + self.stages["movie-slack"]   # secs + warm + slack
+        t0 = time.time()
+        send_cmd(self.hz, line)
+        if not self.expect("ack", lambda ls: ("cmd-ack " + line) in ls, "cmd-ack " + line, since=self.mark):
+            return False
+        c = ST.completion(line)
+        return c is None or self.expect(c[0], c[1], c[0] + " of '" + line.split()[0] + "'", since=self.mark)
 
     def run(self, steps):
+        if not self.op_boot():
+            return
         for op, arg in steps:
             if op == "cmd":
-                self.mark = len(self.progress())
-                send_cmd(self.hz, arg)
+                if not self.send(arg):
+                    return
             elif op == "wait":
                 if not self.op_wait(arg):
                     return
@@ -414,8 +540,8 @@ class Run:
                 # the game's own setup after New Game (corpus.toml `after_start`), for stories whose intro cannot be clicked through
                 time.sleep(6)
                 for c in self.after_start:
-                    self.mark = len(self.progress())
-                    send_cmd(self.hz, c)
+                    if not self.send(c):
+                        return
                     time.sleep(1)
             elif op == "after_start":
                 pass
@@ -510,6 +636,7 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
     if not inject:
         env.pop("HARNESS_DIR")
     res = {"name": name, "engine": engine, "stripped_game_cache": strip, "argv": [a.replace(str(top), "<run>") for a in argv], "plan_log": []}
+    st_table = ST.table(g, ctx.opts.get("stage_scale", 1.0))
     take_lock(ctx.opts.get("lock_timeout", 7200))
     before = None
     deadline = 0
@@ -520,14 +647,16 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
         stdout = open(out / "stdout.log", "w")
         t0 = time.time()
         proc = subprocess.Popen(argv, stdout=stdout, stderr=subprocess.STDOUT, env=env, cwd=str(clone))
-        run = Run(proc, hz, base, out / "shots", pattern, res["plan_log"], g.get("after_start", ()), ctx.opts.get("min_visible", 0.8))
+        run = Run(proc, hz, base, out / "shots", pattern, res["plan_log"], g.get("after_start", ()), ctx.opts.get("min_visible", 0.8), st_table)
         try:
             if plan:
                 run.run(plan)
                 if proc.poll() is None:
                     time.sleep(1)
+            else:
+                run.watch_lint(out / "stdout.log", lambda: [base / "log.txt"] + sorted(data.rglob("log.txt")))
             deadline = t0 + timeout
-            while proc.poll() is None and time.time() < deadline and not (plan and run.aborted):
+            while proc.poll() is None and time.time() < deadline and not run.aborted:
                 time.sleep(0.5)
         finally:
             res["exited"] = proc.poll() is not None
@@ -535,7 +664,9 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
             res["wall_s"] = round(time.time() - t0, 1)
             res["aborted"] = run.aborted
             res["shots"] = run.shots
-        res["timed_out"] = (not res["exited"]) and not (plan and run.aborted) and time.time() >= deadline
+            res["stage_times"] = run.stage_times
+            res["stage_failed"] = run.stage_failed
+        res["timed_out"] = (not res["exited"]) and not run.aborted and time.time() >= deadline
         stdout.close()
     finally:
         res["sweep_ok"] = sweep(pattern)

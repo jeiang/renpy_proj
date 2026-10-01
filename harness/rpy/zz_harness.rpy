@@ -10,7 +10,9 @@
 #   click    end any non-menu interaction every 1 s (splash screens, pauses)
 #   advance  end interactions until N more say statements ran (advance-to: until N in total), then hold:
 #            progress line "advance-done <total>". Use advance-to where two runs must stop at the same line.
-# Events: save-directory NAME | say N | text N HASH | label NAME | menu True|False | tags a b c | movie-channel NAME | cmd ... | video-result {json}
+# Every command writes "cmd-ack LINE" first; a command that returns writes "cmd-done LINE"; one that raises writes
+# "cmd-error LINE REPR" and "cmd-error-trace ...". start, load, jump, movie and quit do not return normally.
+# Events: boot | loaded | save-directory NAME | say N | text N HASH | label NAME | menu True|False | tags a b c | movie-channel NAME | cmd ... | video-result {json}
 init 999 python:
     import os, io, time, json, hashlib, collections
     _hz_dir = os.environ.get("HARNESS_DIR")
@@ -58,6 +60,8 @@ init 999 python:
             _hz_old_label_cb(name, abnormal)
 
     if _hz_dir:
+        _hz_write("boot")
+        config.after_load_callbacks.append(lambda: _hz_write("loaded"))
         if config.save_directory:
             _hz_write("save-directory %s" % config.save_directory)
         config.all_character_callbacks.append(_hz_say)
@@ -80,7 +84,6 @@ init 999 python:
     _hz_ctl = tuple(renpy.game.CONTROL_EXCEPTIONS) + (renpy.display.core.EndInteraction,)
 
     def _hz_do(line):
-        _hz_write("cmd " + line)
         w = line.split(None, 1)
         c, a = w[0], (w[1] if len(w) > 1 else "")
         if c == "start":
@@ -113,6 +116,8 @@ init 999 python:
                 renpy.jump("hz_movie")
         elif c == "quit":
             renpy.quit(save=False)
+        else:
+            raise Exception("unknown harness command %r" % (c,))
 
     def _hz_busy():
         for s in ("input", "choice", "main_menu", "preferences", "confirm", "load", "save", "game_menu"):
@@ -133,13 +138,16 @@ init 999 python:
             os.remove(p)
             for line in txt.splitlines():
                 if line.strip():
+                    line = line.strip()
+                    _hz_write("cmd-ack " + line)
                     try:
-                        _hz_do(line.strip())
+                        _hz_do(line)
+                        _hz_write("cmd-done " + line)
                     except _hz_ctl:
                         raise
-                    except Exception as e:
+                    except BaseException as e:   # BaseException: a failing command must never vanish silently
                         import traceback
-                        _hz_write("cmd-error %r" % (e,))
+                        _hz_write("cmd-error %s %r" % (line.split()[0], e))
                         _hz_write("cmd-error-trace " + " | ".join(l.strip() for l in traceback.format_exc().splitlines()[-8:]))
         mm = bool(renpy.get_screen("main_menu"))
         if mm != st["menu"]:
