@@ -440,6 +440,7 @@ init 999 python:
         D.save_s = 0.0
         D.save_err = None
         D.last_save_t = 0.0
+        D.last_save_cost = 0.0
         D.last_presave = None
         D.lines = collections.OrderedDict()
         D.labels = collections.OrderedDict()
@@ -447,6 +448,8 @@ init 999 python:
         D.errors = 0
         D.menu_ticks = 0
         D.plays = 0
+        D.hub_clicks = 0
+        D.hub_after = min(20.0, D.stall / 4.0)
         D.lines_at_play_start = 0
         D.pending = []
         D.restart_t = 0.0
@@ -513,7 +516,7 @@ init 999 python:
         cov = {"seed": D.seed, "elapsed_s": round(time.time() - D.t0, 1), "say": D.say, "nodes": D.nodes,
                "lines_hit": len(D.lines), "lines_total": D.tot_lines, "labels_hit": len(hit_labels),
                "labels_total": len(D.tot_labels), "saves": D.saves, "save_s": round(D.save_s, 2),
-               "save_error": D.save_err, "decisions": D.decisions, "inputs": D.inputs, "errors": D.errors,
+               "save_error": D.save_err, "decisions": D.decisions, "hub_clicks": D.hub_clicks, "inputs": D.inputs, "errors": D.errors,
                "renpy": renpy.version_only, "final": final}
         _hz_json_write(os.path.join(d, "coverage.json"), cov)
         if final:
@@ -546,7 +549,9 @@ init 999 python:
         if not (_hz_is_pycode(code) and code.mode == "exec"):
             return
         now = time.time()
-        if now - D.last_save_t < D.save_gap:
+        # Adaptive gap: saves may use at most a tenth of the run time (a hub loop runs thousands of PyCode nodes a minute).
+        # The error-time save (deep-errN) resumes at the failing node whether or not a rolling save was made there.
+        if now - D.last_save_t < max(D.save_gap, D.last_save_cost * 9):
             return
         try:
             log = renpy.game.log
@@ -556,7 +561,8 @@ init 999 python:
             renpy.save(slot, extra_info="deep")
             D.saves += 1
             D.last_save_t = now
-            D.save_s += time.time() - now
+            D.last_save_cost = time.time() - now
+            D.save_s += D.last_save_cost
             D.last_presave = {"slot": slot, "exec_n": D.exec_n, "file": fn, "line": node.linenumber, "say": D.say}
         except _hz_ctl:
             raise
@@ -617,6 +623,41 @@ init 999 python:
         config.all_character_callbacks.append(_hz_say_count)
 
     # ---- the driver
+    _HZ_SKIP_ACTIONS = ("Quit", "MainMenu", "ShowMenu", "Preference", "Language", "Help", "Screenshot", "Rollback", "RollbackToIdentifier",
+                        "FileSave", "FileLoad", "FileDelete", "FileAction", "FilePage", "FilePageNext", "FilePagePrevious", "Return",
+                        "QuickSave", "QuickLoad", "ToggleScreen", "Skip", "Replay", "EndReplay", "Confirm", "SetMute", "ToggleMute", "MouseMove",
+                        "OpenURL", "Start", "InvertSelected", "Scroll", "XScrollValue", "YScrollValue")
+
+    def _hz_action_ok(act):
+        if isinstance(act, (list, tuple)):
+            return len(act) > 0 and all(_hz_action_ok(a) for a in act)
+        if act is None or isinstance(act, (bool, int)) or not hasattr(act, "__call__") and not hasattr(act, "get_sensitive"):
+            return False
+        if type(act).__name__ in _HZ_SKIP_ACTIONS:
+            return False
+        try:
+            return bool(renpy.is_sensitive(act))
+        except Exception:
+            return False
+
+    def _hz_hub_click():
+        """A screen the driver has no screen_actions for, and no new script line for a while: press one of its buttons
+        (a random pick from the run's generator), as a click would. Buttons that leave the game or change settings are skipped."""
+        D = _hz_D
+        cands = []
+        for f in list(renpy.display.focus.focus_list):
+            act = getattr(f.widget, "clicked", None)
+            if act is not None and _hz_action_ok(act):
+                cands.append(act)
+        if not cands:
+            return False
+        act = cands[int(D.rng.random() * len(cands))]
+        D.hub_clicks += 1
+        rv = renpy.run(act)
+        if rv is not None:
+            renpy.end_interaction(rv)
+        return True
+
     def _hz_deep_tick():
         D = _hz_D
         if not D.on or D.done:
@@ -691,6 +732,8 @@ init 999 python:
                     rv = renpy.run(it.action)
                     if rv is not None:
                         renpy.end_interaction(rv)
+                return
+            if D.verify is None and now - D.last_new > D.hub_after and D.n % 25 == 0 and _hz_hub_click():
                 return
             if not _hz_busy():
                 renpy.end_interaction(True)

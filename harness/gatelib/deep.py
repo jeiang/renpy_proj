@@ -40,7 +40,7 @@ def _num(ctx, key, default):
 def deep_plan(seed, budget_s, stall_s, save_gap, stop_say=0):
     extra = " %d" % stop_say if stop_say else ""
     return L.parse_plan(
-        "wait menu True\ncmd deep %d %d %d %s%s\ncmd start\nafter_start\nwait deep-done %d\nend\n"
+        "cmd click on\nwait menu True\ncmd deep %d %d %d %s%s\ncmd start\nafter_start\nwait deep-done %d\nend\n"
         % (seed, budget_s, stall_s, save_gap, extra, budget_s + 240))
 
 
