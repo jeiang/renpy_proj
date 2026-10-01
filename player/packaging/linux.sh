@@ -44,12 +44,10 @@ for so in "$PKG"/lib/*.so*; do patchelf --set-rpath '$ORIGIN' "$so"; done
 patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 --set-rpath '$ORIGIN/lib' "$PKG/player"
 strip --strip-unneeded "$PKG/player" "$PKG"/lib/*.so* 2>/dev/null || true
 
-# Check: with the generic interpreter and an empty library path, list what is outside the package.
+# Check: ldd of the packaged binary. Outside NixOS the host's own library path applies. On NixOS the
+# generic interpreter is nix-ld, which reads NIX_LD_LIBRARY_PATH (the devshell sets LD_LIBRARY_PATH).
 echo "== ldd =="
-LDD=$(ld_so=$(patchelf --print-interpreter "$PKG/player"); { [ -e "$ld_so" ] && "$ld_so" --list "$PKG/player"; } 2>/dev/null || true)
-# `ldd` on the package binary: on NixOS the generic interpreter is a stub, so list through the nix one.
-ALT=$(ls /nix/store/*glibc-2*/lib/ld-linux-x86-64.so.2 2>/dev/null | head -1 || true)
-if [ -z "$LDD" ] && [ -n "$ALT" ]; then LDD=$("$ALT" --library-path "$PKG/lib" --list "$PKG/player"); fi
+LDD=$(NIX_LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}" ldd "$PKG/player")
 echo "$LDD"
 bad=$(echo "$LDD" | awk '/=> \//{print $3}' | grep -v "^$PKG/lib/" | grep -Ev '/(libc|libm|libdl|libpthread|librt|libutil|libresolv|libgcc_s|libasound|libudev|libvulkan|libwayland-[a-z-]*|libxkbcommon[a-z-]*|libX[a-z0-9]*|libxcb[a-z-]*)\.so' || true)
 if [ -n "$bad" ]; then echo "linux.sh: unexpected dependencies:" >&2; echo "$bad" >&2; exit 1; fi
