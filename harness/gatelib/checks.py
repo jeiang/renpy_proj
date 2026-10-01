@@ -232,7 +232,10 @@ def check_route(ctx):
            "shots": {"count": len(runs[0]["shots"]), "volatile": sorted(volatile)},
            "say_counts": [len(s) for s in seqs], "launches": [_launch_summary(r) for r in runs]}
     if len(runs) > 1:
-        out["dialogue_equal_between_runs"] = all(s == seqs[0] for s in seqs[1:])
+        # Compare the common prefix: lines a run executes after its last advance target, while the plan settles,
+        # shoots and quits, depend on timing (Dreamscape: a timed say 2 s after say 40 races the quit).
+        k = min(len(s) for s in seqs)
+        out["dialogue_equal_between_runs"] = all(s[:k] == seqs[0][:k] for s in seqs[1:])
         if not out["dialogue_equal_between_runs"]:
             problems.append("executed dialogue differs between runs")
         rows = diff_shots(ctx.out / "route-1" / "shots", ctx.out / "route-2" / "shots", _shot_names(runs[0]), tm, tp, ctx.opts["diff_crop_top"])
