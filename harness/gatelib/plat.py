@@ -414,8 +414,8 @@ class Xvfb(Hypr):
         self._tmp = None
 
     def wrap(self, argv):
-        gm = shutil.which("gamemoderun")   # artemis has it, a CI runner does not: no D-Bus session there, so it would do nothing
-        return [gm] + list(argv) if gm else list(argv)
+        # No gamemoderun: a CI runner has none, and gamemode talks to the user D-Bus session that this mode must not see.
+        return list(argv)
 
     def session_start(self, env):
         """Start Xvfb for this launch and point `env` at it, with a private XDG_RUNTIME_DIR."""
@@ -483,7 +483,8 @@ class Xvfb(Hypr):
         env.setdefault("LANG", "C.UTF-8")
         env["PATH"] = LINUX_CLEAN_PATH
         env.update(LIBGL_ALWAYS_SOFTWARE="1", GALLIUM_DRIVER="llvmpipe", WGPU_BACKEND="vulkan", SDL_AUDIODRIVER="dummy",
-                   XDG_SESSION_TYPE="x11")
+                   XDG_SESSION_TYPE="x11",
+                   DBUS_SESSION_BUS_ADDRESS="disabled:")   # no session bus: without it, libdbus autolaunches dbus-launch (a fork storm seen on artemis)
         icd = environ.get("HARNESS_VK_ICD")
         if "NIX_LD" in environ:   # NixOS: dynamic ELF files (stock SDK, the player's host libraries) get Mesa's software drivers only
             libs, nix_icd = self.soft_libs()
