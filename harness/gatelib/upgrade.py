@@ -340,17 +340,17 @@ def load_run(ctx, name, err, with_patch, timeout=180):
     return res
 
 
-def stock_baseline(out_root, key, game_args):
+def stock_baseline(out_root, key, game_arg, game_args):
     d = out_root / ("%s-stock" % key)
     if (d / "checks" / "probe.json").exists():
         return d
-    r = subprocess.run([sys.executable, str(L.HARNESS / "gate.py"), "run", "--engine", "stock", "--game", key, "--tier", "full", "--out", str(d)] + game_args)
+    r = subprocess.run([sys.executable, str(L.HARNESS / "gate.py"), "run", "--engine", "stock", "--game", game_arg, "--tier", "full", "--out", str(d)] + game_args)
     return d if (d / "checks" / "probe.json").exists() else None
 
 
-def run_gate(key, player_bin, seed, out, baseline, extra):
+def run_gate(game_arg, player_bin, seed, out, baseline, extra):
     """The full M3 gate on the patched player. -> (passed, summary dict)."""
-    cmd = [sys.executable, str(L.HARNESS / "gate.py"), "run", "--engine", "player", "--player-bin", str(player_bin), "--game", key,
+    cmd = [sys.executable, str(L.HARNESS / "gate.py"), "run", "--engine", "player", "--player-bin", str(player_bin), "--game", game_arg,
            "--tier", "full", "--with-proposed", "--seed-data", str(seed), "--out", str(out)]
     if baseline:
         cmd += ["--baseline", str(baseline)]

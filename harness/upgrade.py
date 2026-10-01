@@ -153,8 +153,8 @@ def upgrade_error(a, key, game, game_arg, cfg, data, err_dir, err):
             elif a.no_gate:
                 rec["gate"] = "skipped (--no-gate)"
             else:
-                base = pathlib.Path(a.stock_out) if a.stock_out else U.stock_baseline(L.HARNESS / "out", key, [] if game_arg == key else ["--renpy-version", str(game.get("renpy", ""))])
-                ok, gate = U.run_gate(key, a.player_bin, seed, adir / "gate", base, [] if game_arg == key else ["--renpy-version", str(game.get("renpy", ""))])
+                base = pathlib.Path(a.stock_out) if a.stock_out else U.stock_baseline(L.HARNESS / "out", key, game_arg, [] if game_arg == key else ["--renpy-version", str(game.get("renpy", ""))])
+                ok, gate = U.run_gate(game_arg, a.player_bin, seed, adir / "gate", base, [] if game_arg == key else ["--renpy-version", str(game.get("renpy", ""))])
                 rec["gate"] = gate
                 if not ok:
                     probs = "; ".join("%s: %s" % (c, "; ".join(d.get("problems") or [d["status"]])) for c, d in (gate.get("checks_detail") or {}).items() if d["status"] != "pass")

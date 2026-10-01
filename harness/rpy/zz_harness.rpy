@@ -363,7 +363,7 @@ screen _hz_poll_screen():
 #     A save resumes at the latest checkpoint, so a save made at node X resumes at X;
 #   - counts node lines and labels (coverage), and records every uncaught error as $HARNESS_DIR/deep/err-N.json;
 #   - stops at: story end (the main menu again), BUDGET seconds, STALL seconds with no new script line, or the first error.
-# Progress lines: deep-start SEED | deep-error N TYPE | deep-done REASON. `verify LINE SECS FILE` (after a load) runs on: it
+# Progress lines: deep-start SEED | deep-play N | deep-error N TYPE | deep-done REASON. `verify LINE SECS FILE` (after a load) runs on: it
 # writes verify-ok once the node at FILE:LINE ran and the next node began, verify-fail REASON on any error.
 # State lives in the module sys.modules["_hz_deep"], not in the store: loads and rollbacks must not touch it.
 # ======================================================================================================================
@@ -446,6 +446,10 @@ init 999 python:
         D.trail = collections.deque(maxlen=12)
         D.errors = 0
         D.menu_ticks = 0
+        D.plays = 0
+        D.lines_at_play_start = 0
+        D.pending = []
+        D.restart_t = 0.0
         D.last_flush = 0.0
         D.inputs = 0
         D.decisions = 0
@@ -644,10 +648,25 @@ init 999 python:
             if renpy.get_screen("main_menu"):
                 D.menu_ticks += 1
                 if D.started and D.menu_ticks > 15 and D.verify is None:
-                    _hz_finish("story-end")
+                    # The story ended (or a bad ending came back to the menu). Play again with the next draws while the
+                    # last play still reached script lines no earlier play had; stop when one adds nothing.
+                    D.plays += 1
+                    if len(D.lines) == D.lines_at_play_start or D.plays >= 30:
+                        _hz_finish("story-end")
+                        return
+                    D.lines_at_play_start = len(D.lines)
+                    D.menu_ticks = 0
+                    D.restart_t = now
+                    D.pending = [x for x in json.loads(os.environ.get("HZ_AFTER_START") or "[]")]
+                    _hz_write("deep-play %d" % (D.plays + 1))
+                    renpy.run(Start())
                 return
             D.menu_ticks = 0
             D.started = True
+            if D.pending and now - D.restart_t > 6:
+                D.restart_t = now - 5   # the gate's after_start spacing: 6 s before the first command, 1 s between
+                _hz_do(D.pending.pop(0))
+                return
             for _scr, _act in _HZ_SCREEN_ACTIONS:
                 if renpy.get_screen(_scr) and D.n % 4 == 0:
                     rv = renpy.run(eval(_act, renpy.store.__dict__))

@@ -6,6 +6,7 @@ differs per host (window lookup and capture, clone command, environment, `gamemo
 untouched) is in `plat.py`.
 """
 import hashlib
+import json
 import os
 import pathlib
 import re
@@ -675,6 +676,7 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
     env["PLAYER_COMPAT_NOTICE"] = "off"
     env["HZ_INPUT_ANSWER"] = str(g.get("input_answer", "Tester"))
     env["HZ_INPUT_EXPLICIT"] = "1" if "input_answer" in g else "0"   # deep runs vary the answer unless the game needs one
+    env["HZ_AFTER_START"] = json.dumps(list(g.get("after_start", ())))   # deep runs replay it when a play ends and the next starts
     env.update(ctx.opts.get("extra_env") or {})
     env["HZ_INPUT_LIMIT"] = str(g.get("input_limit", 3))
     env["HZ_SCREEN_ACTIONS"] = ";".join("%s=%s" % kv for kv in g.get("screen_actions", {}).items())
