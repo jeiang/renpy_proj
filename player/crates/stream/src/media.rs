@@ -18,7 +18,13 @@ use str0m::{Event, IceConnectionState, Input, Output, Rtc};
 use crate::input::{self, Message};
 use crate::{Msg, Shared, clock_ms};
 
-const KEEPALIVE: Duration = Duration::from_secs(1);
+/// Longest gap between two video frames while the picture is static (`STREAM_KEEPALIVE_MS` overrides, default 100).
+fn keepalive() -> Duration {
+    static MS: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
+    Duration::from_millis(*MS.get_or_init(|| {
+        std::env::var("STREAM_KEEPALIVE_MS").ok().and_then(|v| v.parse().ok()).filter(|v| *v > 0).unwrap_or(100)
+    }))
+}
 const IDR_MIN_GAP: Duration = Duration::from_millis(150);
 const OPUS_CHUNK: usize = 1920; // 960 frames, 20 ms, interleaved stereo
 const AUDIO_QUEUE_MAX: usize = 48_000 * 2; // 1 s
@@ -103,7 +109,7 @@ pub(crate) fn run(sh: Arc<Shared>, socks: Vec<UdpSocket>, rx: Receiver<Msg>) {
             deadline = deadline.min(t);
         }
         if m.sess.as_ref().is_some_and(|s| s.connected) {
-            deadline = deadline.min(m.last_sent + KEEPALIVE);
+            deadline = deadline.min(m.last_sent + keepalive());
             if let Some(t) = m.flush_at {
                 deadline = deadline.min(t);
             }
@@ -286,7 +292,7 @@ impl Media {
             self.flush_at = None;
             // The flush repeats the picture so the browser releases it; it keeps the picture's own timecode.
             self.encode_last(now, false, true, false);
-        } else if now.duration_since(self.last_sent) >= KEEPALIVE && self.last_frame.is_some() {
+        } else if now.duration_since(self.last_sent) >= keepalive() && self.last_frame.is_some() {
             self.encode_last(now, false, true, true);
         }
         self.pump_audio(now);
