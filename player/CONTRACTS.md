@@ -187,3 +187,23 @@ Rust parses and validates; Python applies after load and before the first init b
 - `patches` (M3, merged): entry fields are only `file`, `line`, `original_hash` (`sha1:` plus 8 to 40 hex digits) and `source`; unknown fields are errors. `<data>/reports/<key>/patches.json` holds results and the fingerprint. `PLAYER_PATCHES_APPLY_TEST=1` makes the player exit after applying patches and write no report or events (used by `player patches <game> apply-test`).
 - `compat` notice: `PLAYER_COMPAT_NOTICE=off` hides the in-game notice; events are still written to `runtime.jsonl`.
 - `text` (M3): FreeType's kern-table pair limit is reproduced. For Ren'Py 7 games, patches 0900 (FreeType shaper default up to 7.7) and 0901 (Ren'Py 7 glyph overlap blend) apply.
+
+# M4 contracts
+
+Added for "M4: Linux and Windows on real GPUs" (issue #37). Scope now (user, 2026-10-01): Linux on a real GPU (artemis), Windows build and headless checks without a GPU (WARP). The Windows GPU gate is a recorded gap.
+
+## Remote machines
+
+- **artemis-host.example** (Linux GPU host): NixOS 26.11, x86_64, Ryzen 7 7800X3D, AMD RX 9070-class (Navi 48, gfx1201, RADV Vulkan, radeonsi VA-API), Hyprland Wayland session `wayland-1` on `/run/user/1000` (outputs HDMI-A-1 and the hypr-rdp output, 1920x1080). Reach it with `ssh -o BatchMode=yes user@<artemis-host> "bash -c '...'"` (fish login shell; no `-t`). Never run `sudo`/`doas`; never print secrets.
+  - Git: bare repo `~/Projects/renpy_proj-remote/repo.git` (the coordinator pushes `main` there). Clone it to `~/Projects/renpy_proj-remote/<slug>` and push your branch back to it; the coordinator fetches and merges. Only `~/Projects` survives a reboot.
+  - Test games (released copies, never in git): `~/Projects/renpy_proj-remote/corpus/` (SecretIsland, WaifuAcademy, BlackRose, Harem_Hotel). Clone a game per run with `cp -a --reflink=auto` into your checkout's gitignored `corpus/`.
+  - GPU: launch games through `gamemoderun` (it stops llm-server, qbittorrent and jellyfin for the run and restarts them).
+  - GUI: export `XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=wayland-1 HYPRLAND_INSTANCE_SIGNATURE=$(ls /run/user/1000/hypr)`. Window list and geometry: `hyprctl clients -j`. Window-scoped capture: `grim -g "<x>,<y> <w>x<h>"` of that window's geometry after checking it is the visible top window on its workspace; never capture the whole output. No synthetic input (`hyprctl dispatch` focus or workspace commands are allowed; `wtype`/`ydotool` are not).
+  - Machine lock: `/tmp/renpy_proj.run.lock` on artemis with the same owner-file rules as on the Mac.
+- **Windows VM** `Administrator@<windows-vm>` (key auth): Server 2022, 4 vCPU, 8 GB, no GPU, VS 2022 Build Tools, Git, rustup. Work under `C:\spike\`. wgpu uses WARP (D3D12 software adapter) there.
+
+## Platform rules
+
+- Linux host: glibc-dynamic binary; static libpython; Vulkan, VA-API and the audio stack are loaded from the system at run time. Package: a directory `player-linux-x86_64/` with the binary and the LGPL FFmpeg shared libraries in `lib/` (rpath `$ORIGIN/lib`), plus a tarball.
+- Windows host: `/MT`, static libpython (research/win-spike), LGPL FFmpeg shared DLLs beside the exe, nothing appended after signing, `PYTHONUTF8=1` for the build.
+- Platform-specific code uses `cfg(target_os)`; macOS-only pieces (objc2-metal, CoreFoundation locale) must not break other targets.
