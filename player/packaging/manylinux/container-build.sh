@@ -71,7 +71,7 @@ if ! stamped "$DEPS" static; then
   d=$(fetch xz);      (cd "$d" && ./configure --prefix="$DEPS" --disable-shared --enable-static --disable-xz --disable-xzdec --disable-lzmadec --disable-lzmainfo --disable-scripts --disable-doc --disable-nls >/dev/null && make -j"$JOBS" >/dev/null && make install >/dev/null)
   d=$(fetch expat);   (cd "$d" && ./configure --prefix="$DEPS" --disable-shared --enable-static --without-docbook --without-examples --without-tests >/dev/null && make -j"$JOBS" >/dev/null && make install >/dev/null)
   d=$(fetch libffi);  (cd "$d" && ./configure --prefix="$DEPS" --disable-shared --enable-static --disable-docs --with-pic >/dev/null && make -j"$JOBS" >/dev/null && make install >/dev/null)
-  d=$(fetch openssl); (cd "$d" && ./Configure linux-x86_64 no-shared no-tests no-docs no-apps --prefix="$DEPS" --libdir=lib -fPIC >/dev/null && make -j"$JOBS" build_libs >/dev/null && make install_dev >/dev/null)
+  d=$(fetch openssl); (cd "$d" && ./Configure linux-x86_64 no-shared no-tests --prefix="$DEPS" --libdir=lib -fPIC >/dev/null && make -j"$JOBS" build_libs >/dev/null && make install_dev >/dev/null)
   # libffi installs into lib or lib64 depending on the host; flatten so one path serves every library.
   for f in "$DEPS"/lib64/*.a; do [ -e "$f" ] && cp "$f" "$DEPS/lib/"; done
   mark "$DEPS" static
