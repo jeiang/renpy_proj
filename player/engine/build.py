@@ -487,7 +487,7 @@ def main():
     args = ap.parse_args()
 
     if not UPSTREAM.exists() or not (UPSTREAM.parent / "pywheels").is_dir():
-        run([git_tool("bash") if IS_WIN else "bash", str(ENGINE / "fetch.sh")])
+        run([git_tool("bash") if IS_WIN else "bash", (ENGINE / "fetch.sh").as_posix()])
 
     if IS_WIN:
         fetch_sdl2_headers()

@@ -9,6 +9,8 @@ use std::process::Command;
 fn main() {
     let manifest = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
     let player = manifest.join("../..").canonicalize().unwrap();
+    // Windows: canonicalize gives a `\\?\` path that cl and msbuild do not take.
+    let player = PathBuf::from(player.to_string_lossy().trim_start_matches(r"\\?\"));
     let out = player.join("build-out/cpython");
     if std::env::var("CARGO_CFG_TARGET_OS").is_ok_and(|os| os == "windows") {
         windows(&manifest, &player, &out);

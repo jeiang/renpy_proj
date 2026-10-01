@@ -11,6 +11,8 @@ use std::process::Command;
 fn main() {
     let manifest = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let player = manifest.join("..").join("..").canonicalize().unwrap();
+    // Windows: canonicalize gives a `\\?\` path that cl, bash and msbuild do not take.
+    let player = PathBuf::from(player.to_string_lossy().trim_start_matches(r"\\?\"));
     let engine_dir = player.join("engine");
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
     let built = player.join("build-out").join("engine");
