@@ -10,8 +10,9 @@ label start:
     e "This is the Ren'Py 7 synthetic game."
     e "It was compiled by the 7.4.11 SDK, so its scripts hold Python 2 pickles."
     $ player = renpy.input("What is your name?", length=12)
-    $ player = player.strip() or "Nobody"
-    e "Hello, [player]."
+    # The gate's click mode can end the input with True before its answer arrives: the story must not print the answer.
+    $ player = player.strip() if hasattr(player, "strip") else ""
+    e "Thank you."
 
     menu:
         e "Which cases should I run?"

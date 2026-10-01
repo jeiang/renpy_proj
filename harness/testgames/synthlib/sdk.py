@@ -29,7 +29,8 @@ def run_renpy7(base, args, timeout=300):
     """Run the 7.4.11 SDK on the project `base` without a display, with scratch saves (never ~/Library/RenPy or ~/.renpy)."""
     sys.path.insert(0, str(HARNESS))
     from gatelib import plat   # the gate's launch environment (nix-ld libraries on NixOS)
-    env = dict(plat.get().game_env(os.environ), SDL_VIDEODRIVER="dummy", SDL_AUDIODRIVER="dummy")
+    env = dict(plat.get().game_env(os.environ), SDL_VIDEODRIVER="dummy", SDL_AUDIODRIVER="dummy",
+               RENPY_DISABLE_BACKUPS="I take responsibility for this.")
     with tempfile.TemporaryDirectory() as sav:
         r = subprocess.run([str(sdk7() / "renpy.sh"), str(base)] + list(args) + ["--savedir", sav], capture_output=True, text=True, env=env, timeout=timeout)
     out = r.stdout + r.stderr
