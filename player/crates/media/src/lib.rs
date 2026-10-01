@@ -10,6 +10,8 @@ mod types;
 
 use std::ffi::CStr;
 
+pub use source::ByteSource;
+pub use stream::{Media, Shared, advance_time};
 pub use types::{ColorInfo, Matrix, Plane, PlaneLayout, PyVideoFrame, VideoFrame};
 
 /// The Python modules of this crate, by dotted name.
