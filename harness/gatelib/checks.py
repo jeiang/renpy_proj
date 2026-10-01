@@ -385,4 +385,4 @@ def check_video(ctx):
 from . import deep as _deep  # noqa: E402
 
 CHECKS = {"deep": _deep.check_deep, "lint": check_lint, "probe": check_probe, "route": check_route, "saveresume": check_saveresume, "video": check_video}
-TIERS = {"deep": ["deep"], "m1": ["lint", "probe", "route"], "full": ["lint", "probe", "route", "saveresume", "video"]}
+TIERS = {"deep": ["deep"], "synth": ["lint", "probe", "route", "saveresume"], "m1": ["lint", "probe", "route"], "full": ["lint", "probe", "route", "saveresume", "video"]}
