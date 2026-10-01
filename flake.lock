@@ -16,9 +16,27 @@
         "type": "github"
       }
     },
+    "renpy-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1778894081,
+        "narHash": "sha256-RLLgCVLf6LJiv5O66lgcwF5jP1NZPpsG1/OD4nZXCJc=",
+        "owner": "renpy",
+        "repo": "renpy",
+        "rev": "39895c1e017f0b36ffea2447d97eccd69d76ee1c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "renpy",
+        "ref": "8.5.3.26051504",
+        "repo": "renpy",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": "nixpkgs",
+        "renpy-src": "renpy-src"
       }
     }
   },
