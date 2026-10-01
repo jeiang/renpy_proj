@@ -250,7 +250,12 @@ impl Shared {
         };
         // wgpu allows anisotropy only with all three filters linear. A sampler with no mip levels (`mip == 0`, GL_LINEAR)
         // samples level 0 only (lod_max_clamp 0), so a Linear mipmap filter changes nothing there and lets the clamp
-        // through; GL applies anisotropy to such a texture too.
+        // through; GL applies anisotropy to such a texture too (Mesa radeonsi and Apple's GL do).
+        // This is the closest Vulkan can get on AMD. Mesa radeonsi programs "no mip filter" (Z_FILTER_NONE) for
+        // GL_LINEAR, and RADV has no such state (Vulkan has no "none" mipmap mode; wgpu needs Linear for anisotropy).
+        // On RX 9070 XT the two give pictures that differ by 1 to 2.5 (mean, 0..255) in strongly aliased scenes.
+        // Measured, none of the states below gets closer to radeonsi than this one: maxAnisotropy 8, 4 or 2, lod_max_clamp
+        // 0.5 or 1, a one-level view, a one-level texture, a LOD bias. See harness/testgames/aniso/README.md.
         let all_linear = k.mag_linear && k.min_linear;
         let mipf = match k.mip {
             2 => MipmapFilterMode::Linear,
