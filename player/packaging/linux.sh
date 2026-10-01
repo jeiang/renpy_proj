@@ -40,7 +40,11 @@ bundle() { # copy the non-system libraries of $1 (recursively) into lib/
   done
 }
 bundle "$PKG/player"
-for so in "$PKG"/lib/*.so*; do patchelf --set-rpath '$ORIGIN' "$so"; done
+for so in "$PKG"/lib/*.so*; do
+  patchelf --set-rpath '$ORIGIN' "$so"
+  # nix links FFmpeg against the unversioned name, which only a -dev package provides on other distributions.
+  if patchelf --print-needed "$so" | grep -qx 'libvulkan.so'; then patchelf --replace-needed libvulkan.so libvulkan.so.1 "$so"; fi
+done
 patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 --set-rpath '$ORIGIN/lib' "$PKG/player"
 strip --strip-unneeded "$PKG/player" "$PKG"/lib/*.so* 2>/dev/null || true
 
