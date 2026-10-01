@@ -31,9 +31,10 @@ chmod u+w "$PKG/player"
 SYSTEM='^(linux-vdso|ld-linux.*|libc|libm|libdl|libpthread|librt|libutil|libresolv|libgcc_s|libasound|libudev|libvulkan|libwayland-.*|libxkbcommon.*|libX.*|libxcb.*|libpipewire.*|libdrm.*|libGL.*|libEGL.*)\.so'
 bundle() { # copy the non-system libraries of $1 (recursively) into lib/
   ldd "$1" | awk '/=> \//{print $1, $3}' | while read -r soname path; do
+    soname=${soname##*/}
     if [[ "$soname" =~ $SYSTEM ]]; then continue; fi
     if [ ! -e "$PKG/lib/$soname" ]; then
-      cp -L "$path" "$PKG/lib/$soname"; chmod u+w "$PKG/lib/$soname"
+      cp -L "$path" "$PKG/lib/$soname"; chmod u+wx "$PKG/lib/$soname"
       bundle "$PKG/lib/$soname"
     fi
   done
