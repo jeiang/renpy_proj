@@ -205,7 +205,7 @@ init 999 python:
         try:
             if st["auto"] or st["adv"] is not None:
                 for _scr, _act in _HZ_SCREEN_ACTIONS:
-                    if renpy.get_screen(_scr) and st["n"] % 4 == 0:
+                    if renpy.get_screen(_scr):   # every poll: a later poll would end the screen with True first
                         _hz_write("auto: screen %s %s" % (_scr, _act))
                         rv = renpy.run(eval(_act, renpy.store.__dict__))
                         if rv is not None:
@@ -719,7 +719,7 @@ init 999 python:
                 _hz_do(D.pending.pop(0))
                 return
             for _scr, _act in _HZ_SCREEN_ACTIONS:
-                if renpy.get_screen(_scr) and D.n % 4 == 0:
+                if renpy.get_screen(_scr):   # every tick: a later tick would end the screen with True first
                     rv = renpy.run(eval(_act, renpy.store.__dict__))
                     if rv is not None:
                         renpy.end_interaction(rv)
