@@ -108,60 +108,80 @@ def _pid_alive(pid):
 
 
 def _stale_reason():
-    """-> why the existing lock is stale, or None when its holder may still be running."""
+    """-> (why the existing lock is stale, its inode) or None when its holder may still be running."""
+    try:
+        ino = os.stat(LOCK).st_ino
+    except OSError:
+        return None   # gone meanwhile
     owner = _read_owner()
     if owner and owner["pid"] is not None:
-        return None if _pid_alive(owner["pid"]) else "owner pid %d is dead (%s)" % (owner["pid"], owner["text"].replace("\n", " "))
+        if _pid_alive(owner["pid"]):
+            return None
+        return "owner pid %d is dead (%s)" % (owner["pid"], owner["text"].replace("\n", " ")), ino
     try:
         age = time.time() - os.stat(LOCK).st_mtime
     except OSError:
-        return None   # gone meanwhile
-    return "no owner file and the lock is %.0f min old" % (age / 60) if age > STALE_NO_OWNER_S else None
+        return None
+    return ("no owner file and the lock is %.0f min old" % (age / 60), ino) if age > STALE_NO_OWNER_S else None
 
 
-def _take_over(reason):
-    """Move the stale lock aside (one taker wins the rename), then check it was the lock we judged stale."""
+def _write_owner():
+    (pathlib.Path(LOCK) / "owner").write_text("pid=%d\nstart=%s\ncmd=%s\n" % (
+        os.getpid(), time.strftime("%Y-%m-%dT%H:%M:%S%z"), " ".join(sys.argv)[:200]))
+
+
+def _take_over(reason, ino):
+    """Replace a stale lock. Never drops a lock a live process holds: the dir that is moved aside must be the one judged
+    stale (same inode, owner pid not alive); if it is not, it is put back when possible and never deleted. Then mkdir
+    the lock: when that fails another taker won, and this one goes back to waiting. -> True when this process holds it."""
     aside = "%s.stale.%d" % (LOCK, os.getpid())
     try:
-        os.rename(LOCK, aside)
+        os.rename(LOCK, aside)   # atomic: one taker moves the dir away
     except OSError:
-        return False   # someone else took it over first
-    pre = pathlib.Path(aside) / "owner"
+        return False
     owner = None
     try:
-        m = re.search(r"pid=(\d+)", pre.read_text())
+        m = re.search(r"pid=(\d+)", (pathlib.Path(aside) / "owner").read_text())
         owner = int(m.group(1)) if m else None
     except OSError:
         pass
-    if owner is not None and _pid_alive(owner):   # a live holder's fresh lock: put it back
+    if os.stat(aside).st_ino != ino or (owner is not None and _pid_alive(owner)):
+        # not the lock we judged: a live holder's. Put it back; if the name is taken again, leave the dir alone
         try:
             os.rename(aside, LOCK)
         except OSError:
-            pass
+            print("[gate] machine lock: a live holder's lock was moved to %s and could not be restored" % aside, flush=True)
         return False
-    print("[gate] machine lock taken over: %s" % reason, flush=True)
     shutil.rmtree(aside, ignore_errors=True)
+    if subprocess.run(["mkdir", LOCK], capture_output=True).returncode != 0:
+        return False   # someone else won the race: they hold it, never remove theirs
+    _write_owner()
+    print("[gate] machine lock taken over: %s" % reason, flush=True)
     return True
 
 
 def take_lock(timeout):
     """mkdir the lock, write `owner` (pid, start time, command) into it. A lock whose owner pid is dead, or that has no
-    owner file and is older than 30 min, is logged and taken over."""
+    owner file and is older than 30 min, is logged and taken over (see _take_over)."""
     t0 = time.time()
     while True:
         if subprocess.run(["mkdir", LOCK], capture_output=True).returncode == 0:
-            (pathlib.Path(LOCK) / "owner").write_text("pid=%d\nstart=%s\ncmd=%s\n" % (
-                os.getpid(), time.strftime("%Y-%m-%dT%H:%M:%S%z"), " ".join(sys.argv)[:200]))
+            _write_owner()
             return
-        reason = _stale_reason()
-        if reason and _take_over(reason):
-            continue
+        stale = _stale_reason()
+        if stale and _take_over(*stale):
+            owner = _read_owner()
+            if owner and owner["pid"] == os.getpid():
+                return
         if time.time() - t0 > timeout:
             raise TimeoutError("machine lock %s held for more than %d s" % (LOCK, timeout))
         time.sleep(0.1)   # 0.1 s: a slower poll starves behind siblings that retake the lock at once
 
 
 def release_lock():
+    owner = _read_owner()
+    if owner and owner["pid"] not in (None, os.getpid()):
+        return   # not ours (it was taken over): never remove another process's lock
     (pathlib.Path(LOCK) / "owner").unlink(missing_ok=True)
     subprocess.run(["rmdir", LOCK], capture_output=True)
 
