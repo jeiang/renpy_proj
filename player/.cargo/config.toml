@@ -3,3 +3,8 @@
 # before any other build script can write it. It has no link lines; crates/pyhost/build.rs emits them.
 [env]
 PYO3_CONFIG_FILE = { value = "crates/pyhost/pyo3-config.txt", relative = true }
+
+# Windows: static CRT for the whole graph (research/win-spike section 5.1). One /MD static library in the
+# link would break it. FFmpeg is the exception by design: it is a set of DLLs with a C interface.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

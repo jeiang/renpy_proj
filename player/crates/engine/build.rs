@@ -24,8 +24,15 @@ fn main() {
     );
     println!("cargo:rerun-if-env-changed=PYTHON");
 
-    let python = env::var("PYTHON").unwrap_or_else(|_| "python3.12".to_string());
-    let status = Command::new(&python)
+    // Windows: `python` (3.12) inside a VS x64 shell; `-X utf8` because Ren'Py's sources are UTF-8.
+    let windows = env::var("CARGO_CFG_TARGET_OS").is_ok_and(|os| os == "windows");
+    let default_python = if windows { "python" } else { "python3.12" };
+    let python = env::var("PYTHON").unwrap_or_else(|_| default_python.to_string());
+    let mut cmd = Command::new(&python);
+    if windows {
+        cmd.args(["-X", "utf8"]);
+    }
+    let status = cmd
         .arg(engine_dir.join("build.py"))
         .status()
         .unwrap_or_else(|e| panic!("cannot run `{python}` (use `nix develop .#player`): {e}"));
@@ -67,4 +74,10 @@ fn main() {
     // Link the archive. The text modules are Rust (`text`), so no native library is needed.
     println!("cargo:rustc-link-search=native={}", built.display());
     println!("cargo:rustc-link-lib=static=engine_cy");
+    if windows {
+        // tinyfiledialogs (renpy.tfd) and libhydrogen (renpy.encryption).
+        for lib in ["comdlg32", "ole32", "user32", "shell32", "advapi32"] {
+            println!("cargo:rustc-link-lib={lib}");
+        }
+    }
 }

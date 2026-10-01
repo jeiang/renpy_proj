@@ -13,11 +13,13 @@ DEST="${HERE}/../upstream/renpy-8.5.3"
 # They are wheels, checked by SHA-256, unpacked by build.py into the layer zip.
 WHEELS="${HERE}/../upstream/pywheels"
 mkdir -p "${WHEELS}"
+# macOS has shasum; Git for Windows and Linux have sha256sum.
+sha256() { if command -v shasum >/dev/null 2>&1; then shasum -a 256 "$1" | cut -d' ' -f1; else sha256sum "$1" | cut -d' ' -f1; fi; }
 fetch_wheel() { # name file url sha256
     local file="${WHEELS}/$1"
-    if [ -f "${file}" ] && [ "$(shasum -a 256 "${file}" | cut -d' ' -f1)" = "$3" ]; then return 0; fi
+    if [ -f "${file}" ] && [ "$(sha256 "${file}")" = "$3" ]; then return 0; fi
     curl -fsSL -o "${file}.tmp" "$2"
-    [ "$(shasum -a 256 "${file}.tmp" | cut -d' ' -f1)" = "$3" ] || { echo "checksum mismatch for $1" >&2; rm -f "${file}.tmp"; exit 1; }
+    [ "$(sha256 "${file}.tmp")" = "$3" ] || { echo "checksum mismatch for $1" >&2; rm -f "${file}.tmp"; exit 1; }
     mv "${file}.tmp" "${file}"
 }
 fetch_wheel ecdsa-0.19.2-py2.py3-none-any.whl \
@@ -49,7 +51,7 @@ fi
 
 mkdir -p "$(dirname "${DEST}")"
 rm -rf "${DEST}.tmp"
-git -c advice.detachedHead=false clone --quiet --depth 1 --branch "${TAG}" "${URL}" "${DEST}.tmp"
+git -c advice.detachedHead=false -c core.autocrlf=false clone --quiet --depth 1 --branch "${TAG}" "${URL}" "${DEST}.tmp"
 head="$(git -C "${DEST}.tmp" rev-parse HEAD)"
 case "${head}" in
     "${COMMIT_PREFIX}"*) ;;
