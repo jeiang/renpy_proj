@@ -24,6 +24,16 @@
         withDav1d = true;
         withSmallBuild = false;
       };
+      # LGPL-only FFmpeg as a media generator for harness/testgames (never linked): the same GPL-free
+      # build, with BSD-licensed encoders added (libvpx, libaom, libopus, libtheora, libwebp, OpenH264).
+      ffmpegSynth = pkgs: (ffmpegLgpl pkgs).override {
+        withVpx = true;
+        withAom = true;
+        withOpus = true;
+        withTheora = true;
+        withWebp = true;
+        withOpenh264 = true;
+      };
       # The pure player package is built for the two platforms of the M4 gate.
       playerSystems = [ "aarch64-darwin" "x86_64-linux" ];
       playerPackages = system:
@@ -48,6 +58,7 @@
         let pkgs = nixpkgs.legacyPackages.${system}; in
         {
           ffmpeg-lgpl = ffmpegLgpl pkgs;
+          ffmpeg-synth = ffmpegSynth pkgs;
         } // nixpkgs.lib.optionalAttrs (builtins.elem system playerSystems) (playerPackages system));
 
       checks = nixpkgs.lib.genAttrs playerSystems (system:

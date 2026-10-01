@@ -177,6 +177,11 @@ impl Gpu {
         Ok(d.unbind())
     }
 
+    /// True when the screen is an offscreen texture (headless mode).
+    fn is_offscreen(&self) -> bool {
+        self.r.lock().is_offscreen()
+    }
+
     fn screen_size(&self) -> (u32, u32) {
         self.r.lock().screen_size
     }
@@ -495,6 +500,12 @@ fn compile_program(name: &str, vertex: &str, fragment: &str) -> PyResult<GpuProg
 /// Creates the window through `platform` and the wgpu device on it.
 #[pyfunction]
 fn create(width: u32, height: u32, title: &str, resizable: bool) -> PyResult<Gpu> {
+    if platform::is_headless() {
+        // No window and no surface: the screen is an offscreen texture of the size the game asked for.
+        let _ = (title, resizable);
+        let r = Renderer::new_headless(width, height).map_err(rt)?;
+        return Ok(Gpu { r: Mutex::new(r) });
+    }
     let win = platform::create_window(width, height, title, resizable).map_err(rt)?;
     let r = Renderer::new_window(win).map_err(rt)?;
     Ok(Gpu { r: Mutex::new(r) })
@@ -520,6 +531,87 @@ fn drawable_size() -> (u32, u32) {
     platform::drawable_size()
 }
 
+/// Installs a frame sink that writes every `every_n`-th flipped frame as `<dir>/frame_<seq>.png`.
+/// `every_n = 0` removes the sink. For tests and tools.
+#[pyfunction]
+#[pyo3(signature = (dir, every_n=1))]
+fn dump_frames(dir: &str, every_n: u64) -> PyResult<()> {
+    if every_n == 0 {
+        crate::set_frame_sink(None);
+        return Ok(());
+    }
+    let dir = std::path::PathBuf::from(dir);
+    std::fs::create_dir_all(&dir).map_err(rt)?;
+    crate::set_frame_sink(Some(Box::new(move |f| {
+        if f.seq % every_n != 0 {
+            return;
+        }
+        let path = dir.join(format!("frame_{:06}.png", f.seq));
+        let res = (|| -> Result<(), Box<dyn std::error::Error>> {
+            let file = std::io::BufWriter::new(std::fs::File::create(&path)?);
+            let mut enc = png::Encoder::new(file, f.width, f.height);
+            enc.set_color(png::ColorType::Rgba);
+            enc.set_depth(png::BitDepth::Eight);
+            enc.set_compression(png::Compression::Fast);
+            enc.write_header()?.write_image_data(&f.rgba)?;
+            Ok(())
+        })();
+        if let Err(e) = res {
+            log::warn!("cannot write {}: {e}", path.display());
+        }
+    })));
+    Ok(())
+}
+
+/// Capture cost counters: `(submitted, game-thread ms per capture, delivered, worker ms per frame, replaced unread)`.
+#[pyfunction]
+fn capture_stats() -> (u64, f64, u64, f64, u64) {
+    crate::capture_stats()
+}
+
+/// Presents `frames` frames of `width` x `height` on a fresh offscreen device with a counting sink and returns
+/// `(game-thread ms per present, wall ms per frame until the last frame arrived, delivered, replaced)`. For measurements.
+#[pyfunction]
+fn bench_capture(
+    py: Python<'_>,
+    width: u32,
+    height: u32,
+    frames: u32,
+) -> PyResult<(f64, f64, u64, u64)> {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    py.detach(|| {
+        let mut r = Renderer::new_headless(width, height).map_err(rt)?;
+        let got = Arc::new(AtomicU64::new(0));
+        let g = got.clone();
+        let before = crate::capture_stats().4;
+        crate::set_frame_sink(Some(Box::new(move |_| {
+            g.fetch_add(1, Ordering::Relaxed);
+        })));
+        let t0 = std::time::Instant::now();
+        let mut present_ns = 0u128;
+        for _ in 0..frames {
+            let t = std::time::Instant::now();
+            r.present().map_err(rt)?;
+            present_ns += t.elapsed().as_nanos();
+            // The game draws at 60 Hz.
+            std::thread::sleep(std::time::Duration::from_millis(16));
+        }
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        while got.load(Ordering::Relaxed) == 0 && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        let wall = t0.elapsed().as_secs_f64() * 1000.0;
+        crate::set_frame_sink(None);
+        let replaced = crate::capture_stats().4 - before;
+        Ok((
+            present_ns as f64 / 1e6 / frames as f64,
+            wall / frames as f64,
+            got.load(Ordering::Relaxed),
+            replaced,
+        ))
+    })
+}
+
 #[pymodule]
 #[pyo3(name = "wgpudraw")]
 pub fn wgpudraw(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -534,6 +626,9 @@ pub fn init_module(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(compile_program, m)?)?;
     m.add_function(wrap_pyfunction!(create, m)?)?;
     m.add_function(wrap_pyfunction!(create_headless, m)?)?;
+    m.add_function(wrap_pyfunction!(dump_frames, m)?)?;
+    m.add_function(wrap_pyfunction!(capture_stats, m)?)?;
+    m.add_function(wrap_pyfunction!(bench_capture, m)?)?;
     m.add_function(wrap_pyfunction!(drawable_size, m)?)?;
     m.add_function(wrap_pyfunction!(gpu_memory_bytes, m)?)?;
     let builtins = py.import("builtins")?;

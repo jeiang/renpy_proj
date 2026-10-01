@@ -126,3 +126,14 @@ pub fn key_name(keycode: u32) -> String {
         _ => String::new(),
     }
 }
+
+/// The winit key for a W3C `KeyboardEvent.code` string. winit names its variants after the
+/// W3C codes, except the Super keys (`MetaLeft`, `MetaRight`, also `OSLeft`, `OSRight`).
+pub fn code_from_dom(code: &str) -> Option<KeyCode> {
+    let name = match code {
+        "MetaLeft" | "OSLeft" => "SuperLeft",
+        "MetaRight" | "OSRight" => "SuperRight",
+        other => other,
+    };
+    TABLE.iter().map(|r| r.0).find(|k| format!("{k:?}") == name)
+}

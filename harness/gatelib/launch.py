@@ -41,8 +41,12 @@ def main_repo():
 
 
 def resolve(path):
+    """Absolute paths stay. `harness/...` is relative to the checkout that holds this harness (the synthetic games are
+    committed there); any other relative path is relative to the main checkout (ignored corpus/ and SDKs)."""
     p = pathlib.Path(os.path.expanduser(path))
-    return p if p.is_absolute() else main_repo() / p
+    if p.is_absolute():
+        return p
+    return HARNESS.parent / p if p.parts[:1] == ("harness",) else main_repo() / p
 
 
 def load_corpus():
@@ -593,6 +597,9 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
     # The compat notice is drawn over the game; stock has none, so it would show up in frame diffs. The fix is
     # still recorded in the player's runtime.jsonl.
     env["PLAYER_COMPAT_NOTICE"] = "off"
+    # Ren'Py backs up the .rpy files it compiles into ~/Library/RenPy/backups (~/.renpy/backups), outside every scratch
+    # save dir: a game with loose scripts would change the host's save root (the hygiene check below).
+    env["RENPY_DISABLE_BACKUPS"] = "I take responsibility for this."
     env["HZ_INPUT_ANSWER"] = str(g.get("input_answer", "Tester"))
     env["HZ_INPUT_EXPLICIT"] = "1" if "input_answer" in g else "0"   # deep runs vary the answer unless the game needs one
     env["HZ_AFTER_START"] = json.dumps(list(g.get("after_start", ())))   # deep runs replay it when a play ends and the next starts
