@@ -8,7 +8,7 @@ Rules for any agent (or subagent) resolving a ticket on the wayfinder map, [Map:
 - Output goes in `research/<slug>/`: a fact sheet `README.md` ending with "Implications for the route decision", plus kept scripts and small outputs.
 - The coordinator merges `research/<slug>` into `main` (`git merge --no-ff`) and pushes. Subagents do not push or merge.
 - Finished worktrees stay under `.worktrees/` with their gitignored artefacts (screenshots, SDKs, `out/`, corpus clones) until the user cleans up at the end of the session. Never run `git worktree remove --force`: it deletes ignored files, which is how the Ren'Py 7 on 8 screenshots were lost. Move large APFS clones with `mv`, never copy them (`rsync` breaks clone sharing).
-- Games run by several agents at once distort timings and fight over the screen. Hold the machine lock while any game process runs: `until mkdir /tmp/renpy_proj.run.lock 2>/dev/null; do sleep 5; done`, then `rmdir /tmp/renpy_proj.run.lock` after the sweep. Keep each hold short (one run).
+- Games run by several agents at once distort timings and fight over the screen. Hold the machine lock while any game process runs: `until mkdir /tmp/renpy_proj.run.lock 2>/dev/null; do sleep 5; done`, then `rmdir /tmp/renpy_proj.run.lock` after the sweep. Keep each hold short (one run). The holder writes `owner` (pid, start time, command) inside the lock dir. A taker that finds a dead owner pid, or no owner file and a dir older than 30 minutes, logs it and takes the lock over. Release the lock in a `finally`/`trap`, and run long jobs in the background so a tool timeout can't kill a holder. `harness/gatelib` does all of this.
 
 ## What to commit
 
@@ -24,7 +24,7 @@ Rules for any agent (or subagent) resolving a ticket on the wayfinder map, [Map:
 
 ## Running Ren'Py
 
-- Never run a game against the user's real save directory. Pass `--savedir <scratch>` (`renpy/arguments.py`) or set `RENPY_PATH_TO_SAVES=<scratch>` (`renpy.py` L173, parent of the per-game dir), and check `~/Library/RenPy/<game>` is unchanged afterwards. Ren'Py also writes to `game/saves/` inside the game directory, so run a scratch copy, never the original. A newer engine (8.4+) rewrites `persistent` in a format older engines can't read.
+- Never run a game against the user's real save directory. Ren'Py 7 ignores `RENPY_PATH_TO_SAVES`: pass `--savedir <scratch>` as well. Pass `--savedir <scratch>` (`renpy/arguments.py`) or set `RENPY_PATH_TO_SAVES=<scratch>` (`renpy.py` L173, parent of the per-game dir), and check `~/Library/RenPy/<game>` is unchanged afterwards. Ren'Py also writes to `game/saves/` inside the game directory, so run a scratch copy, never the original. A newer engine (8.4+) rewrites `persistent` in a format older engines can't read.
 - Never modify games under `~/Games`. Work on APFS clones in the repo's gitignored `corpus/`: `research/test-corpus/make_released.py` builds a released (`.rpyc`-only) copy. For a plain copy, use `/bin/cp -Rc` (the Nix shell's GNU `cp` has no `-c`). Always run `xattr -dr com.apple.quarantine <copy>` on copied `.app` bundles so Gatekeeper doesn't block them.
 - Headless compatibility gate: `<engine> <game> lint` with `RENPY_PATH_TO_SAVES` pointing at scratch (see `research/test-corpus/lint_released.sh`). It loads every script without opening a window.
 - No computer use or screen capture: the permission needs a terminal restart. Verify through `log.txt`, `traceback.txt`, exit codes, and process state. Record visual checks as HITL follow-ups.
