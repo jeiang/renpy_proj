@@ -165,6 +165,11 @@ export PKG_CONFIG_PATH=$FF/lib/pkgconfig:$SDL/lib/pkgconfig:/usr/lib64/pkgconfig
 export LD_LIBRARY_PATH=$FF/lib
 export LIBCLANG_PATH=/usr/lib64
 unset CFLAGS
+# engine/build.py compiles with a bare `cc` and ignores CFLAGS. The nix gcc wrapper makes PIE objects by
+# default; this image's gcc does not, and the Rust linker builds a PIE. A `cc` shim adds -fPIC.
+mkdir -p "$CACHE/shim"
+printf '#!/bin/sh\nexec /usr/bin/gcc -fPIC "$@"\n' > "$CACHE/shim/cc"; chmod +x "$CACHE/shim/cc"
+export PATH=$CACHE/shim:$PATH
 rm -rf "$PLAYER/build-out/engine/stamp.txt"
 (cd "$PLAYER" && cargo build --release -p player)
 
