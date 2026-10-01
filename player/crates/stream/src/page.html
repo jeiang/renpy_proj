@@ -28,6 +28,7 @@ if (Q.get("hud") === "0") hud.classList.add("hide");
 let pc = null, relCh = null, movCh = null, state = "idle";
 const sdp = { offer: null, answer: null };
 const latencySamples = [];
+const latencyLog = [];
 let bestRtt = Infinity, serverOffset = null; // serverNow = performance.now() + serverOffset
 let frameCount = 0, fpsWindow = [], hudText = "";
 
@@ -125,7 +126,7 @@ function onFrame(now) {
     const srv = Math.floor(now + serverOffset) >>> 0;
     const ms = (srv - cap) >>> 0;
     // A repeat of a picture (decoder flush, keepalive) carries the same or a newer timecode: count each timecode once.
-    if (cap !== lastCap && ms < 5000) latencySamples.push(ms);
+    if (cap !== lastCap && ms < 5000) { latencySamples.push(ms); latencyLog.push([Math.round(now), ms, cap]); }
     lastCap = cap;
   }
   if (video.requestVideoFrameCallback) video.requestVideoFrameCallback(onFrame);
@@ -198,6 +199,7 @@ window.__stream = {
   connect,
   sendInput: obj => send(obj, obj && obj.t === "mm"),
   latency: () => latencySamples.slice(),
+  latencyLog: () => latencyLog.slice(),
   state: () => state,
   stats: async () => {
     const q = video.getVideoPlaybackQuality ? video.getVideoPlaybackQuality() : {};

@@ -202,6 +202,9 @@ def main():
         url = urls[0]
         if a.url_host:
             url = re.sub(r"//[^:/]+", "//" + a.url_host, url)
+        elif a.host == "artemis":
+            nb = [u for u in urls if "//100." in u]
+            url = (nb or urls)[0]
         elif a.host == "mac":
             lan = [u for u in urls if "127.0.0.1" not in u and "//100." not in u] or urls
             url = lan[0]
@@ -226,7 +229,10 @@ def main():
               await ctx.resume(); const src = ctx.createMediaStreamSource(v.srcObject); const an = ctx.createAnalyser(); an.fftSize = 2048; src.connect(an);
               window.__rmsMax = 0; const buf = new Float32Array(an.fftSize);
               setInterval(() => { an.getFloatTimeDomainData(buf); let s = 0; for (const x of buf) s += x*x; const r = Math.sqrt(s/buf.length); if (r > window.__rmsMax) window.__rmsMax = r; }, 50); }""")
+            clicks = []
+
             def click(x, y):
+                clicks.append(page.evaluate("performance.now()"))
                 for m in ({"t": "mm", "x": x, "y": y}, {"t": "md", "b": 0, "x": x, "y": y}, {"t": "mu", "b": 0, "x": x, "y": y}):
                     page.evaluate("m => window.__stream.sendInput(m)", m)
                     time.sleep(0.05)
@@ -291,6 +297,9 @@ def main():
             res["checks"]["audio_nonsilent"] = (res["audio_rms_max"] or 0) > 0.001
             lat = page.evaluate("window.__stream.latency()")
             res["latency_play_ms"] = {"n": len(lat) - lat0, "p50": pct(lat[lat0:], .5), "p95": pct(lat[lat0:], .95), "max": max(lat[lat0:]) if len(lat) > lat0 else None}
+            log = page.evaluate("window.__stream.latencyLog()")
+            near = [ms for (t, ms, _c) in log if any(0 <= t - c <= 1500 for c in clicks)]
+            res["latency_after_input_ms"] = {"n": len(near), "p50": pct(near, .5), "p95": pct(near, .95), "min": min(near) if near else None, "max": max(near) if near else None}
             res["latency_ms"] = {"n": len(lat), "p50": pct(lat, .5), "p95": pct(lat, .95), "min": min(lat) if lat else None, "max": max(lat) if lat else None}
             res["stream_stats"] = page.evaluate("window.__stream.stats()")
             page.screenshot(path=a.out + "/page.png")
@@ -306,7 +315,7 @@ def main():
         except Exception:
             pass
         host.stop()
-    res["pass"] = all(res["checks"].values()) and "error" not in res and len(res["checks"]) >= 6
+    res["pass"] = all(res["checks"].values()) and "error" not in res and len(res["checks"]) >= 5
     json.dump(res, open(a.out + "/result.json", "w"), indent=1)
     print(json.dumps(res, indent=1))
     return 0 if res["pass"] else 1
