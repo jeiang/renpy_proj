@@ -6,6 +6,9 @@ after the script is loaded and before the first init block (`_player.boot.path_t
 runtime report and an entry in `results`.
 
 Patch files: `<data>/patches/<fingerprint>/*.toml` and `<data>/patches/<game key>/*.toml`.
+A patch file with a sidecar (`<stem>.json`, key `state`) is loaded only when the state is `accepted`; `proposed`,
+`needs-human` and any other state are skipped (listed in `results["inactive"]`). `PLAYER_PATCHES_PROPOSED=1` also loads
+`proposed` ones (used by `player upgrade` to verify). A file without a sidecar is active.
 A patch matches a node whose `PyCode` has the patch's `file` and `line` (the node's line or the
 first line of its code) and whose source hash starts with `original_hash`. The new source is
 compiled as plain Python 3 and replaces `code.source` and `code.bytecode`. The node, its name, the
@@ -23,7 +26,7 @@ import sys
 import textwrap
 
 # Filled by on_script_loaded; read by _player.preflight.
-results = {"fingerprint": None, "dirs": [], "files": [], "applied": [], "unmatched": [], "errors": []}
+results = {"fingerprint": None, "dirs": [], "files": [], "inactive": [], "applied": [], "unmatched": [], "errors": []}
 
 
 def source_hash(src):
@@ -80,9 +83,11 @@ def apply(settings, dirs):
     """Load, match and apply. Returns `results`."""
     import _player_patches
 
-    results.update(dirs=dirs, files=[], applied=[], unmatched=[], errors=[])
-    files, patches, errors = _player_patches.load_dirs(dirs)
+    results.update(dirs=dirs, files=[], inactive=[], applied=[], unmatched=[], errors=[])
+    proposed = bool(os.environ.get("PLAYER_PATCHES_PROPOSED"))  # verification of an AI patch: also load proposed ones
+    files, patches, errors, inactive = _player_patches.load_dirs(dirs, proposed)
     results["files"] = files
+    results["inactive"] = [{"file": f, "state": st} for f, st in inactive]
 
     for e in errors:
         results["errors"].append(e["text"])

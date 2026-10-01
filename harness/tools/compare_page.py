@@ -78,10 +78,24 @@ def uri(png):
     return "data:image/png;base64," + base64.b64encode(png).decode()
 
 
-def compare_set(title, sdir, pdir):
+def measure(a, b):
+    """Numbers for two cropped shots of equal size."""
+    w, h = a[:2]
+    d = absdiff(a[2], b[2])
+    dl, dr = halves(w, h, d)
+    row = {"mean": mean(d), "changed": changed_share(d), "on": mean(dl), "off": mean(dr)}
+    for key, (pw, ph, prgb) in (("own_stock", a), ("own_player", b)):
+        l, r = halves(pw, ph, prgb)
+        row[key] = mean(absdiff(l, r))
+    return row, d
+
+
+def compare_set(title, sdir, pdir, adir=None):
     names = sorted(p.stem for p in pathlib.Path(sdir).glob("*.png") if (pathlib.Path(pdir) / p.name).exists())
     rows = []
     for n in names:
+        if adir and not (pathlib.Path(adir) / (n + ".png")).exists():
+            continue
         a = crop_game(*decode_png(str(pathlib.Path(sdir) / (n + ".png"))))
         b = crop_game(*decode_png(str(pathlib.Path(pdir) / (n + ".png"))))
         row = {"name": n, "sa": a[:2], "sb": b[:2]}
@@ -91,16 +105,20 @@ def compare_set(title, sdir, pdir):
             rows.append(row)
             continue
         w, h = a[:2]
-        d = absdiff(a[2], b[2])
-        row["mean"] = mean(d)
-        row["changed"] = changed_share(d)
-        dl, dr = halves(w, h, d)
-        row["on"], row["off"] = mean(dl), mean(dr)
-        for key, (pw, ph, prgb) in (("own_stock", a), ("own_player", b)):
-            l, r = halves(pw, ph, prgb)
-            row[key] = mean(absdiff(l, r))
+        m, d = measure(a, b)
+        row.update(m)
+        imgs = [uri(png_bytes(*a)), uri(png_bytes(*b))]
+        if adir:
+            c = crop_game(*decode_png(str(pathlib.Path(adir) / (n + ".png"))))
+            if c[:2] != a[:2]:
+                row["error"] = "size mismatch: after %dx%d" % c[:2]
+            else:
+                m2, d = measure(a, c)
+                row["after"] = m2
+                imgs.append(uri(png_bytes(*c)))
         amp = bytes(map(lambda v: 255 if v > 63 else v * 4, d))
-        row["imgs"] = [uri(png_bytes(*a)), uri(png_bytes(*b)), uri(png_bytes(w, h, amp))]
+        imgs.append(uri(png_bytes(w, h, amp)))
+        row["imgs"] = imgs
         rows.append(row)
         print("%s / %s: mean_abs %.3f (on %.3f, off %.3f)" % (title, n, row["mean"], row["on"], row["off"]), flush=True)
     return {"title": title, "rows": rows}
@@ -126,11 +144,21 @@ def render(sets, intro):
             if r.get("error"):
                 o.append(' <span class=err>%s</span>' % html.escape(r["error"]))
             o.append('<div class=imgs>')
-            for cap, im in zip(("stock (left: aniso True, right: False)", "player", "difference x4"), r["imgs"]):
+            caps = ["stock (left: aniso True, right: False)", "player", "difference x4"]
+            if len(r["imgs"]) == 4:
+                caps = ["stock (left: aniso True, right: False)", "player before fix", "player after fix", "difference stock vs after, x4"]
+            for cap, im in zip(caps, r["imgs"]):
                 if im:
                     o.append('<figure><img src="%s" loading=lazy><figcaption>%s</figcaption></figure>' % (im, cap))
             o.append("</div>")
-            if "mean" in r:
+            if "after" in r:
+                x = r["after"]
+                o.append("<table class=n><tr><th><th>mean_abs<th>on (left)<th>off (right)<th>&gt;24 %%<th>own on/off, stock<th>own on/off, player"
+                         "<tr><th>before<td>%.3f<td>%.3f<td>%.3f<td>%.2f<td>%.3f<td>%.3f"
+                         "<tr><th>after<td>%.3f<td>%.3f<td>%.3f<td>%.2f<td>%.3f<td>%.3f</table>"
+                         % (r["mean"], r["on"], r["off"], r["changed"], r["own_stock"], r["own_player"],
+                            x["mean"], x["on"], x["off"], x["changed"], x["own_stock"], x["own_player"]))
+            elif "mean" in r:
                 o.append("<table class=n><tr><th>mean_abs<th>on (left)<th>off (right)<th>&gt;24 %%<th>own on/off, stock<th>own on/off, player"
                          "<tr><td>%.3f<td>%.3f<td>%.3f<td>%.2f<td>%.3f<td>%.3f</table>"
                          % (r["mean"], r["on"], r["off"], r["changed"], r["own_stock"], r["own_player"]))
@@ -142,10 +170,11 @@ def render(sets, intro):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", required=True)
-    ap.add_argument("--set", nargs=3, action="append", metavar=("TITLE", "STOCK_SHOTS", "PLAYER_SHOTS"), required=True)
+    ap.add_argument("--set", nargs="+", action="append", metavar="TITLE STOCK_SHOTS PLAYER_SHOTS [PLAYER_AFTER_SHOTS]", required=True,
+                    help="a 4th folder adds an 'after' player column and before/after numbers")
     ap.add_argument("--json", help="also write the numbers here")
     a = ap.parse_args()
-    sets = [compare_set(t, s, p) for t, s, p in a.set]
+    sets = [compare_set(*x) for x in a.set]
     intro = ("<p>One row per case. Left half of each picture: <code>gl_anisotropic True</code>; right half: <code>False</code>. "
              "Click a picture for full size. See harness/testgames/aniso/README.md for what to look at.</p>")
     pathlib.Path(a.out).write_text(render(sets, intro))

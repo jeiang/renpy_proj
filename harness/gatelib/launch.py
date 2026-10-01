@@ -6,6 +6,7 @@ differs per host (window lookup and capture, clone command, environment, `gamemo
 untouched) is in `plat.py`.
 """
 import hashlib
+import json
 import os
 import pathlib
 import re
@@ -15,11 +16,11 @@ import sys
 import time
 import tomllib
 
+from . import machinelock as ML
 from . import plat
 from . import stages as ST
 
 HARNESS = pathlib.Path(__file__).resolve().parents[1]
-LOCK = "/tmp/renpy_proj.run.lock"
 SYNC_CLIP_NAME = "harness_av_sync.webm"
 RPY = HARNESS / "rpy" / "zz_harness.rpy"
 
@@ -85,105 +86,13 @@ def sweep(pattern):
     return False
 
 
-STALE_NO_OWNER_S = 1800   # a lock dir with no owner file (an older harness, a shell user) is stale after 30 min
-
-
-def _read_owner():
-    try:
-        txt = (pathlib.Path(LOCK) / "owner").read_text()
-    except OSError:
-        return None
-    m = re.search(r"pid=(\d+)", txt)
-    return {"pid": int(m.group(1)) if m else None, "text": txt.strip()}
-
-
-def _pid_alive(pid):
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    return True
-
-
-def _stale_reason():
-    """-> (why the existing lock is stale, its inode) or None when its holder may still be running."""
-    try:
-        ino = os.stat(LOCK).st_ino
-    except OSError:
-        return None   # gone meanwhile
-    owner = _read_owner()
-    if owner and owner["pid"] is not None:
-        if _pid_alive(owner["pid"]):
-            return None
-        return "owner pid %d is dead (%s)" % (owner["pid"], owner["text"].replace("\n", " ")), ino
-    try:
-        age = time.time() - os.stat(LOCK).st_mtime
-    except OSError:
-        return None
-    return ("no owner file and the lock is %.0f min old" % (age / 60), ino) if age > STALE_NO_OWNER_S else None
-
-
-def _write_owner():
-    (pathlib.Path(LOCK) / "owner").write_text("pid=%d\nstart=%s\ncmd=%s\n" % (
-        os.getpid(), time.strftime("%Y-%m-%dT%H:%M:%S%z"), " ".join(sys.argv)[:200]))
-
-
-def _take_over(reason, ino):
-    """Replace a stale lock. Never drops a lock a live process holds: the dir that is moved aside must be the one judged
-    stale (same inode, owner pid not alive); if it is not, it is put back when possible and never deleted. Then mkdir
-    the lock: when that fails another taker won, and this one goes back to waiting. -> True when this process holds it."""
-    aside = "%s.stale.%d" % (LOCK, os.getpid())
-    try:
-        os.rename(LOCK, aside)   # atomic: one taker moves the dir away
-    except OSError:
-        return False
-    owner = None
-    try:
-        m = re.search(r"pid=(\d+)", (pathlib.Path(aside) / "owner").read_text())
-        owner = int(m.group(1)) if m else None
-    except OSError:
-        pass
-    if os.stat(aside).st_ino != ino or (owner is not None and _pid_alive(owner)):
-        # not the lock we judged: a live holder's. Put it back; if the name is taken again, leave the dir alone
-        try:
-            os.rename(aside, LOCK)
-        except OSError:
-            print("[gate] machine lock: a live holder's lock was moved to %s and could not be restored" % aside, flush=True)
-        return False
-    shutil.rmtree(aside, ignore_errors=True)
-    if subprocess.run(["mkdir", LOCK], capture_output=True).returncode != 0:
-        return False   # someone else won the race: they hold it, never remove theirs
-    _write_owner()
-    print("[gate] machine lock taken over: %s" % reason, flush=True)
-    return True
-
-
 def take_lock(timeout):
-    """mkdir the lock, write `owner` (pid, start time, command) into it. A lock whose owner pid is dead, or that has no
-    owner file and is older than 30 min, is logged and taken over (see _take_over)."""
-    t0 = time.time()
-    while True:
-        if subprocess.run(["mkdir", LOCK], capture_output=True).returncode == 0:
-            _write_owner()
-            return
-        stale = _stale_reason()
-        if stale and _take_over(*stale):
-            owner = _read_owner()
-            if owner and owner["pid"] == os.getpid():
-                return
-        if time.time() - t0 > timeout:
-            raise TimeoutError("machine lock %s held for more than %d s" % (LOCK, timeout))
-        time.sleep(0.1)   # 0.1 s: a slower poll starves behind siblings that retake the lock at once
+    """flock plus the lock dir with its `owner` file: see machinelock.py."""
+    ML.take(timeout)
 
 
 def release_lock():
-    owner = _read_owner()
-    if owner and owner["pid"] not in (None, os.getpid()):
-        return   # not ours (it was taken over): never remove another process's lock
-    (pathlib.Path(LOCK) / "owner").unlink(missing_ok=True)
-    subprocess.run(["rmdir", LOCK], capture_output=True)
+    ML.release()
 
 
 def safe_rmtree(path):
@@ -305,6 +214,7 @@ class Run:
         self.shots = []
         self.size = None   # pixel size of this run's first screenshot: every later shot must match
         self.aborted = None
+        self.verify_line = None
 
     def dead(self):
         return self.proc.poll() is not None or (self.base / "traceback.txt").exists()
@@ -356,6 +266,12 @@ class Run:
 
     def op_wait(self, arg):
         tok = arg.strip()
+        if tok.startswith("deep-done "):   # wait deep-done SECS: a deep run, until the driver says it is done
+            return self.wait_token(("deep-done",), float(tok.split()[1]), "deep") is not None
+        if tok.startswith("verify "):      # wait verify SECS: verify-ok or verify-fail
+            ln = self.wait_token(("verify-ok", "verify-fail"), float(tok.split()[1]), "verify")
+            self.verify_line = ln
+            return ln is not None
         for known in ("menu True", "advance-done", "saved", "say", "video-result"):   # a trailing "SECS" of older plans is ignored
             if tok == known or (tok.startswith(known + " ") and tok[len(known):].strip().isdigit()):
                 tok = known
@@ -396,6 +312,49 @@ class Run:
             if time.time() - last > gap:
                 return self.fail_stage("say", "say %d" % (n + 1), gap, "no 'say %d' within %.0f s of the previous line (%d seen since the command)" % (n + 1, gap, n))
             time.sleep(0.1)
+
+    def wait_token(self, prefix, secs, label):
+        """Wait for a progress line that starts with one of `prefix` (a tuple), reading only the new bytes of progress.txt
+        (a deep run writes tens of thousands of lines). Ends early when the process exits. -> the line, or None (and the
+        run is marked aborted when the time is up or the process died without the line)."""
+        path = self.hz / "progress.txt"
+        pos, buf = 0, b""
+        t0 = time.time()
+        while True:
+            try:
+                with open(path, "rb") as f:
+                    f.seek(pos)
+                    chunk = f.read()
+            except OSError:
+                chunk = b""
+            if chunk:
+                pos += len(chunk)
+                buf += chunk
+                lines = buf.split(b"\n")
+                buf = lines.pop()
+                for ln in lines:
+                    t = ln.decode("utf-8", "replace")
+                    if t.startswith(prefix):
+                        self.stage_times[label] = round(time.time() - t0, 1)
+                        return t
+            if self.proc.poll() is not None:
+                self.fail_stage(label, "/".join(prefix), secs, "process ended before a '%s' line" % "/".join(prefix))
+                return None
+            if time.time() - t0 > secs:
+                self.fail_stage(label, "/".join(prefix), secs)
+                return None
+            time.sleep(1.0)
+
+    def op_end(self):
+        """Leave a game that may sit on an error screen: ask it to quit, give it 20 s, never fail (the sweep kills it)."""
+        try:
+            send_cmd(self.hz, "quit")
+        except OSError:
+            pass
+        try:
+            self.proc.wait(timeout=20)
+        except subprocess.TimeoutExpired:
+            self.log.append("end: the game did not quit within 20 s; the sweep kills it")
 
     def _pick_window(self):
         """-> (window id, pids): the game's window among the processes of this run."""
@@ -538,6 +497,8 @@ class Run:
                 self.log.append("note: " + arg)
             elif op == "quit":
                 self.op_quit()
+            elif op == "end":
+                self.op_end()
             else:
                 raise ValueError("unknown plan op: " + op)
 
@@ -607,6 +568,8 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
         # Ren'Py 7 reads its saves from --savedir (saves/_stock7), flat: seed the files of every seeded folder there too
         for d in sorted({p.parent for p in pathlib.Path(seed_saves).rglob("*") if p.is_file()}):
             shutil.copytree(d, saves / STOCK7_SAVEDIR, dirs_exist_ok=True, ignore=lambda _d, names: [n for n in names if (d / n).is_dir()])
+    if ctx.opts.get("seed_data"):   # M6 verification: a patch library (patches/<fingerprint>/) for the player under test
+        shutil.copytree(ctx.opts["seed_data"], data, dirs_exist_ok=True)
     for fname, fsrc in (extra_files or {}).items():   # into the scratch clone only
         shutil.copy(fsrc, base / "game" / fname)
     if inject and engine == "stock":
@@ -620,6 +583,9 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
     # still recorded in the player's runtime.jsonl.
     env["PLAYER_COMPAT_NOTICE"] = "off"
     env["HZ_INPUT_ANSWER"] = str(g.get("input_answer", "Tester"))
+    env["HZ_INPUT_EXPLICIT"] = "1" if "input_answer" in g else "0"   # deep runs vary the answer unless the game needs one
+    env["HZ_AFTER_START"] = json.dumps(list(g.get("after_start", ())))   # deep runs replay it when a play ends and the next starts
+    env.update(ctx.opts.get("extra_env") or {})
     env["HZ_INPUT_LIMIT"] = str(g.get("input_limit", 3))
     env["HZ_SCREEN_ACTIONS"] = ";".join("%s=%s" % kv for kv in g.get("screen_actions", {}).items())
     if not inject:
@@ -663,9 +629,9 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
         if res["sweep_ok"]:
             release_lock()
     if not res["sweep_ok"]:
-        # keep the lock for good: pid=0 never counts as dead (os.kill(0, 0) signals our own group), so nobody takes it over
-        (pathlib.Path(LOCK) / "owner").write_text("pid=0\nstart=%s\nnote=game processes survived the sweep of %s\n" % (time.strftime("%Y-%m-%dT%H:%M:%S%z"), pattern))
-        res["lock_left"] = "game processes survived the sweep; lock %s left in place" % LOCK
+        # keep the lock dir for good: pid=0 never counts as dead, so nobody removes it
+        ML.leave_blocked("game processes survived the sweep of %s" % pattern)
+        res["lock_left"] = "game processes survived the sweep; lock %s left in place" % ML.LOCK_DIR
     res["forced_kill"] = not res["exited"]
     res["clean_exit"] = res["rc"] == 0
     # artifacts
@@ -692,6 +658,8 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
     nest_stock7_saves(ctx, engine, saves, res["progress"])
     (out / "progress.txt").write_text("\n".join(res["progress"]) + "\n")
     (out / "plan.log").write_text("\n".join(res["plan_log"]) + "\n")
+    if (hz / "deep").exists():   # deep runs: coverage.json, lines.json, err-N.json
+        shutil.copytree(hz / "deep", out / "deep", dirs_exist_ok=True)
     if (hz / "video.json").exists():
         shutil.copy(hz / "video.json", out / "video.json")
     if keep_saves:
