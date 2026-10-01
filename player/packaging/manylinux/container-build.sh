@@ -48,7 +48,7 @@ mark() { : > "$1/.built-$2"; }
 
 # ---- system packages and tools ----------------------------------------------------------------------------
 log "dnf packages"
-dnf install -y --enablerepo=powertools clang clang-devel clang-libs nasm libva-devel libdrm-devel pkgconfig perl-IPC-Cmd perl-Time-Piece >/dev/null
+dnf install -y --enablerepo=powertools clang clang-devel clang-libs nasm libva-devel libdrm-devel pkgconfig perl-IPC-Cmd perl-Time-Piece systemd-devel alsa-lib-devel >/dev/null
 export PATH=/opt/python/cp312-cp312/bin:$PATH
 export PIP_CACHE_DIR=$CACHE/pip PIP_DISABLE_PIP_VERSION_CHECK=1
 log "pip tools: $PIP_TOOLS"
