@@ -226,6 +226,21 @@ pub fn run(cfg: Config, main_module: &str, main_func: &str) -> Result<i32> {
         status_ok(st, "Py_InitializeFromConfig")?;
         let py_initialize_ms = t0.elapsed().as_secs_f64() * 1000.0;
 
+        // A static CPython has no python312.dll, so `sys.dllhandle` is missing and `import ctypes` fails
+        // (ctypes/__init__.py). Set it to the exe's module handle (research/win-spike section 3.1).
+        #[cfg(windows)]
+        {
+            unsafe extern "system" {
+                fn GetModuleHandleW(name: *const u16) -> *mut std::ffi::c_void;
+            }
+            let handle = PyLong_FromVoidPtr(GetModuleHandleW(null()));
+            if handle.is_null() || PySys_SetObject(c"dllhandle".as_ptr(), handle) != 0 {
+                PyErr_Print();
+                bail!("cannot set sys.dllhandle");
+            }
+            Py_DECREF(handle);
+        }
+
         // Bootstrap the blob importer as module `_pyhost_blob`.
         let t1 = Instant::now();
         let code = Py_CompileString(boot.as_ptr(), c"<pyhost boot>".as_ptr(), Py_file_input);

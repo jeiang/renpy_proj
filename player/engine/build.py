@@ -69,6 +69,14 @@ STORED_EXT = {".ogg", ".oga", ".mp3", ".opus", ".png", ".jpg", ".jpeg", ".webp",
 
 PROBE_NOTE = "generated at build time from the SDL2 headers"
 
+# Windows (MSVC, /MT; research/win-spike): `cl` and `lib` replace cc and ar, the SDL2 headers for the constant
+# probe come from engine/fetch.sh (upstream/sdl2-win), Cython runs as `python -m cython`, and the host
+# modules for the build-time .rpyc compile are .pyd files. Run it as `python -X utf8` inside a VS x64 shell.
+IS_WIN = sys.platform == "win32"
+OBJ_EXT = ".obj" if IS_WIN else ".o"
+DEF = "/D" if IS_WIN else "-D"
+ARCHIVE_NAME = "engine_cy.lib" if IS_WIN else "libengine_cy.a"
+
 
 def log(*a):
     print("[engine-build]", *a, flush=True)
@@ -82,6 +90,48 @@ def run(cmd, cwd=None, env=None, capture=False):
             sys.stderr.write(r.stderr or "")
         raise SystemExit(f"command failed ({r.returncode}): {' '.join(map(str, cmd))}")
     return r.stdout if capture else None
+
+
+def sdl_cflags():
+    if IS_WIN:
+        return ["/I" + str(UPSTREAM.parent / "sdl2-win" / "include"), "/DSDL_MAIN_HANDLED"]
+    return pkg_config("--cflags", "sdl2")
+
+
+SDL2_WIN_URL = "https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-devel-2.32.10-VC.zip"
+SDL2_WIN_SHA = "af347939395a58b365846aaea27391e69f9ec9d4dd650d6ac40802159b418a6e"
+
+
+def fetch_sdl2_headers():
+    """Windows only: the SDL2 headers (zlib licence) for the pygame.locals constant probe. Not linked."""
+    dest = UPSTREAM.parent / "sdl2-win"
+    if (dest / "include" / "SDL.h").exists():
+        return
+    import io
+    import urllib.request
+    data = urllib.request.urlopen(SDL2_WIN_URL).read()
+    got = hashlib.sha256(data).hexdigest()
+    if got != SDL2_WIN_SHA:
+        raise SystemExit(f"checksum mismatch for SDL2 headers: {got}")
+    with zipfile.ZipFile(io.BytesIO(data)) as z:
+        for name in z.namelist():
+            parts = name.split("/", 1)
+            if len(parts) == 2 and parts[1].startswith("include/") and not name.endswith("/"):
+                out = dest / parts[1]
+                out.parent.mkdir(parents=True, exist_ok=True)
+                out.write_bytes(z.read(name))
+    log("SDL2 headers in", dest)
+
+
+def git_tool(name):
+    """A tool from Git for Windows' usr/bin (patch, bash); System32 has a WSL bash.exe that must not win."""
+    git = shutil.which("git")
+    if git:
+        root = Path(git).resolve().parent.parent
+        for cand in (root / "usr" / "bin" / f"{name}.exe", root / "bin" / f"{name}.exe"):
+            if cand.exists():
+                return str(cand)
+    raise SystemExit(f"Git for Windows is required ({name}.exe not found next to git)")
 
 
 def pkg_config(*args):
@@ -126,7 +176,7 @@ def prepare_tree(tree: Path):
     for patch in sorted((ENGINE / "patches").glob("*.patch")):
         log("apply", patch.name)
         # Not `git apply`: inside the worktree it silently skips paths that git ignores.
-        run(["patch", "-p1", "--no-backup-if-mismatch", "--fuzz=0", "-i", str(patch)], cwd=tree)
+        run([git_tool("patch") if IS_WIN else "patch", "-p1", "--no-backup-if-mismatch", "--fuzz=0", "-i", str(patch)], cwd=tree)
 
     # Overlay: engine/python (same relative paths as the Ren'Py tree, plus _player), then engine/extra.
     for root in (ENGINE / "python", ENGINE / "extra"):
@@ -194,8 +244,11 @@ def generate_pygame_constants(tree: Path, work: Path):
         + "".join(f'    printf("{s}=%lld\\n", (long long)({s}));\n' for s in symbols)
         + "    return 0;\n}\n"
     )
-    exe = work / "sdl_probe"
-    run(["cc", "-w", str(probe), "-o", str(exe), *pkg_config("--cflags", "sdl2")])
+    exe = work / ("sdl_probe.exe" if IS_WIN else "sdl_probe")
+    if IS_WIN:
+        run(["cl", "/nologo", "/w", str(probe), f"/Fe{exe}", f"/Fo{work / 'sdl_probe.obj'}", *sdl_cflags()])
+    else:
+        run(["cc", "-w", str(probe), "-o", str(exe), *sdl_cflags()])
     values = dict(line.split("=") for line in subprocess.check_output([str(exe)], text=True).splitlines())
 
     def sub_qualified(m):
@@ -244,7 +297,7 @@ def cythonize(tree: Path, cdir: Path, mods):
             raise SystemExit(f"missing Cython source for {name}: {src}")
         out = cdir / (name + ".c")
         r = subprocess.run(
-            ["cython", *includes, *flags, str(src.relative_to(tree)), "-o", str(out)],
+            [*([sys.executable, "-m", "cython"] if IS_WIN else ["cython"]), *includes, *flags, str(src.relative_to(tree)), "-o", str(out)],
             cwd=tree, text=True, capture_output=True,
         )
         if r.returncode:
@@ -267,27 +320,38 @@ def compile_all(tree: Path, cdir: Path, odir: Path, mods, py_include: str):
         "-O2", "-DNDEBUG", "-std=gnu99", "-fno-strict-aliasing", "-w",
         "-I" + py_include, "-I" + str(tree / "src"), "-I" + str(tree / "tmp" / "gen3"),
     ]
+    if IS_WIN:
+        cflags = ["/nologo", "/O2", "/MT", "/utf-8", "/w", "/DNDEBUG", "/DPy_NO_ENABLE_SHARED", "/D_CRT_SECURE_NO_WARNINGS",
+                  "/I" + py_include, "/I" + str(tree / "src"), "/I" + str(tree / "tmp" / "gen3")]
     jobs = []  # (source, object, extra flags)
     helper_seen = set()
     for name, helpers in mods.items():
         leaf = name.rsplit(".", 1)[1]
-        jobs.append((cdir / (name + ".c"), odir / (name + ".o"), [f"-DPyInit_{leaf}={init_symbol(name)}"]))
+        jobs.append((cdir / (name + ".c"), odir / (name + OBJ_EXT), [f"{DEF}PyInit_{leaf}={init_symbol(name)}"]))
         for h in helpers:
             if h not in helper_seen:
                 helper_seen.add(h)
-                jobs.append((tree / h, odir / (Path(h).stem + ".helper.o"), []))
+                jobs.append((tree / h, odir / (Path(h).stem + ".helper" + OBJ_EXT), []))
 
     def one(job):
         src, obj, extra = job
-        run(["cc", "-c", *cflags, *extra, str(src), "-o", str(obj)])
+        if IS_WIN:
+            run(["cl", "/c", *cflags, *extra, str(src), f"/Fo{obj}"], capture=True)
+        else:
+            run(["cc", "-c", *cflags, *extra, str(src), "-o", str(obj)])
         return obj
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count() or 4) as ex:
         objs = list(ex.map(one, jobs))
-    lib = OUT / "libengine_cy.a"
+    lib = OUT / ARCHIVE_NAME
     if lib.exists():
         lib.unlink()
-    run(["ar", "rcs", str(lib), *map(str, objs)])
+    if IS_WIN:
+        rsp = OUT / "objs.rsp"
+        rsp.write_text("\n".join(f'"{o}"' for o in objs))
+        run(["lib", "/nologo", f"/OUT:{lib}", f"@{rsp}"])
+    else:
+        run(["ar", "rcs", str(lib), *map(str, objs)])
     log("archive", lib, f"{lib.stat().st_size // 1024} KiB", f"{len(objs)} objects")
 
 
@@ -352,12 +416,23 @@ def build_host_tree(tree: Path, cdir: Path, mods, dest: Path):
     cflags = [
         "-O1", "-DNDEBUG", "-std=gnu99", "-fno-strict-aliasing", "-w", "-fPIC",
         "-I" + host_include, "-I" + str(tree / "src"), "-I" + str(tree / "tmp" / "gen3"),
-        *pkg_config("--cflags", "sdl2"),
+        *sdl_cflags(),
     ]
     ldflags = ["-bundle", "-undefined", "dynamic_lookup"] if sys.platform == "darwin" else ["-shared"]
+    pylibs = str(Path(sysconfig.get_paths()["stdlib"]).parent / "libs")
 
     def one(item):
         name, helpers = item
+        if IS_WIN:
+            out = dest / (name.replace(".", "/") + ".pyd")
+            objdir = OUT / "host-obj" / name
+            objdir.mkdir(parents=True, exist_ok=True)
+            run(["cl", "/nologo", "/LD", "/MD", "/O1", "/w", "/utf-8", "/DNDEBUG", "/D_CRT_SECURE_NO_WARNINGS",
+                 "/I" + host_include, "/I" + str(tree / "src"), "/I" + str(tree / "tmp" / "gen3"), *sdl_cflags(),
+                 str(cdir / (name + ".c")), *[str(tree / h) for h in helpers], f"/Fo{objdir}\\", f"/Fe{out}",
+                 "/link", f"/LIBPATH:{pylibs}", "user32.lib", "comdlg32.lib", "ole32.lib", "shell32.lib", "advapi32.lib"],
+                capture=True)
+            return
         out = dest / (name.replace(".", "/") + ".so")
         run(["cc", *cflags, *ldflags, str(cdir / (name + ".c")), *[str(tree / h) for h in helpers], "-o", str(out)])
 
@@ -412,7 +487,13 @@ def main():
     args = ap.parse_args()
 
     if not UPSTREAM.exists() or not (UPSTREAM.parent / "pywheels").is_dir():
-        run(["bash", str(ENGINE / "fetch.sh")])
+        env = None
+        if IS_WIN:  # bash.exe from Git's usr/bin needs that folder on PATH for dirname, curl, sha256sum
+            env = dict(os.environ, PATH=str(Path(git_tool("bash")).parent) + os.pathsep + os.environ["PATH"])
+        run([git_tool("bash") if IS_WIN else "bash", (ENGINE / "fetch.sh").as_posix()], env=env)
+
+    if IS_WIN:
+        fetch_sdl2_headers()
 
     py_include = args.py_include
     if not py_include:
@@ -425,7 +506,7 @@ def main():
     fingerprint, stamp = digest_inputs(inputs)
     stamp += py_include
     stamp_file = OUT / "stamp.txt"
-    needed = ["libengine_cy.a", "layer.zip", "common.zip", "inittab.txt", "fingerprint.txt"]
+    needed = [ARCHIVE_NAME, "layer.zip", "common.zip", "inittab.txt", "fingerprint.txt"]
     if stamp_file.exists() and stamp_file.read_text() == stamp and all((OUT / n).exists() for n in needed):
         log("up to date, fingerprint", fingerprint)
         return

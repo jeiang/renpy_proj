@@ -88,8 +88,9 @@ pub struct KernTable {
 /// so loses the pairs beyond it, and FreeType never finds them.
 fn parse_kern(data: &[u8]) -> Vec<KernTable> {
     let mut tables = Vec::new();
-    let be16 =
-        |o: usize| -> Option<usize> { Some(u16::from_be_bytes([*data.get(o)?, *data.get(o + 1)?]) as usize) };
+    let be16 = |o: usize| -> Option<usize> {
+        Some(u16::from_be_bytes([*data.get(o)?, *data.get(o + 1)?]) as usize)
+    };
     let Some(count) = be16(2) else { return tables };
     let mut at = 4;
     for _ in 0..count.min(32) {
@@ -113,10 +114,15 @@ fn parse_kern(data: &[u8]) -> Vec<KernTable> {
                 let (Some(l), Some(r), Some(v)) = (be16(o), be16(o + 2), be16(o + 4)) else {
                     break;
                 };
-                pairs.entry(((l as u32) << 16) | r as u32).or_insert(v as u16 as i16);
+                pairs
+                    .entry(((l as u32) << 16) | r as u32)
+                    .or_insert(v as u16 as i16);
                 o += 6;
             }
-            tables.push(KernTable { pairs, replace: coverage & 8 != 0 });
+            tables.push(KernTable {
+                pairs,
+                replace: coverage & 8 != 0,
+            });
         }
         at = next;
     }
@@ -296,7 +302,11 @@ impl Face {
         let mut result = 0i32;
         for t in &self.kern {
             if let Some(&v) = t.pairs.get(&key) {
-                result = if t.replace { v as i32 } else { result + v as i32 };
+                result = if t.replace {
+                    v as i32
+                } else {
+                    result + v as i32
+                };
             }
         }
         result
