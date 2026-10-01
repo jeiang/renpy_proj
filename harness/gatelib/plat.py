@@ -312,20 +312,24 @@ class Hypr:
             self._ctl("dispatch", "focuswindow", "pid:%d" % st["pid"])
             time.sleep(1.5)
 
-    OPAQUE_PROPS = (("opaque", "1"), ("alpha", "1"), ("alphainactive", "1"), ("alphafullscreen", "1"))
+    def set_opaque(self, wid, on=True):
+        """Set the `opaque` window property through Hyprland's Lua API (`hyprctl eval`; `hyprctl setprop` is gone in 0.56).
+        -> the reply text ("ok" on success)."""
+        code = "hl.dispatch(hl.dsp.window.set_prop({ prop = 'opaque', value = '%d', window = 'address:%s' }))" % (1 if on else 0, wid)
+        r = self._ctl("eval", code)
+        return (r.stdout + r.stderr).strip()
+
+    def is_opaque(self, wid):
+        return self._ctl("getprop", "address:" + wid, "opaque").stdout.strip() == "true"
 
     def prepare(self, wid):
         """Hyprland's default config draws windows slightly transparent (decoration:active_opacity 0.95, inactive 0.85), so
-        a capture would blend the game with the wallpaper. Set the window's opacity properties to 1 (`hyprctl setprop
-        address:<addr> <prop> 1 lock`, Hyprland 0.56; a property change, no input) and check them back with `getprop`.
-        -> list of problems (empty when the window is opaque)."""
-        problems = []
-        for prop, val in self.OPAQUE_PROPS:
-            r = self._ctl("setprop", "address:" + wid, prop, val, "lock")
-            out = (r.stdout + r.stderr).strip()
-            if r.returncode != 0 or (out and out != "ok"):
-                problems.append("setprop %s %s: %s" % (prop, val, out[:120] or "rc %d" % r.returncode))
-        return problems
+        a capture would blend the game with the wallpaper. Force `opaque` on the window (a property change, no input) and
+        read it back. -> list of problems (empty when the window is opaque)."""
+        reply = self.set_opaque(wid)
+        if reply != "ok" or not self.is_opaque(wid):
+            return ["hyprctl eval set_prop opaque: reply '%s', opaque=%s" % (reply[:120], self.is_opaque(wid))]
+        return []
 
     def capture(self, wid, dest):
         """`grim -g` of the window geometry only (never the whole output), as raw PPM that is written to `dest` as a PNG.
