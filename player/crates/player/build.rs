@@ -4,11 +4,11 @@
 //! starts outside the shell. `packaging/linux.sh` replaces the runpath with `$ORIGIN/lib`.
 fn main() {
     println!("cargo:rerun-if-env-changed=PLAYER_DLOPEN_RPATH");
-    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("linux") {
-        if let Ok(paths) = std::env::var("PLAYER_DLOPEN_RPATH") {
-            for p in paths.split(':').filter(|p| !p.is_empty()) {
-                println!("cargo:rustc-link-arg=-Wl,-rpath,{p}");
-            }
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("linux")
+        && let Ok(paths) = std::env::var("PLAYER_DLOPEN_RPATH")
+    {
+        for p in paths.split(':').filter(|p| !p.is_empty()) {
+            println!("cargo:rustc-link-arg=-Wl,-rpath,{p}");
         }
     }
 }

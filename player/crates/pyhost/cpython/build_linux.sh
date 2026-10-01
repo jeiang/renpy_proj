@@ -21,16 +21,23 @@ case "$(uname -s)-$(uname -m)" in
   Linux-x86_64) ;;
   *) echo "pyhost: build_linux.sh supports Linux x86_64 only" >&2; exit 1 ;;
 esac
-command -v nix >/dev/null || { echo "pyhost: nix is required for the static libffi, bzip2, xz, expat, zlib and openssl (run inside 'nix develop .#player')" >&2; exit 1; }
 
 # ---- static dependencies from nix (resolved before the environment is cleaned) ----
-nixp() { nix build --no-link --print-out-paths "$NIXPKGS.$1" 2>/dev/null | head -1; }
-FFI=$(nixp libffi.out); FFI_DEV=$(nixp libffi.dev)
-BZ=$(nixp bzip2.out); BZ_DEV=$(nixp bzip2.dev)
-XZ=$(nixp xz.out); XZ_DEV=$(nixp xz.dev)
-EXP=$(nixp expat.out); EXP_DEV=$(nixp expat.dev)
-ZL=$(nixp zlib.out); ZL_DEV=$(nixp zlib.dev)
-SSL=$(nixp openssl.out); SSL_DEV=$(nixp openssl.dev)
+# Prefetched inputs (hermetic builds, for example the Nix package): PYHOST_<NAME> names the store path of
+# each static dependency (NAME is FFI, FFI_DEV, BZ, BZ_DEV, XZ, XZ_DEV, EXP, EXP_DEV, ZL, ZL_DEV, SSL or
+# SSL_DEV). Without it the script asks `nix build` (the dev shell flow).
+nixp() {
+  eval "pre=\${PYHOST_$2:-}"
+  if [ -n "$pre" ]; then echo "$pre"; return; fi
+  command -v nix >/dev/null || { echo "pyhost: nix is required for the static libffi, bzip2, xz, expat, zlib and openssl (run inside 'nix develop .#player', or set PYHOST_<NAME>)" >&2; exit 1; }
+  nix build --no-link --print-out-paths "$NIXPKGS.$1" 2>/dev/null | head -1
+}
+FFI=$(nixp libffi.out FFI); FFI_DEV=$(nixp libffi.dev FFI_DEV)
+BZ=$(nixp bzip2.out BZ); BZ_DEV=$(nixp bzip2.dev BZ_DEV)
+XZ=$(nixp xz.out XZ); XZ_DEV=$(nixp xz.dev XZ_DEV)
+EXP=$(nixp expat.out EXP); EXP_DEV=$(nixp expat.dev EXP_DEV)
+ZL=$(nixp zlib.out ZL); ZL_DEV=$(nixp zlib.dev ZL_DEV)
+SSL=$(nixp openssl.out SSL); SSL_DEV=$(nixp openssl.dev SSL_DEV)
 for v in FFI FFI_DEV BZ BZ_DEV XZ XZ_DEV EXP EXP_DEV ZL ZL_DEV SSL SSL_DEV; do
   eval "p=\${$v}"; [ -n "$p" ] && [ -d "$p" ] || { echo "pyhost: nix build of pkgsStatic dependency $v failed" >&2; exit 1; }
 done
@@ -42,11 +49,15 @@ run() { env CFLAGS="-O2 -fPIC" "$@"; }
 # ---- fetch ----
 mkdir -p "$UP/src" "$B" "$OUT"
 if [ ! -d "$SRC" ]; then
-  echo "pyhost: fetching CPython $PYVER"
-  curl -fsSL -o "$UP/Python-$PYVER.tar.xz" "$PYURL"
-  got=$(run sha256sum "$UP/Python-$PYVER.tar.xz" | cut -d' ' -f1)
-  [ "$got" = "$PYSHA" ] || { echo "pyhost: checksum mismatch for Python-$PYVER.tar.xz: $got" >&2; rm -f "$UP/Python-$PYVER.tar.xz"; exit 1; }
-  tar -xJf "$UP/Python-$PYVER.tar.xz" -C "$UP/src"
+  # PYHOST_CPYTHON_TARBALL names a prefetched Python-$PYVER.tar.xz (hermetic builds); the checksum applies to it too.
+  TARBALL=${PYHOST_CPYTHON_TARBALL:-$UP/Python-$PYVER.tar.xz}
+  if [ -z "${PYHOST_CPYTHON_TARBALL:-}" ]; then
+    echo "pyhost: fetching CPython $PYVER"
+    curl -fsSL -o "$TARBALL" "$PYURL"
+  fi
+  got=$(run sha256sum "$TARBALL" | cut -d' ' -f1)
+  [ "$got" = "$PYSHA" ] || { echo "pyhost: checksum mismatch for $TARBALL: $got" >&2; [ -n "${PYHOST_CPYTHON_TARBALL:-}" ] || rm -f "$TARBALL"; exit 1; }
+  tar -xJf "$TARBALL" -C "$UP/src"
 fi
 
 # ---- Setup.local: every extension module builtin ----
@@ -139,6 +150,9 @@ cp "$FFI/lib/libffi.a" "$BZ/lib/libbz2.a" "$XZ/lib/liblzma.a" "$EXP/lib/libexpat
 chmod u+w "$OUT"/deps/*.a
 PY=$B/install/bin/python3.12
 LIBDIR=$B/install/lib/python3.12
+# The 3.12.8 headers: engine/build.py compiles the Cython modules against them (host python's headers otherwise).
+rm -rf "$OUT/include"; mkdir -p "$OUT/include"
+cp -R "$B/install/include/python3.12" "$OUT/include/python3.12"
 run "$PY" "$HERE/mkboot.py" "$LIBDIR" "$OUT/boot"
 run "$PY" "$HERE/mkzip.py" "$LIBDIR" "$OUT/stdlib.zip"
 
