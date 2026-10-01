@@ -637,6 +637,8 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
     # The compat notice is drawn over the game; stock has none, so it would show up in frame diffs. The fix is
     # still recorded in the player's runtime.jsonl.
     env["PLAYER_COMPAT_NOTICE"] = "off"
+    env["HZ_INPUT_ANSWER"] = str(g.get("input_answer", "Tester"))
+    env["HZ_INPUT_LIMIT"] = str(g.get("input_limit", 3))
     if not inject:
         env.pop("HARNESS_DIR")
     res = {"name": name, "engine": engine, "stripped_game_cache": strip, "argv": [a.replace(str(top), "<run>") for a in argv], "plan_log": []}

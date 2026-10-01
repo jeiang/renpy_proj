@@ -17,7 +17,10 @@ init 999 python:
     import os, io, time, json, hashlib, collections
     _hz_dir = os.environ.get("HARNESS_DIR")
     _hz_st = collections.OrderedDict(say=0, tags=None, menu=None, movie="-", auto=False, click=False, adv=None,
-                                     n=0, prefs=False)   # OrderedDict: not a Revertable type, so load/rollback keep it
+                                     n=0, prefs=False, inputs=0)   # OrderedDict: not a Revertable type, so load/rollback keep it
+
+    _HZ_INPUT = os.environ.get("HZ_INPUT_ANSWER") or "Tester"
+    _HZ_INPUT_LIMIT = int(os.environ.get("HZ_INPUT_LIMIT") or "3")
 
     def _hz_write(s):
         if isinstance(s, bytes):   # py2 str holding non-ASCII text
@@ -173,8 +176,16 @@ init 999 python:
         try:
             if st["auto"] or st["adv"] is not None:
                 if renpy.get_screen("input") and st["n"] % 4 == 0:
+                    # A game that rejects the answer asks again; count answers so a rejection loop fails the
+                    # stage instead of counting the game's "invalid name" lines as executed dialogue.
+                    st["inputs"] += 1
+                    if st["inputs"] > _HZ_INPUT_LIMIT:
+                        _hz_write("cmd-error input-loop %d answers of %r rejected; set input_answer in corpus.toml" % (st["inputs"] - 1, _HZ_INPUT))
+                        st["auto"] = False
+                        st["adv"] = None
+                        return
                     _hz_write("auto: input")
-                    renpy.end_interaction("Tester")
+                    renpy.end_interaction(_HZ_INPUT)
                 ch = renpy.get_screen("choice")
                 if ch and st["n"] % 4 == 0:
                     it = ch.scope["items"][0]
