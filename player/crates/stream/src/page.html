@@ -26,6 +26,7 @@ const btn = document.getElementById("connect"), hud = document.getElementById("h
 if (Q.get("hud") === "0") hud.classList.add("hide");
 
 let pc = null, relCh = null, movCh = null, state = "idle";
+const sdp = { offer: null, answer: null };
 const latencySamples = [];
 let bestRtt = Infinity, serverOffset = null; // serverNow = performance.now() + serverOffset
 let frameCount = 0, fpsWindow = [], hudText = "";
@@ -84,7 +85,8 @@ box.addEventListener("pointerup", e => {
 box.addEventListener("wheel", e => {
   const p = norm(e); if (!p) return;
   const k = e.deltaMode === 0 ? 1 / 40 : e.deltaMode === 1 ? 1 : 20;
-  send({ t: "wh", x: e.deltaX * k, y: -e.deltaY * k, ...(p || {}) }, false);
+  send({ t: "mm", x: p.x, y: p.y }, false); // `wh` carries deltas only; position first, same channel
+  send({ t: "wh", x: e.deltaX * k, y: -e.deltaY * k }, false);
   e.preventDefault();
 }, { passive: false });
 box.addEventListener("contextmenu", e => e.preventDefault());
@@ -163,7 +165,9 @@ async function connect() {
   relCh.onopen = () => { send({ t: "fc", g: document.hasFocus() ? 1 : 0 }, false); startPing(); };
   relCh.onmessage = ev => { try { const m = JSON.parse(ev.data); if (m.t === "pong") onPong(m); } catch (_) {} };
   p.ontrack = e => {
-    if (video.srcObject !== e.streams[0]) video.srcObject = e.streams[0];
+    // One MediaStream for both tracks, even if the answer carries no usable stream id.
+    if (!(video.srcObject instanceof MediaStream)) video.srcObject = new MediaStream();
+    video.srcObject.addTrack(e.track);
     video.play().catch(() => {});
   };
   p.onconnectionstatechange = () => {
@@ -176,9 +180,11 @@ async function connect() {
     const t = setTimeout(res, 1500);
     p.onicegatheringstatechange = () => { if (p.iceGatheringState === "complete") { clearTimeout(t); res(); } };
   });
+  sdp.offer = p.localDescription.sdp;
   const r = await fetch("offer", { method: "POST", headers: { "content-type": "application/sdp" }, body: p.localDescription.sdp });
   if (!r.ok) { setState("offer rejected: " + await r.text()); btn.classList.remove("hide"); return; }
-  await p.setRemoteDescription({ type: "answer", sdp: await r.text() });
+  sdp.answer = await r.text();
+  await p.setRemoteDescription({ type: "answer", sdp: sdp.answer });
   if (video.requestVideoFrameCallback) video.requestVideoFrameCallback(onFrame);
 }
 btn.addEventListener("click", () => { connect().catch(e => { setState("error: " + e); btn.classList.remove("hide"); }); });
@@ -206,6 +212,8 @@ window.__stream = {
     }
     return o;
   },
+  sdp,
+  pc: () => pc,
   video,
 };
 </script>

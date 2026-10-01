@@ -55,8 +55,9 @@ pub(crate) fn map_point(x: f64, y: f64, size: (u32, u32)) -> (f64, f64) {
 /// Parses one text message. Returns `None` for malformed or unknown messages.
 pub(crate) fn parse(text: &str, size: (u32, u32)) -> Option<Message> {
     let w: Wire = serde_json::from_str(text).ok()?;
+    // `wh` reuses x,y for its deltas, so it carries no position.
     let pos = match (w.x, w.y) {
-        (Some(x), Some(y)) => {
+        (Some(x), Some(y)) if w.t != "wh" => {
             let (x, y) = map_point(x, y, size);
             Some(InputEvent::MouseMove { x, y })
         }
@@ -76,7 +77,6 @@ pub(crate) fn parse(text: &str, size: (u32, u32)) -> Option<Message> {
             ev.push(InputEvent::MouseButton { down: w.t == "md", button: w.b });
         }
         "wh" => {
-            ev.extend(pos);
             ev.push(InputEvent::Wheel { dx: w.x.unwrap_or(0.0), dy: w.y.unwrap_or(0.0) });
         }
         "tx" => ev.push(InputEvent::Text(w.s)),

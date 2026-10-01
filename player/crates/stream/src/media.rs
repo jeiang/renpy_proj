@@ -2,10 +2,10 @@
 //! the newest-wins frame slot consumer, the damage gate, the encoders and the keepalive.
 
 use std::collections::HashMap;
-use std::net::UdpSocket;
+use std::net::{SocketAddr, UdpSocket};
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
-use std::sync::mpsc::Receiver;
+use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::time::{Duration, Instant};
 
 use encode::{FrameGate, OpusEncoder, RawFrame, VideoEncoder};
@@ -16,7 +16,7 @@ use str0m::net::{Protocol, Receive};
 use str0m::{Event, IceConnectionState, Input, Output, Rtc};
 
 use crate::input::{self, Message};
-use crate::{Shared, clock_ms};
+use crate::{Msg, Shared, clock_ms};
 
 const KEEPALIVE: Duration = Duration::from_secs(1);
 const IDR_MIN_GAP: Duration = Duration::from_millis(150);
@@ -37,6 +37,7 @@ struct Session {
     base: Instant,
     audio_base: Option<Instant>,
     audio_samples: u64,
+    first_idr_logged: bool,
 }
 
 impl Session {
@@ -54,14 +55,14 @@ impl Session {
             base: Instant::now(),
             audio_base: None,
             audio_samples: 0,
+            first_idr_logged: false,
         }
     }
 }
 
 struct Media {
     sh: Arc<Shared>,
-    sock: UdpSocket,
-    local: std::net::SocketAddr,
+    socks: HashMap<SocketAddr, UdpSocket>,
     sess: Option<Session>,
     enc: Option<Box<dyn VideoEncoder>>,
     enc_size: (u32, u32),
@@ -71,15 +72,17 @@ struct Media {
     opus_failed: bool,
     last_frame: Option<(RawFrame, Instant)>,
     last_sent: Instant,
+    /// When set: re-send the last picture once, so the browser's decoder/jitter buffer shows the
+    /// final frame of a change burst now instead of when the next frame arrives.
+    flush_at: Option<Instant>,
     audio_pending: Vec<f32>,
 }
 
-pub(crate) fn run(sh: Arc<Shared>, sock: UdpSocket, rx: Receiver<Rtc>) {
-    let local = sock.local_addr().expect("udp local addr");
+pub(crate) fn run(sh: Arc<Shared>, socks: Vec<UdpSocket>, rx: Receiver<Msg>) {
+    let socks: HashMap<_, _> = socks.into_iter().filter_map(|s| Some((s.local_addr().ok()?, s))).collect();
     let mut m = Media {
         sh,
-        sock,
-        local,
+        socks,
         sess: None,
         enc: None,
         enc_size: (0, 0),
@@ -89,16 +92,11 @@ pub(crate) fn run(sh: Arc<Shared>, sock: UdpSocket, rx: Receiver<Rtc>) {
         opus_failed: false,
         last_frame: None,
         last_sent: Instant::now(),
+        flush_at: None,
         audio_pending: Vec::new(),
     };
-    let mut buf = vec![0u8; 2048];
+    let mut timeout: Option<Instant> = None;
     while !m.sh.stop.load(Ordering::Acquire) {
-        m.sh.wake_pending.store(false, Ordering::Release);
-        while let Ok(rtc) = rx.try_recv() {
-            m.replace_session(rtc);
-        }
-        m.pump(Instant::now());
-        let timeout = m.drive();
         let now = Instant::now();
         let mut deadline = now + Duration::from_millis(50);
         if let Some(t) = timeout {
@@ -106,22 +104,32 @@ pub(crate) fn run(sh: Arc<Shared>, sock: UdpSocket, rx: Receiver<Rtc>) {
         }
         if m.sess.as_ref().is_some_and(|s| s.connected) {
             deadline = deadline.min(m.last_sent + KEEPALIVE);
-        }
-        let wait = deadline.saturating_duration_since(now).max(Duration::from_millis(1));
-        let _ = m.sock.set_read_timeout(Some(wait));
-        match m.sock.recv_from(&mut buf) {
-            Ok((n, src)) => {
-                if src != m.sh.wake_sock.local_addr().unwrap_or(src) || n != 1 {
-                    m.receive(&buf[..n], src);
-                }
+            if let Some(t) = m.flush_at {
+                deadline = deadline.min(t);
             }
-            Err(e) if matches!(e.kind(), std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut) => {}
-            Err(e) => log::debug!("stream: udp recv: {e}"),
         }
+        let wait = deadline.saturating_duration_since(now);
+        let mut next = match rx.recv_timeout(wait) {
+            Ok(msg) => Some(msg),
+            Err(RecvTimeoutError::Timeout) => None,
+            Err(RecvTimeoutError::Disconnected) => break,
+        };
+        // Handle the message and whatever else is queued; `drive` after every mutation.
+        while let Some(msg) = next {
+            match msg {
+                Msg::Wake => {}
+                Msg::Session(rtc) => m.replace_session(rtc),
+                Msg::Packet { at, src, dst, data } => m.receive(at, src, dst, &data),
+            }
+            next = rx.try_recv().ok();
+        }
+        m.sh.wake_pending.store(false, Ordering::Release);
         if let Some(s) = m.sess.as_mut() {
             let _ = s.rtc.handle_input(Input::Timeout(Instant::now()));
         }
         m.drive();
+        m.pump(Instant::now());
+        timeout = m.drive();
     }
     m.sh.connected.store(false, Ordering::Release);
 }
@@ -137,14 +145,15 @@ impl Media {
         self.sess = Some(Session::new(rtc));
     }
 
-    fn receive(&mut self, data: &[u8], src: std::net::SocketAddr) {
-        let Some(s) = self.sess.as_mut() else { return };
+    fn receive(&mut self, at: Instant, src: SocketAddr, dst: SocketAddr, data: &[u8]) {
+        let Some(s) = self.sess.as_mut() else {
+            log::debug!("stream: {src} -> {dst}: datagram with no session");
+            return;
+        };
         let Ok(contents) = data.try_into() else { return };
-        let input = Input::Receive(
-            Instant::now(),
-            Receive { proto: Protocol::Udp, source: src, destination: self.local, contents },
-        );
+        let input = Input::Receive(at, Receive { proto: Protocol::Udp, source: src, destination: dst, contents });
         if !s.rtc.accepts(&input) {
+            log::debug!("stream: {src} -> {dst}: datagram not accepted by the session ({} bytes)", data.len());
             return;
         }
         if let Err(e) = s.rtc.handle_input(input) {
@@ -156,7 +165,6 @@ impl Media {
 
     /// Polls the Rtc until it asks for a timeout; sends datagrams, handles events.
     fn drive(&mut self) -> Option<Instant> {
-        let mut inputs: Vec<(ChannelId, String)> = Vec::new();
         let timeout;
         loop {
             let Some(s) = self.sess.as_mut() else { return None };
@@ -166,13 +174,16 @@ impl Media {
             }
             match s.rtc.poll_output() {
                 Ok(Output::Transmit(t)) => {
-                    let _ = self.sock.send_to(&t.contents, t.destination);
+                    let sock = self.socks.get(&t.source).or_else(|| self.socks.values().next());
+                    if let Some(sock) = sock {
+                        let _ = sock.send_to(&t.contents, t.destination);
+                    }
                 }
                 Ok(Output::Timeout(t)) => {
                     timeout = Some(t);
                     break;
                 }
-                Ok(Output::Event(e)) => self.event(e, &mut inputs),
+                Ok(Output::Event(e)) => self.event(e),
                 Err(e) => {
                     log::warn!("stream: poll_output: {e:?}");
                     s.rtc.disconnect();
@@ -189,7 +200,7 @@ impl Media {
         log::info!("stream: session ended");
     }
 
-    fn event(&mut self, e: Event, _scratch: &mut Vec<(ChannelId, String)>) {
+    fn event(&mut self, e: Event) {
         let Some(s) = self.sess.as_mut() else { return };
         match e {
             Event::Connected => {
@@ -271,6 +282,9 @@ impl Media {
         });
         if want_idr && self.last_frame.is_some() {
             self.encode_last(now, true, false);
+        } else if self.flush_at.is_some_and(|t| now >= t) && self.last_frame.is_some() {
+            self.flush_at = None;
+            self.encode_last(now, false, true);
         } else if now.duration_since(self.last_sent) >= KEEPALIVE && self.last_frame.is_some() {
             self.encode_last(now, false, true);
         }
@@ -283,9 +297,11 @@ impl Media {
         if !connected {
             return;
         }
+        let t = Instant::now();
         let changed = self.gate.changed(f);
         {
             let mut st = self.sh.stats.lock().unwrap();
+            st.gate_ms += (t.elapsed().as_secs_f64() * 1000.0 - st.gate_ms) * 0.05;
             if !changed {
                 st.frames_gated += 1;
             }
@@ -342,6 +358,7 @@ impl Media {
         let Some((frame, _)) = self.last_frame.as_ref() else { return };
         let Some(enc) = self.enc.as_mut() else { return };
         let force = force_idr || reopened;
+        let t = Instant::now();
         let out = match enc.encode(frame, force) {
             Ok(o) => o,
             Err(e) => {
@@ -350,6 +367,11 @@ impl Media {
             }
         };
         self.last_sent = now;
+        self.flush_at = (!keepalive).then(|| now + Duration::from_millis(2000 / u64::from(self.sh.fps)));
+        {
+            let mut st = self.sh.stats.lock().unwrap();
+            st.encode_ms += (t.elapsed().as_secs_f64() * 1000.0 - st.encode_ms) * 0.05;
+        }
         let Some(s) = self.sess.as_mut() else { return };
         let mut bytes = 0u64;
         let mut keys = 0u64;
@@ -357,6 +379,10 @@ impl Media {
             bytes += au.data.len() as u64;
             if au.keyframe {
                 keys += 1;
+                if !s.first_idr_logged {
+                    s.first_idr_logged = true;
+                    log::info!("stream: first IDR {} ms after connect, {} bytes", now.duration_since(s.base).as_millis(), au.data.len());
+                }
                 s.need_idr = false;
                 s.last_idr = Some(now);
             }

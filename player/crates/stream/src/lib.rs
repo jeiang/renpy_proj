@@ -60,6 +60,9 @@ pub struct Stats {
     pub connected: bool,
     pub sessions: u64,
     pub rtt_ms: Option<f64>,
+    /// Exponential moving averages of the media-thread stage costs.
+    pub gate_ms: f64,
+    pub encode_ms: f64,
 }
 
 pub(crate) struct Shared {
@@ -75,14 +78,20 @@ pub(crate) struct Shared {
     pub wake_pending: AtomicBool,
     pub connected: AtomicBool,
     pub input: Box<dyn Fn(InputEvent) + Send + Sync>,
-    pub wake_sock: UdpSocket,
-    pub wake_dest: SocketAddr,
+    pub msg_tx: mpsc::Sender<Msg>,
+}
+
+/// Messages to the media thread.
+pub(crate) enum Msg {
+    Wake,
+    Session(str0m::Rtc),
+    Packet { at: Instant, src: SocketAddr, dst: SocketAddr, data: Vec<u8> },
 }
 
 impl Shared {
     pub fn wake(&self) {
         if !self.wake_pending.swap(true, Ordering::AcqRel) {
-            let _ = self.wake_sock.send_to(&[0], self.wake_dest);
+            let _ = self.msg_tx.send(Msg::Wake);
         }
     }
 }
@@ -91,6 +100,7 @@ pub struct Server {
     shared: Arc<Shared>,
     urls: Vec<String>,
     media: Option<JoinHandle<()>>,
+    readers: Vec<JoinHandle<()>>,
     http: Option<JoinHandle<()>>,
     shutdown: Option<tokio::sync::oneshot::Sender<()>>,
 }
@@ -104,19 +114,14 @@ pub(crate) fn clock_ms() -> u64 {
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 
 impl Server {
-    pub fn start(cfg: ServeConfig, input: Box<dyn Fn(InputEvent) + Send + Sync>) -> Result<Server> {
+    pub fn start(cfg: ServeConfig, input_cb: Box<dyn Fn(InputEvent) + Send + Sync>) -> Result<Server> {
         let _ = clock_ms();
-        let (listener, udp) = bind_pair(cfg.bind, cfg.port)?;
-        let port = udp.local_addr()?.port();
         let ifaces = net::interface_v4();
+        let (listener, socks, port) = bind_all(cfg.bind, cfg.port, &ifaces)?;
         let urls = net::urls(cfg.bind, port, &ifaces);
         let cands = net::candidate_addrs(cfg.bind, port, &ifaces);
 
-        let wake_sock = UdpSocket::bind("127.0.0.1:0").context("wake socket")?;
-        let mut wake_dest = udp.local_addr()?;
-        if wake_dest.ip().is_unspecified() {
-            wake_dest.set_ip(std::net::Ipv4Addr::LOCALHOST.into());
-        }
+        let (tx, rx) = mpsc::channel::<Msg>();
         let shared = Arc::new(Shared {
             cfg_size: cfg.size,
             fps: cfg.fps.max(1),
@@ -129,24 +134,44 @@ impl Server {
             stop: AtomicBool::new(false),
             wake_pending: AtomicBool::new(false),
             connected: AtomicBool::new(false),
-            input,
-            wake_sock,
-            wake_dest,
+            input: input_cb,
+            msg_tx: tx.clone(),
         });
-        let (tx, rx) = mpsc::channel::<str0m::Rtc>();
         let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
+        let mut readers = Vec::new();
+        for s in &socks {
+            let s = s.try_clone()?;
+            let dst = s.local_addr()?;
+            s.set_read_timeout(Some(std::time::Duration::from_millis(100)))?;
+            let (shared, tx) = (shared.clone(), tx.clone());
+            readers.push(std::thread::Builder::new().name(format!("stream-udp-{id}")).spawn(move || {
+                let mut buf = vec![0u8; 2048];
+                while !shared.stop.load(Ordering::Acquire) {
+                    match s.recv_from(&mut buf) {
+                        Ok((n, src)) => {
+                            let _ = tx.send(Msg::Packet { at: Instant::now(), src, dst, data: buf[..n].to_vec() });
+                        }
+                        Err(e) if matches!(e.kind(), std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut) => {}
+                        Err(e) => {
+                            log::debug!("stream: udp recv on {dst}: {e}");
+                            std::thread::sleep(std::time::Duration::from_millis(50));
+                        }
+                    }
+                }
+            })?);
+        }
         let media = {
             let shared = shared.clone();
             std::thread::Builder::new()
                 .name(format!("stream-media-{id}"))
-                .spawn(move || media::run(shared, udp, rx))?
+                .spawn(move || media::run(shared, socks, rx))?
         };
         let (sd_tx, sd_rx) = tokio::sync::oneshot::channel();
         let http = {
             let state = http::State {
                 shared: shared.clone(),
                 cands,
-                tx,
+                tx: tx.clone(),
                 title: cfg.title,
                 size: cfg.size,
                 fps: cfg.fps,
@@ -155,7 +180,7 @@ impl Server {
                 .name(format!("stream-http-{id}"))
                 .spawn(move || http::run(listener, state, sd_rx))?
         };
-        Ok(Server { shared, urls, media: Some(media), http: Some(http), shutdown: Some(sd_tx) })
+        Ok(Server { shared, urls, media: Some(media), readers, http: Some(http), shutdown: Some(sd_tx) })
     }
 
     pub fn urls(&self) -> Vec<String> {
@@ -211,6 +236,9 @@ impl Server {
         if let Some(h) = self.media.take() {
             let _ = h.join();
         }
+        for h in self.readers.drain(..) {
+            let _ = h.join();
+        }
         if let Some(h) = self.http.take() {
             let _ = h.join();
         }
@@ -223,18 +251,27 @@ impl Drop for Server {
     }
 }
 
-/// Binds a TCP listener and a UDP socket on the same port number.
-fn bind_pair(ip: IpAddr, port: u16) -> Result<(std::net::TcpListener, UdpSocket)> {
+/// Binds the HTTP listener and UDP sockets on the same port number. A wildcard bind gets one UDP
+/// socket per IPv4 interface address: the media thread needs the local address each datagram
+/// arrived on (ICE pairs are keyed by it), and plain sockets do not report it.
+fn bind_all(
+    ip: IpAddr,
+    port: u16,
+    ifaces: &[(std::net::Ipv4Addr, bool)],
+) -> Result<(std::net::TcpListener, Vec<UdpSocket>, u16)> {
     let attempts = if port == 0 { 32 } else { 1 };
     let mut last = None;
     for _ in 0..attempts {
         let l = std::net::TcpListener::bind((ip, port)).with_context(|| format!("bind tcp {ip}:{port}"))?;
         let p = l.local_addr()?.port();
-        match UdpSocket::bind((ip, p)) {
-            Ok(u) => {
+        let addrs = net::candidate_addrs(ip, p, ifaces);
+        let socks: std::io::Result<Vec<UdpSocket>> = addrs.iter().map(UdpSocket::bind).collect();
+        match socks {
+            Ok(s) if !s.is_empty() => {
                 l.set_nonblocking(true)?;
-                return Ok((l, u));
+                return Ok((l, s, p));
             }
+            Ok(_) => anyhow::bail!("no usable IPv4 address to bind"),
             Err(e) => last = Some(e),
         }
     }
@@ -243,8 +280,7 @@ fn bind_pair(ip: IpAddr, port: u16) -> Result<(std::net::TcpListener, UdpSocket)
 
 #[cfg(test)]
 pub(crate) fn test_shared() -> Arc<Shared> {
-    let wake_sock = UdpSocket::bind("127.0.0.1:0").unwrap();
-    let wake_dest = wake_sock.local_addr().unwrap();
+    let (msg_tx, _rx) = mpsc::channel();
     Arc::new(Shared {
         cfg_size: (1280, 720),
         fps: 60,
@@ -258,7 +294,6 @@ pub(crate) fn test_shared() -> Arc<Shared> {
         wake_pending: AtomicBool::new(false),
         connected: AtomicBool::new(false),
         input: Box::new(|_| {}),
-        wake_sock,
-        wake_dest,
+        msg_tx,
     })
 }

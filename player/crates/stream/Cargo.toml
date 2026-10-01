@@ -21,3 +21,8 @@ if-addrs = "0.13"
 str0m = { version = "0.24", default-features = false, features = ["aws-lc-rs"] }
 [target.'cfg(target_os = "windows")'.dependencies]
 str0m = { version = "0.24", default-features = false, features = ["wincrypto"] }
+
+[dev-dependencies]
+env_logger = { version = "0.11", default-features = false, features = ["humantime"] }
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "env-filter"] }
+libc = "0.2"

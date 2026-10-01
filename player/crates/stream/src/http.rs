@@ -22,7 +22,7 @@ const PAGE: &str = include_str!("page.html");
 pub(crate) struct State {
     pub shared: Arc<Shared>,
     pub cands: Vec<SocketAddr>,
-    pub tx: Sender<Rtc>,
+    pub tx: Sender<crate::Msg>,
     pub title: String,
     pub size: (u32, u32),
     pub fps: u32,
@@ -110,10 +110,33 @@ pub(crate) fn answer_offer(st: &State, sdp: &str) -> anyhow::Result<String> {
         rtc.add_local_candidate(Candidate::host(*a, "udp")?);
     }
     let answer = rtc.sdp_api().accept_offer(offer)?;
-    let text = answer.to_sdp_string();
-    st.tx.send(rtc).map_err(|_| anyhow::anyhow!("media thread is gone"))?;
-    st.shared.wake();
+    let text = unify_stream_id(&answer.to_sdp_string());
+    st.tx.send(crate::Msg::Session(rtc)).map_err(|_| anyhow::anyhow!("media thread is gone"))?;
     Ok(text)
+}
+
+/// str0m gives every answered m-line its own random stream id. The browser synchronizes audio and
+/// video only inside one stream, so rewrite all of them to one id (contract: same stream id).
+fn unify_stream_id(sdp: &str) -> String {
+    const ID: &str = "renpy-stream";
+    let mut out = String::with_capacity(sdp.len());
+    for line in sdp.split_inclusive('\n') {
+        let eol = &line[line.trim_end_matches(['\r', '\n']).len()..];
+        let body = line.trim_end_matches(['\r', '\n']);
+        let fixed = if body.starts_with("a=msid-semantic:") {
+            format!("a=msid-semantic: WMS {ID}")
+        } else if let Some(rest) = body.strip_prefix("a=msid:") {
+            format!("a=msid:{ID}{}", rest.find(' ').map_or("", |i| &rest[i..]))
+        } else if body.starts_with("a=ssrc:") && body.contains(" msid:") {
+            let (head, tail) = body.split_once(" msid:").unwrap();
+            format!("{head} msid:{ID}{}", tail.find(' ').map_or("", |i| &tail[i..]))
+        } else {
+            body.to_string()
+        };
+        out.push_str(&fixed);
+        out.push_str(eol);
+    }
+    out
 }
 
 pub(crate) fn build_rtc() -> Rtc {
@@ -133,10 +156,17 @@ pub(crate) fn build_rtc() -> Rtc {
 mod tests {
     use super::*;
 
+    #[test]
+    fn stream_ids_are_unified() {
+        let sdp = "v=0\r\na=msid-semantic: WMS aaa bbb\r\nm=video 9\r\na=msid:aaa t1\r\na=ssrc:1 cname:x\r\na=ssrc:1 msid:aaa t1\r\nm=audio 9\r\na=msid:bbb t2\r\na=ssrc:2 msid:bbb t2\r\n";
+        let out = unify_stream_id(sdp);
+        assert_eq!(out, "v=0\r\na=msid-semantic: WMS renpy-stream\r\nm=video 9\r\na=msid:renpy-stream t1\r\na=ssrc:1 cname:x\r\na=ssrc:1 msid:renpy-stream t1\r\nm=audio 9\r\na=msid:renpy-stream t2\r\na=ssrc:2 msid:renpy-stream t2\r\n");
+    }
+
     /// Minimal browser-like offer (video H264 + opus + datachannel) accepted with host candidates.
     #[test]
     fn answer_has_h264_opus_and_candidates() {
-        let (tx, rx) = std::sync::mpsc::channel();
+        let (tx, rx) = std::sync::mpsc::channel::<crate::Msg>();
         let shared = crate::test_shared();
         let st = State {
             shared,
