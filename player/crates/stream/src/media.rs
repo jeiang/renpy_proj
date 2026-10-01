@@ -242,7 +242,7 @@ impl Media {
                     return;
                 }
                 let Ok(text) = std::str::from_utf8(&d.data) else { return };
-                match input::parse(text, self.sh.cfg_size) {
+                match input::parse(text, if self.enc_size.0 > 0 { self.enc_size } else { self.sh.cfg_size }) {
                     Some(Message::Events(evs)) => {
                         for ev in evs {
                             (self.sh.input)(ev);
@@ -281,12 +281,13 @@ impl Media {
             s.need_idr && s.last_idr.is_none_or(|t| now.duration_since(t) >= IDR_MIN_GAP)
         });
         if want_idr && self.last_frame.is_some() {
-            self.encode_last(now, true, false);
+            self.encode_last(now, true, false, true);
         } else if self.flush_at.is_some_and(|t| now >= t) && self.last_frame.is_some() {
             self.flush_at = None;
-            self.encode_last(now, false, true);
+            // The flush repeats the picture so the browser releases it; it keeps the picture's own timecode.
+            self.encode_last(now, false, true, false);
         } else if now.duration_since(self.last_sent) >= KEEPALIVE && self.last_frame.is_some() {
-            self.encode_last(now, false, true);
+            self.encode_last(now, false, true, true);
         }
         self.pump_audio(now);
     }
@@ -312,7 +313,7 @@ impl Media {
         let force = self.sess.as_ref().is_some_and(|s| {
             s.need_idr && s.last_idr.is_none_or(|t| now.duration_since(t) >= IDR_MIN_GAP)
         });
-        self.encode_last(now, force, false);
+        self.encode_last(now, force, false, force);
     }
 
     fn ensure_encoder(&mut self, size: (u32, u32)) -> bool {
@@ -341,12 +342,12 @@ impl Media {
     }
 
     /// Encodes `last_frame` and writes the access unit(s).
-    fn encode_last(&mut self, now: Instant, force_idr: bool, keepalive: bool) {
+    fn encode_last(&mut self, now: Instant, force_idr: bool, keepalive: bool, restamp: bool) {
         let Some((frame, arrival)) = self.last_frame.as_mut() else { return };
         let size = (frame.width, frame.height);
         let arrival = if keepalive || force_idr { now } else { *arrival };
         if self.sh.overlay {
-            if keepalive || force_idr {
+            if restamp {
                 frame.capture_ms = clock_ms() as u32;
             }
             encode::burn_timecode(frame);
@@ -367,7 +368,7 @@ impl Media {
             }
         };
         self.last_sent = now;
-        self.flush_at = (!keepalive).then(|| now + Duration::from_millis(2000 / u64::from(self.sh.fps)));
+        self.flush_at = (!keepalive || restamp).then(|| now + Duration::from_millis(2000 / u64::from(self.sh.fps)));
         {
             let mut st = self.sh.stats.lock().unwrap();
             st.encode_ms += (t.elapsed().as_secs_f64() * 1000.0 - st.encode_ms) * 0.05;

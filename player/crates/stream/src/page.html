@@ -117,13 +117,16 @@ function decodeTimecode() {
   }
   return v >>> 0;
 }
+let lastCap = -1;
 function onFrame(now) {
   frameCount++; fpsWindow.push(now);
   if (CFG.overlay && serverOffset !== null && video.videoWidth >= 512) {
     const cap = decodeTimecode();
     const srv = Math.floor(now + serverOffset) >>> 0;
     const ms = (srv - cap) >>> 0;
-    if (ms < 5000) latencySamples.push(ms);
+    // A repeat of a picture (decoder flush, keepalive) carries the same or a newer timecode: count each timecode once.
+    if (cap !== lastCap && ms < 5000) latencySamples.push(ms);
+    lastCap = cap;
   }
   if (video.requestVideoFrameCallback) video.requestVideoFrameCallback(onFrame);
 }
