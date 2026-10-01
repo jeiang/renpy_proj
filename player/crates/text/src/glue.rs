@@ -132,9 +132,10 @@ impl Target {
         Some(unsafe { self.ptr.add(y as usize * self.pitch + x as usize * 4) })
     }
 
-    /// Draws a coverage bitmap with its top-left at (`bmx`, `bmy`). A pixel is written only when it
-    /// raises the alpha there, so overlapping glyphs do not darken each other.
-    pub fn blit(&self, b: &Bitmap, bmx: i32, bmy: i32, color: [u32; 4]) {
+    /// Draws a coverage bitmap with its top-left at (`bmx`, `bmy`). Ren'Py 8 writes a pixel only
+    /// when it raises the alpha there, so overlapping glyphs do not darken each other. With `over`
+    /// (Ren'Py 7 `ftfont.pyx`) the glyph is composited over the pixel: `a + dst * (255 - a) / 255`.
+    pub fn blit(&self, b: &Bitmap, bmx: i32, bmy: i32, color: [u32; 4], over: bool) {
         let [sr, sg, sb, sa] = color;
         for py in 0..b.rows as i32 {
             let row = &b.data[(py as usize * b.width as usize)..][..b.width as usize];
@@ -150,7 +151,13 @@ impl Target {
                         *p.add(1) = sg as u8;
                         *p.add(2) = sb as u8;
                         *p.add(3) = 255;
-                    } else if alpha > *p.add(3) as u32 {
+                    } else if over && alpha != 0 {
+                        let alpha = alpha + *p.add(3) as u32 * (255 - alpha) / 255;
+                        *p = (sr * alpha / 255) as u8;
+                        *p.add(1) = (sg * alpha / 255) as u8;
+                        *p.add(2) = (sb * alpha / 255) as u8;
+                        *p.add(3) = alpha as u8;
+                    } else if !over && alpha > *p.add(3) as u32 {
                         *p = (sr * alpha / 255) as u8;
                         *p.add(1) = (sg * alpha / 255) as u8;
                         *p.add(2) = (sb * alpha / 255) as u8;

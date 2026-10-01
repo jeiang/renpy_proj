@@ -1,0 +1,15 @@
+# Reason: Ren'Py 7 games. Ren'Py 7.7 chose the text shaper by Python version (`"harfbuzz" if not PY2 else "freetype"`) and a Ren'Py 7 game runs on Python 2, so its text uses the FreeType shaper (advances rounded per glyph, `kern` table only). Ren'Py 8.5.3 defaults to harfbuzz, and its own compat step (`style.default.shaper = "freetype"`) stops at script_version 7.6.99, so a 7.7 game got harfbuzz text that differed from stock. The default is FreeType when `renpy.lexer.renpy7_syntax` is set (Ren'Py 7 detection).
+
+diff --git a/renpy/common/00style.rpy b/renpy/common/00style.rpy
+--- a/renpy/common/00style.rpy
++++ b/renpy/common/00style.rpy
+@@ -173,7 +173,8 @@
+         adjust_spacing True
+         emoji_font "TwemojiCOLRv0.ttf"
+         prefer_emoji True
+-        shaper "harfbuzz"
++        # Player patch: a Ren'Py 7 game ran on Python 2, where Ren'Py 7.7 had the FreeType shaper as default.
++        shaper ("freetype" if renpy.lexer.renpy7_syntax else "harfbuzz")
+         reading_order None
+ 
+         # Window properties

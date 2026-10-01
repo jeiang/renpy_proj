@@ -64,6 +64,10 @@ pub struct FTFont {
     height: i32,
     #[pyo3(get, set)]
     lineskip: i32,
+    /// Ren'Py 7 `ftfont.pyx` composites overlapping glyph bitmaps over each other; Ren'Py 8 keeps
+    /// the larger alpha. The engine patch sets this for a Ren'Py 7 game.
+    #[pyo3(get, set)]
+    over_blend: bool,
 }
 
 #[pymethods]
@@ -133,6 +137,7 @@ impl FTFont {
             descent: 0,
             height: 0,
             lineskip: 0,
+            over_blend: false,
         })
     }
 
@@ -294,7 +299,7 @@ impl FTFont {
             underline_end = underline_end.min(target.w - 1);
 
             if gi.draw {
-                target.blit(b, bmx, bmy, color);
+                target.blit(b, bmx, bmy, color, self.over_blend);
             }
             if underline != 0 {
                 let ly = y - self.underline_offset - 1;

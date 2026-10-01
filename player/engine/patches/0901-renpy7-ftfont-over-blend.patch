@@ -1,0 +1,15 @@
+# Reason: Ren'Py 7 games. `ftfont.pyx` of Ren'Py 7 composites overlapping glyph bitmaps with `a + dst * (255 - a) / 255`, where Ren'Py 8 keeps the larger alpha; this changes the pixels where outlines of neighboring glyphs overlap. `FTFont.over_blend` (text crate) selects it; it is set when `renpy.lexer.renpy7_syntax` is set (Ren'Py 7 detection).
+
+diff --git a/renpy/text/font.py b/renpy/text/font.py
+--- a/renpy/text/font.py
++++ b/renpy/text/font.py
+@@ -758,6 +758,9 @@
+             face, int(size * scale), bold, italics, outline, antialias, vertical, hinting
+         )
+ 
++        # Player patch: Ren'Py 7 composites overlapping glyph bitmaps over each other.
++        rv.over_blend = renpy.lexer.renpy7_syntax
++
+     font_cache[key] = rv
+ 
+     return rv

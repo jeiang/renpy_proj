@@ -58,7 +58,7 @@ pub struct Face {
     pub instances: Vec<InstanceInfo>,
 
     /// Pairs from format-0 horizontal `kern` subtables, `(left << 16 | right) -> value`.
-    pub kern: HashMap<u32, i16>,
+    pub kern: Vec<KernTable>,
 }
 
 fn axis_name(tag: Tag, fallback: Option<String>) -> String {
@@ -74,40 +74,53 @@ fn axis_name(tag: Tag, fallback: Option<String>) -> String {
     n.to_lowercase()
 }
 
-fn parse_kern(data: &[u8]) -> HashMap<u32, i16> {
-    let mut pairs = HashMap::new();
+/// One usable format-0 horizontal `kern` subtable.
+pub struct KernTable {
+    /// `(left << 16 | right) -> value`; the first of equal keys wins, as in FreeType's linear search.
+    pairs: HashMap<u32, i16>,
+    /// Coverage bit 3: the value replaces the sum so far instead of adding to it.
+    replace: bool,
+}
+
+/// The subtables FreeType's `tt_face_load_kern` keeps (at most 32; formats other than 0 and
+/// non-horizontal ones are skipped), with the pair count cut to what the subtable `length` holds.
+/// A font whose `length` field is too short for its pair count (a `kern` table of more than 64 KiB)
+/// so loses the pairs beyond it, and FreeType never finds them.
+fn parse_kern(data: &[u8]) -> Vec<KernTable> {
+    let mut tables = Vec::new();
     let be16 =
-        |o: usize| -> Option<u16> { Some(u16::from_be_bytes([*data.get(o)?, *data.get(o + 1)?])) };
-    let Some(count) = be16(2) else { return pairs };
-    if be16(0) != Some(0) {
-        return pairs;
-    }
+        |o: usize| -> Option<usize> { Some(u16::from_be_bytes([*data.get(o)?, *data.get(o + 1)?]) as usize) };
+    let Some(count) = be16(2) else { return tables };
     let mut at = 4;
-    for _ in 0..count {
+    for _ in 0..count.min(32) {
+        if at + 6 > data.len() {
+            break;
+        }
         let (Some(length), Some(coverage)) = (be16(at + 2), be16(at + 4)) else {
             break;
         };
-        // Format 0, horizontal, not minimum or cross-stream ("override" is allowed).
-        if coverage & !8 == 1
-            && let Some(n) = be16(at + 6)
-        {
-            let mut o = at + 14;
+        if length <= 6 + 8 {
+            break;
+        }
+        let next = (at + length).min(data.len());
+        if coverage >> 8 == 0 && coverage & 3 == 1 && at + 6 + 8 <= next {
+            let declared = be16(at + 6).unwrap_or(0);
+            let start = at + 14;
+            let n = declared.min(next.saturating_sub(start) / 6);
+            let mut pairs = HashMap::new();
+            let mut o = start;
             for _ in 0..n {
                 let (Some(l), Some(r), Some(v)) = (be16(o), be16(o + 2), be16(o + 4)) else {
                     break;
                 };
-                pairs
-                    .entry(((l as u32) << 16) | r as u32)
-                    .or_insert(v as i16);
+                pairs.entry(((l as u32) << 16) | r as u32).or_insert(v as u16 as i16);
                 o += 6;
             }
+            tables.push(KernTable { pairs, replace: coverage & 8 != 0 });
         }
-        if length == 0 {
-            break;
-        }
-        at += length as usize;
+        at = next;
     }
-    pairs
+    tables
 }
 
 impl Face {
@@ -279,9 +292,13 @@ impl Face {
 
     /// The FreeType kerning value for a pair, in font units.
     pub fn kerning(&self, left: u32, right: u32) -> i32 {
-        self.kern
-            .get(&((left << 16) | (right & 0xffff)))
-            .copied()
-            .unwrap_or(0) as i32
+        let key = (left << 16) | (right & 0xffff);
+        let mut result = 0i32;
+        for t in &self.kern {
+            if let Some(&v) = t.pairs.get(&key) {
+                result = if t.replace { v as i32 } else { result + v as i32 };
+            }
+        }
+        result
     }
 }

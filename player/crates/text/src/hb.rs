@@ -457,7 +457,7 @@ impl HBFont {
             underline_end = underline_end.min(target.w - 1);
 
             if gi.draw {
-                target.blit(b, bmx, bmy, color);
+                target.blit(b, bmx, bmy, color, false);
             }
             if underline != 0 {
                 let ly = y - self.underline_offset - 1;
