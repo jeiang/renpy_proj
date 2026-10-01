@@ -221,6 +221,10 @@ class Hypr:
             env["NIX_LD_LIBRARY_PATH"] = ":".join([env.get("NIX_LD_LIBRARY_PATH", "/run/current-system/sw/share/nix-ld/lib")] + self.runtime_libs())
         env.update(PATH=LINUX_CLEAN_PATH, XDG_RUNTIME_DIR=self.runtime, WAYLAND_DISPLAY=self.wayland, XDG_SESSION_TYPE="wayland",
                    DBUS_SESSION_BUS_ADDRESS="unix:path=%s/bus" % self.runtime)
+        if os.environ.get("HARNESS_X11_ONLY"):
+            # X11 lane: the game sees no Wayland session at all (it must use XWayland through DISPLAY)
+            env.pop("WAYLAND_DISPLAY")
+            env["XDG_SESSION_TYPE"] = "x11"
         if self.x_display:
             env["DISPLAY"] = self.x_display
         return env

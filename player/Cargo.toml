@@ -12,7 +12,7 @@ pyo3 = { version = "0.29", default-features = false, features = ["macros"] }
 pyo3-ffi = "0.29"
 wgpu = "30"
 naga = { version = "30", features = ["glsl-in", "wgsl-out"] }
-winit = "0.30"
+winit = { version = "0.30", default-features = false, features = ["rwh_06", "x11"] }
 cpal = "0.16"
 gilrs = "0.11"
 ffmpeg-next = { version = "=7.1.0", default-features = false, features = ["codec", "format", "software-resampling"] }
@@ -25,7 +25,7 @@ anyhow = "1"
 pyhost = { path = "crates/pyhost" }
 engine = { path = "crates/engine" }
 surface = { path = "crates/surface" }
-platform = { path = "crates/platform" }
+platform = { path = "crates/platform", default-features = false }
 gfx = { path = "crates/gfx" }
 media = { path = "crates/media" }
 

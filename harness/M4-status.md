@@ -83,3 +83,60 @@ Evidence: `~/Projects/renpy_proj-remote/m4fix-route/harness/out/{si,wa,br,hh}-fu
 - Stock engines are dynamic ELF files. `gatelib/plat.py` builds `libglvnd`, X11, ALSA, PulseAudio, wayland, xkbcommon and decor libraries from nixpkgs with `nix build` and adds them to `NIX_LD_LIBRARY_PATH` (nix-ld is on artemis; its default set has no `libGL.so.1`).
 - Hyprland 0.56 has no `hyprctl setprop` (`unknown request`); `hyprctl eval` with the Lua API sets window properties. `harness/README.md` (Linux) says so.
 - Corpus keys: on Linux `linux_<key>` replaces `<key>` of a game (`linux_source`, `linux_engine`, `linux_exe`, `linux_volatile_shots`).
+
+## Rest of the corpus on Linux (branch `build/m4-corpus`, in progress)
+
+State at the end of this session. Evidence is on artemis in `~/Projects/renpy_proj-remote/m4-corpus/harness/out/<Game>-{stock,full}/` (`summary.md`, `result.json`); `python3 harness/tools/collect_summary.py <out dir> <Game>...` prints the tables below from them.
+
+### Corpus copies (artemis `~/Projects/renpy_proj-remote/corpus/`)
+
+- 13 archives from `/mnt/Mumei/.../F95/{Played,Unplayed}` were copied to `staging/` on the NVMe drive, extracted there, turned into released copies (`.rpyc` only) and the staging folders were deleted. Nothing was extracted on `/mnt/Mumei`.
+- Version check: the sorted md5 list of every `.rpyc` in the archive equals the Mac original for AHouseInTheRift, A_World_Between_Us, AlexsVantasticAdventure, AstralLust, BloomWar, BraveheartAcademy, Bumpkin 0.14 and 0.15, CabinByTheLake, DFraction, DOF, DTRemake, Dreamscape, InterimDomain, Lucky_Paradox (0 differing files). Ripples-0.8.0, MaidandMaidens-0.12.0 and WhiteRussian Ep10P1/Ep10P2 do NOT match the Mac `.app` games. For these three, `corpus/<Game>-macgame-released/` is the Linux `-pc` engine (same Ren'Py: 8.2.1 for Ripples) with `game/` replaced by the Mac released `game/` (rsync, file counts equal). `corpus.toml` points at them (`linux_source`, `linux_base = "."`, bundled `<Game>.sh`). TheStormWithinUs was rsynced from the Mac (not in the archive); it runs on the Linux 8.5.3 SDK (`engines.sdk-853-linux`).
+- DOF, Bumpkin 0.15 and Lucky_Paradox are plain copies, as on the Mac (they keep loose `.rpy`).
+- Archive faults found: (1) the archives lost the execute bits of `<Game>.sh` and `lib/py*-linux-*/*`: `chmod +x` after extraction (the stock lint failed with rc 126 otherwise). (2) `research/test-corpus/make_released.py` writes the RPA index prefix as text, which makes Ren'Py 7 fail with "Could not load from archive animations.rpyc" (the reason `tools/make_released7.py` exists). Use `make_released7.py` for Ren'Py 7 games. The three affected archives (AHouseInTheRift, A_World_Between_Us, InterimDomain `scripts.rpa`) were repaired with `harness/tools/repair_rpa7.py`; the repaired A_World `scripts.rpa` is byte-identical to the Mac file.
+- SDKs fetched into the gitignored `research/test-corpus/sdk/` of the artemis checkout: 7.4.5, 7.4.8, 7.5.3, 7.6.1, 7.8.2, 8.5.3 (7.4.11 and 7.7.3 were there).
+
+### Results so far (stock = game's engine, player = `--tier full --baseline <stock>`; a pass has exit code 0 for all five checks)
+
+| Game | Stock | Player |
+|---|---|---|
+| A World Between Us (7.4.8) | pass (video 60/60 fps) | pass, digest equals stock, video 60.0/60.0 |
+| Bumpkin 0.14 (7.5.3) | pass | route, probe, lint, video pass; saveresume state match False (the load runs and the story continues) |
+| DOF (8.3.2, bundled) | pass | pass |
+| Dreamscape (7.4.11) | pass | pass |
+| InterimDomain (7.4.5) | pass (state match False) | pass |
+| AstralLust (7.8.2) | stock pass; player run still queued | - |
+| TheStormWithinUs (8.5.3 SDK) | stock pass; player run queued | - |
+
+Not run yet (queued in `batch3.status`, `batch4.status`, `batch5.status` on artemis, or never started): AHouseInTheRift, AlexsVantasticAdventure, BloomWar, BraveheartAcademy, Bumpkin 0.15, CabinByTheLake, DFraction, DTRemake, LuckyParadox, MaidandMaidens, Ripples, WhiteRussian. No player failure on Linux was seen in the games that finished, so the branch has no player code fix for them.
+
+Early runs in this session were thrown away and redone: they used archives without execute bits or with the bad RPA index, and some stock baselines were taken while a second game window was open (Hyprland tiled both, 941 px wide against 1896 px, which breaks every route baseline diff). The table above only holds clean reruns.
+
+### Harness fix: machine lock takeover (commit 42a17b1, also on main)
+
+`_take_over` could drop a live holder's lock: the stale directory was renamed away and, when it could not be put back because a third process had already created it, the live lock was gone and two games ran at once. Now the directory that is moved aside must be the inode judged stale and its owner pid must be dead; otherwise it is put back and never deleted. After that a plain `mkdir` decides the winner (a failed `mkdir` means wait), and `release_lock` only removes a lock it owns. 8 processes x 6 takes gave 0 overlaps. Ad-hoc scripts must write `pid=<pid>` in the owner file.
+
+## Wine and X11 lanes
+
+### Wine 11 (`nixpkgs#wineWow64Packages.stable`, prefix `~/Projects/renpy_proj-remote/wine/prefix`)
+
+The packaged `player.exe` (Windows VM `C:\spike\m4\player\build-out\windows\player-windows-x86_64`, older than `9fdc1f3`) was copied to artemis. Wrapper `--player-bin`: sets `WINEPREFIX`, runs `wine player.exe "$@"` with Unix paths (Wine maps them to `Z:`).
+
+| Item | Result |
+|---|---|
+| lint (SecretIsland copy) | pass, 64,793 dialogue blocks (same as stock) |
+| wgpu backend | Vulkan (Wine's native Vulkan on RADV; not DX12 over vkd3d). `log.txt`: `Backend: 'Vulkan'` |
+| window to main menu | yes; harness probe reaches the menu, runs 66 lines, digest `5b3a5b1c65f1ae8d` = stock |
+| video | `video` check pass: 60.0 presented / 60.0 decoded fps, A/V offset max 27 ms (FFmpeg DLLs decode under Wine) |
+| probe exit code | 9: the process aborts at exit (`thread local panicked on drop ... threads should not terminate unexpectedly`) after a game analytics thread raised in a background thread. Not seen on Linux or macOS. Not investigated further; it needs a Windows-side run. |
+| route | the 1896x1056 shots differ from the Linux stock baseline like the pre-`9fdc1f3` player (01-menu mean_abs 0.00435, 1.35%, the old half-pixel offset); the exe predates the fix |
+
+### X11 (XWayland, `HARNESS_X11_ONLY=1` hides `WAYLAND_DISPLAY`)
+
+- `winit` is now a workspace dependency with `default-features = false, features = ["rwh_06", "x11"]`. `platform` has a default feature `wayland` (winit `wayland`, `wayland-dlopen`, `wayland-csd-adwaita`) and `player` forwards it. X11-only build: `cargo build --release -p player --no-default-features`. The binary is 225 MB against 241 MB. `wayland-client` is still linked through `rfd` (file dialog of the library window), not through winit.
+- Both the X11-only binary and the normal binary with `WAYLAND_DISPLAY` unset start on XWayland, pass lint and the probe on SecretIsland. The route baseline diff of the first runs is not valid (second window open, 941 px). The clean reruns are queued (`harness/out/x11-x11bin`, `x11-nobin`); they are not in this table yet.
+
+## Not done
+
+- Stock and player runs for the 12 games listed above, the clean X11 m1 results, and the clean Wine m1 route.
+- Windows exit code 9 (see above).
