@@ -19,7 +19,7 @@ def printed():
     buf = StringIO.StringIO()
     print >>buf, "a", 1
     print >>buf, "b",
-    print >>buf
     print >>buf, "c"
+    print >>buf
     print
     return buf.getvalue().replace("\n", "|")
