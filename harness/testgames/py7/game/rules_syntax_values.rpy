@@ -4,7 +4,7 @@ init python:
     synth_syntax = {}
 
 init python:
-    synth_syntax["backtick"] = `42` + `"s"`
+    synth_syntax["backtick"] = `42` + `3.5`
 
 init python:
     synth_syntax["ne"] = (1 <> 2, 2 <> 2)
