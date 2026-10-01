@@ -1,4 +1,5 @@
 """Markdown summary of one gate run."""
+from . import plat
 
 
 def _fmt(x, nd=3):
@@ -27,8 +28,8 @@ def markdown(summary, results):
         for l in ([r["launch"]] if r.get("launch") else r.get("launches", [])):
             hyg.append(l)
     if hyg:
-        L += ["", "Conventions: %d launches, sweep ok %s, ~/Library/RenPy unchanged %s, forced kills %d; vm.loadavg at first launch %s" % (
-            len(hyg), all(l["sweep_ok"] for l in hyg), all(l["library_unchanged"] for l in hyg),
+        L += ["", "Conventions: %d launches, sweep ok %s, %s unchanged %s, forced kills %d; load average at first launch %s" % (
+            len(hyg), all(l["sweep_ok"] for l in hyg), plat.get().save_root_label, all(l["library_unchanged"] for l in hyg),
             sum(1 for l in hyg if l["forced_kill"]), hyg[0]["loadavg"])
               + "; game/cache removed from the scratch clone in %d launches" % sum(1 for l in hyg if l.get("stripped_game_cache"))]
     return "\n".join(L) + "\n"

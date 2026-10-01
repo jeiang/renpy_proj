@@ -29,7 +29,7 @@ def _hygiene(r):
     if not r["sweep_ok"]:
         p.append("game processes survived the SIGKILL sweep")
     if not r["library_unchanged"]:
-        p.append("~/Library/RenPy changed during the run")
+        p.append("%s changed during the run" % L.plat.get().save_root_label)
     if r["traceback_files"]:
         p.append("traceback.txt/errors.txt written: " + ", ".join(r["traceback_files"]))
     if r["engine"] == "player" and r["stdout_traceback"]:

@@ -9,8 +9,8 @@ nix develop -c python3 harness/gate.py run --engine player --game SecretIsland -
 nix develop -c python3 harness/gate.py diff --a harness/out/si-stock --b harness/out/si-player
 ```
 
-Python 3.12, standard library only (`tomllib` reads `corpus.toml`). macOS only: `sips` decodes PNG, `screencapture -l <window id>` and a
-small read-only Swift helper (`tools/wintool.swift`, built on first use into `bin/`) capture only windows the gate launched, never the full screen. Exit code 0 means every check passed. `--out` gets `result.json`, `summary.md`, `checks/<check>.json` and the raw
+Python 3.12, standard library only (`tomllib` reads `corpus.toml`). macOS: `sips` decodes PNG, `screencapture -l <window id>` and a
+small read-only Swift helper (`tools/wintool.swift`, built on first use into `bin/`) capture only windows the gate launched, never the full screen. Linux: see [Linux](#linux). Exit code 0 means every check passed. `--out` gets `result.json`, `summary.md`, `checks/<check>.json` and the raw
 evidence of each launch (`<launch>/stdout.log`, `progress.txt`, `plan.log`, `log.txt`, `traceback.txt`, `shots/`).
 `out/` and `work/` are gitignored: they hold game text and screenshots.
 
@@ -95,3 +95,20 @@ A plan is a text file of ops, one per line: `cmd TEXT` sends a command to the ga
 - Input screens are answered with `input_answer` (default "Tester"). More than `input_limit` (default 3) answers in one launch fails the stage with `cmd-error input-loop`: a game that rejects the answer would otherwise loop, and its rejection lines would count as executed dialogue (Braveheart did this until M3).
 
 - `screen_actions` (corpus.toml) answers custom choice screens the driver cannot click: when the named screen shows, the action expression runs, as a click on that button would. Without it a `call screen` ends with no choice and the game may fail later (Braveheart: `year` stayed 0).
+
+## Linux
+
+The gate also runs on the Linux GPU host (artemis, NixOS, Hyprland). `gatelib/plat.py` holds everything that differs per host; macOS keeps `wintool.swift`, `screencapture`, `osascript` and `sips`.
+
+```sh
+# on artemis, in a checkout with the gitignored corpus links (see below); the Nix shell only provides python, grim and ffmpeg
+nix shell nixpkgs#python312 nixpkgs#grim nixpkgs#ffmpeg -c python3 harness/gate.py run --engine stock --game SecretIsland --tier full --out harness/out/si-stock
+nix shell nixpkgs#python312 nixpkgs#grim nixpkgs#ffmpeg -c python3 harness/gate.py run --engine player --player-bin <path>/player --game SecretIsland --tier full \
+    --baseline harness/out/si-stock --out harness/out/si-player
+```
+
+- **Windows.** `hyprctl clients -j` (by pid of the processes under the run's work path) gives address, geometry, workspace, `mapped`, `hidden`, `floating`, `fullscreen` and `focusHistoryID`; `hyprctl monitors -j` gives the shown workspaces. Covered check: the window is mapped, not hidden and on its monitor's active workspace, and a 40x40 sample of its area is not hidden by a window in front of it (fullscreen, in an open special workspace, floating over a tiled window, or focused more recently while overlapping). Below `--min-visible` the gate runs `hyprctl dispatch focuswindow pid:<pid>` once (a focus change, no input) and checks again. Hyprland's default config draws windows slightly transparent (`decoration:active_opacity` 0.95, `inactive_opacity` 0.85), so before every capture the gate forces the window opaque and reads it back: `hyprctl eval "hl.dispatch(hl.dsp.window.set_prop({ prop = 'opaque', value = '1', window = 'address:<addr>' }))"`, then `hyprctl getprop address:<addr> opaque` must say `true` (Hyprland 0.56 has the Lua API; `hyprctl setprop` answers `unknown request`). Checked on artemis: black borders capture as (0,0,0) with `opaque` 1 and as about (10,7,6), a blend with the desktop, with it off. A failure is logged in `plan.log`. Capture is `grim -g "<x>,<y> <w>x<h>"` of that window's geometry (PPM on stdout, written as a PNG with filter type 0), never the whole output. The shot size must match the run's first shot.
+- **Diff.** No `sips`: `pngdiff.py` decodes PNGs with `zlib` and point-samples them onto the 640x360 grid. `--diff-crop-top` defaults to 0 (no title bar).
+- **Launch.** The environment is a whitelist (`HOME`, `USER`, `LANG`, `NIX_LD`, `NIX_LD_LIBRARY_PATH`, a clean `PATH`, `XDG_RUNTIME_DIR`, `WAYLAND_DISPLAY`, `DISPLAY` of XWayland, the user D-Bus address for gamemode). Every game process, stock and player, starts as `gamemoderun <argv>`. The clone is `cp -a --reflink=auto`. The machine lock is the same `/tmp/renpy_proj.run.lock` directory with an owner file. The hygiene hash covers `~/.renpy` (Ren'Py's Linux save root) in place of `~/Library/RenPy`. Ren'Py 7 still gets `--savedir`.
+- **Corpus.** On Linux a `linux_<key>` entry of a game in `corpus.toml` replaces `<key>`. The four M4 games point at `~/Projects/renpy_proj-remote/corpus/<copy>`. SecretIsland and WaifuAcademy run their own `<Game>.sh` (`linux_engine = "bundled"`); BlackRose and HaremHotel use the Ren'Py 7.7.3 and 7.4.11 SDKs, fetched into the gitignored `research/test-corpus/sdk/` with `curl -fL https://www.renpy.org/dl/<v>/renpy-<v>-sdk.tar.bz2 | tar -xj -C research/test-corpus/sdk`.
+- **Stock engines are dynamic ELF files.** NixOS needs `nix-ld` (`NIX_LD`, `NIX_LD_LIBRARY_PATH` are passed through).

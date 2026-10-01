@@ -4,7 +4,8 @@
   gate.py run  --engine stock|player --game <key|dir> --tier m1|full [--plan P] --out DIR [options]
   gate.py diff --a DIR --b DIR                      compare the route screenshots of two finished runs
 
-See harness/README.md. Python 3.12, stdlib only (macOS `sips` decodes PNG).
+See harness/README.md. Python 3.12, stdlib only. macOS: `sips`, `screencapture`, wintool;
+Linux: Hyprland (`hyprctl`, `grim`), `gamemoderun`.
 """
 import argparse
 import json
@@ -15,7 +16,7 @@ import time
 import traceback
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from gatelib import checks, launch as L, report  # noqa: E402
+from gatelib import checks, launch as L, plat, report  # noqa: E402
 
 
 def parse():
@@ -43,8 +44,8 @@ def parse():
     r.add_argument("--route-timeout", type=int, default=900)
     r.add_argument("--diff-mean", type=float, default=0.005, help="max mean absolute difference, 0..1 of full scale")
     r.add_argument("--diff-pct", type=float, default=0.5, help="max percent of pixels that changed by more than 24/255")
-    r.add_argument("--diff-crop-top", type=int, default=80,
-                   help="pixel rows cut from the top and bottom of every shot before diffing: the window title bar (macOS 26: about 33 pt at 2x, cut 40 pt)")
+    r.add_argument("--diff-crop-top", type=int, default=None,
+                   help="pixel rows cut from the top and bottom of every shot before diffing: the window title bar (default: 80 on macOS 26, about 33 pt at 2x, cut 40 pt; 0 on Hyprland)")
     r.add_argument("--min-visible", type=float, default=0.8,
                    help="min share of the game window that no other window hides before a shot (else: bring it front once, then report an error)")
     r.add_argument("--stage-scale", type=float, default=1.0, help="multiply every stage timeout (gatelib/stages.py) by this")
@@ -67,8 +68,11 @@ def parse():
     d.add_argument("--b", required=True)
     d.add_argument("--diff-mean", type=float, default=0.005)
     d.add_argument("--diff-pct", type=float, default=0.5)
-    d.add_argument("--diff-crop-top", type=int, default=80)
-    return ap.parse_args()
+    d.add_argument("--diff-crop-top", type=int, default=None)
+    a = ap.parse_args()
+    if a.diff_crop_top is None:
+        a.diff_crop_top = plat.get().default_crop_top
+    return a
 
 
 def resolve_game(arg):
