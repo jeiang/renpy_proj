@@ -39,6 +39,8 @@ EXT = ["_socket", "select", "pyexpat", "_elementtree", "_asyncio", "_queue", "_z
 # Sources that live outside the project file of the module that needs them.
 EXTRA_PROJECTS = {"_lzma": ["liblzma"]}
 SKIP_SOURCES = {"applink.c"}
+# Bump when the compile flags in compile_all change: the objects are rebuilt only when this or the source list changes.
+RECIPE_VERSION = "1"
 
 
 def log(*a):
@@ -190,7 +192,7 @@ def main():
     externals_and_headers(src, env, scratch)
 
     jobs = sources(src)
-    recipe = hashlib.sha256(("\n".join(f"{g} {p}" for g, p in jobs) + Path(__file__).read_text()).encode()).hexdigest()
+    recipe = hashlib.sha256(("\n".join(f"{g} {p}" for g, p in jobs) + RECIPE_VERSION).encode()).hexdigest()
     lib = scratch / "python312.lib"
     stale = not lib.exists() or not (scratch / "recipe").exists() or (scratch / "recipe").read_text() != recipe
     if stale:
@@ -209,6 +211,12 @@ def main():
     shutil.copy2(lib, out / "lib" / "python312.lib")
     for f in ("ffi.lib", "libssl.lib", "libcrypto.lib"):
         shutil.copy2(vcpkg / "lib" / f, out / "deps" / f)
+    # pyo3-ffi still emits `link(name = "pythonXY")` on Windows; the symbols are in python312.lib, so this
+    # import name resolves to an empty library (research/win-spike section 3.1, fault 2).
+    empty = scratch / "empty.c"
+    empty.write_text("/* intentionally empty */\n")
+    run(["cl", "/nologo", "/c", "/MT", str(empty), f"/Fo{scratch / 'empty.obj'}"], env=env)
+    run(["lib", "/nologo", f"/OUT:{out / 'lib' / 'pythonXY.lib'}", str(scratch / "empty.obj")], env=env)
     inc = out / "include" / "python3.12"
     shutil.rmtree(inc, ignore_errors=True)
     shutil.copytree(src / "Include", inc, ignore=shutil.ignore_patterns("*.py"))
