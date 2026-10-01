@@ -93,7 +93,7 @@ fi
 BL=$PLAYER/crates/pyhost/cpython/build_linux.sh
 eval "$(grep -E '^(PYVER|PYURL|PYSHA)=' "$BL")"
 CPY=$PLAYER/build-out/cpython
-RECIPE=$(cat "$BL" "$HERE/container-build.sh" | sha256sum | cut -d' ' -f1)
+RECIPE=$( { cat "$BL"; echo "$PINS"; echo "$CFLAGS"; } | sha256sum | cut -d' ' -f1)
 if [ "$(cat "$CPY/.manylinux-recipe" 2>/dev/null)" != "$RECIPE" ]; then
   log "CPython $PYVER"
   FFI=$DEPS FFI_DEV=$DEPS BZ=$DEPS BZ_DEV=$DEPS XZ=$DEPS XZ_DEV=$DEPS EXP=$DEPS EXP_DEV=$DEPS ZL=$DEPS ZL_DEV=$DEPS SSL=$DEPS SSL_DEV=$DEPS
@@ -179,11 +179,14 @@ PKG=$OUT/$NAME
 rm -rf "$PKG" "$OUT/$NAME.tar.gz"; mkdir -p "$PKG/lib"
 cp "$PLAYER/target/release/player" "$PKG/player"; chmod u+w "$PKG/player"
 SYSTEM='^(linux-vdso|ld-linux.*|libc|libm|libdl|libpthread|librt|libutil|libresolv|libmvec|libnsl|libanl|libnss_[a-z]*|libthread_db|libBrokenLocale|libgcc_s|libdrm.*|libasound|libudev|libvulkan|libwayland-.*|libxkbcommon.*|libX.*|libxcb.*|libpipewire.*|libdrm.*|libGL.*|libEGL.*)\.so'
-bundle() {
-  ldd "$1" | awk '/=> \//{print $1, $3}' | while read -r soname path; do
-    soname=${soname##*/}
+needed() { objdump -p "$1" | awk '/NEEDED/{print $2}'; }   # direct dependencies only
+bundle() { # copy the non-host libraries that $1 needs directly, then recurse into the copies
+  local soname path
+  for soname in $(needed "$1"); do
     if [[ "$soname" =~ $SYSTEM ]]; then continue; fi
     if [ ! -e "$PKG/lib/$soname" ]; then
+      path=$(ldd "$1" | awk -v s="$soname" '$1==s && /=> \//{print $3}')
+      [ -n "$path" ] || { echo "manylinux: cannot resolve $soname for $1" >&2; exit 1; }
       cp -L "$path" "$PKG/lib/$soname"; chmod u+wx "$PKG/lib/$soname"
       bundle "$PKG/lib/$soname"
     fi
@@ -193,10 +196,16 @@ bundle "$PKG/player"
 for so in "$PKG"/lib/*.so*; do patchelf --set-rpath '$ORIGIN' "$so"; done
 patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 --set-rpath '$ORIGIN/lib' "$PKG/player"
 strip --strip-unneeded "$PKG/player" "$PKG"/lib/*.so* 2>/dev/null || true
-echo "== ldd =="
-LDD=$(env -u LD_LIBRARY_PATH ldd "$PKG/player"); echo "$LDD"
-bad=$(echo "$LDD" | awk '/=> \//{print $3}' | grep -v "^$PKG/lib/" | grep -Ev '/(ld-linux-x86-64|libc|libm|libdl|libpthread|librt|libutil|libresolv|libmvec|libgcc_s|libdrm|libasound|libudev|libvulkan|libwayland-[a-z-]*|libxkbcommon[a-z-]*|libX[a-z0-9]*|libxcb[a-z-]*)\.so' || true)
-[ -z "$bad" ] || { echo "manylinux: unexpected dependencies: $bad" >&2; exit 1; }
+echo "== direct dependencies (NEEDED) =="
+bad=""
+for f in "$PKG/player" "$PKG"/lib/*.so*; do
+  for soname in $(needed "$f"); do
+    echo "$(basename "$f"): $soname"
+    if [ -e "$PKG/lib/$soname" ] || [[ "$soname" =~ $SYSTEM ]]; then continue; fi
+    bad="$bad $(basename "$f"):$soname"
+  done
+done
+[ -z "$bad" ] || { echo "manylinux: dependencies that are neither bundled nor host-provided:$bad" >&2; exit 1; }
 (cd "$OUT" && tar -czf "$NAME.tar.gz" "$NAME")
 log "glibc policy check"
 bash "$HERE/check-glibc.sh" "$PKG"
