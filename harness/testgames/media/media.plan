@@ -1,0 +1,72 @@
+# Route for the media game. One shot per image format and per movie. Movie frames are identical, but the decoders and the
+# time of the first frame differ between engines, so the movie shots are volatile (compared, reported, never failing).
+# Ops: cmd TEXT | wait TOKEN | settle SECS | shot NAME [volatile] | note TEXT | quit
+cmd auto on
+cmd click on
+wait menu True
+cmd click off
+settle 3
+shot 01-menu
+cmd start
+after_start
+cmd advance-to 2
+wait advance-done
+settle 2
+shot 02-png
+cmd advance-to 3
+wait advance-done
+settle 2
+shot 03-jpg
+cmd advance-to 4
+wait advance-done
+settle 2
+shot 04-webp
+cmd advance-to 5
+wait advance-done
+settle 2
+shot 05-webp-lossless
+cmd advance-to 6
+wait advance-done
+settle 2
+shot 06-avif
+cmd advance-to 7
+wait advance-done
+settle 3
+shot 07-movie-vp9 volatile
+cmd advance-to 8
+wait advance-done
+settle 3
+shot 08-movie-h264 volatile
+cmd advance-to 9
+wait advance-done
+settle 3
+shot 09-movie-theora volatile
+cmd advance-to 10
+wait advance-done
+settle 3
+shot 10-movie-av1 volatile
+cmd advance-to 11
+wait advance-done
+settle 2
+shot 11-gif
+cmd advance-to 12
+wait advance-done
+settle 2
+shot 12-gif-anim
+cmd advance-to 13
+wait advance-done
+settle 2
+shot 13-alpha-png
+cmd advance-to 14
+wait advance-done
+settle 2
+shot 14-alpha-webp
+cmd advance-to 15
+wait advance-done
+settle 2
+shot 15-alpha-webp-lossless
+cmd advance-to 16
+wait advance-done
+settle 2
+shot 16-alpha-gif
+quit
