@@ -81,6 +81,17 @@ struct Pads {
     next_instance: i64,
 }
 
+/// The Windows backend of gilrs joins its worker thread when `Gilrs` drops. The `Pads` thread local drops
+/// inside `std::process::exit`. Under Wine that join panics ("threads should not terminate unexpectedly",
+/// from `JoinInner::join`) and the panic in a thread-local destructor aborts the process with exit code 9.
+/// The OS reclaims the thread at exit anyway, so the pad system is leaked here and never joined.
+#[cfg(windows)]
+impl Drop for Pads {
+    fn drop(&mut self) {
+        std::mem::forget(self.gilrs.take());
+    }
+}
+
 thread_local! {
     static PADS: RefCell<Pads> = RefCell::new(Pads::default());
 }
