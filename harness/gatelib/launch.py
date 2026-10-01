@@ -91,12 +91,85 @@ def ensure_wintool():
     return WINTOOL
 
 
+STALE_NO_OWNER_S = 1800   # a lock dir with no owner file (an older harness, a shell user) is stale after 30 min
+
+
+def _read_owner():
+    try:
+        txt = (pathlib.Path(LOCK) / "owner").read_text()
+    except OSError:
+        return None
+    m = re.search(r"pid=(\d+)", txt)
+    return {"pid": int(m.group(1)) if m else None, "text": txt.strip()}
+
+
+def _pid_alive(pid):
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _stale_reason():
+    """-> why the existing lock is stale, or None when its holder may still be running."""
+    owner = _read_owner()
+    if owner and owner["pid"] is not None:
+        return None if _pid_alive(owner["pid"]) else "owner pid %d is dead (%s)" % (owner["pid"], owner["text"].replace("\n", " "))
+    try:
+        age = time.time() - os.stat(LOCK).st_mtime
+    except OSError:
+        return None   # gone meanwhile
+    return "no owner file and the lock is %.0f min old" % (age / 60) if age > STALE_NO_OWNER_S else None
+
+
+def _take_over(reason):
+    """Move the stale lock aside (one taker wins the rename), then check it was the lock we judged stale."""
+    aside = "%s.stale.%d" % (LOCK, os.getpid())
+    try:
+        os.rename(LOCK, aside)
+    except OSError:
+        return False   # someone else took it over first
+    pre = pathlib.Path(aside) / "owner"
+    owner = None
+    try:
+        m = re.search(r"pid=(\d+)", pre.read_text())
+        owner = int(m.group(1)) if m else None
+    except OSError:
+        pass
+    if owner is not None and _pid_alive(owner):   # a live holder's fresh lock: put it back
+        try:
+            os.rename(aside, LOCK)
+        except OSError:
+            pass
+        return False
+    print("[gate] machine lock taken over: %s" % reason, flush=True)
+    shutil.rmtree(aside, ignore_errors=True)
+    return True
+
+
 def take_lock(timeout):
+    """mkdir the lock, write `owner` (pid, start time, command) into it. A lock whose owner pid is dead, or that has no
+    owner file and is older than 30 min, is logged and taken over."""
     t0 = time.time()
-    while subprocess.run(["mkdir", LOCK], capture_output=True).returncode != 0:
+    while True:
+        if subprocess.run(["mkdir", LOCK], capture_output=True).returncode == 0:
+            (pathlib.Path(LOCK) / "owner").write_text("pid=%d\nstart=%s\ncmd=%s\n" % (
+                os.getpid(), time.strftime("%Y-%m-%dT%H:%M:%S%z"), " ".join(sys.argv)[:200]))
+            return
+        reason = _stale_reason()
+        if reason and _take_over(reason):
+            continue
         if time.time() - t0 > timeout:
             raise TimeoutError("machine lock %s held for more than %d s" % (LOCK, timeout))
         time.sleep(0.1)   # 0.1 s: a slower poll starves behind siblings that retake the lock at once
+
+
+def release_lock():
+    (pathlib.Path(LOCK) / "owner").unlink(missing_ok=True)
+    subprocess.run(["rmdir", LOCK], capture_output=True)
 
 
 def safe_rmtree(path):
@@ -468,8 +541,10 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
         res["sweep_ok"] = sweep(pattern)
         res["library_unchanged"] = before is not None and library_hash() == before
         if res["sweep_ok"]:
-            subprocess.run(["rmdir", LOCK])
+            release_lock()
     if not res["sweep_ok"]:
+        # keep the lock for good: pid=0 never counts as dead (os.kill(0, 0) signals our own group), so nobody takes it over
+        (pathlib.Path(LOCK) / "owner").write_text("pid=0\nstart=%s\nnote=game processes survived the sweep of %s\n" % (time.strftime("%Y-%m-%dT%H:%M:%S%z"), pattern))
         res["lock_left"] = "game processes survived the sweep; lock %s left in place" % LOCK
     res["forced_kill"] = not res["exited"]
     res["clean_exit"] = res["rc"] == 0

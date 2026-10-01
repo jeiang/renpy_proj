@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Print the per-game, per-check table of harness/M2-status.md from finished gate runs.
 
-  status_table.py <out dir>      (holds <Game>-stock/ and <Game>-player/ result dirs)
+  status_table.py <out dir> [Game,Game,...]   (holds <Game>-stock/ and <Game>-player/ result dirs; default: the M2 games)
+  status_table.py <out dir> m3                  the Ren'Py 7 games of corpus.toml (renpy 7.x)
 """
 import json
 import pathlib
@@ -17,8 +18,15 @@ def first_problem(c):
     return c.get("error") or c.get("reason") or ""
 
 
-def main(out):
+def corpus_games(prefix):
+    import tomllib
+    with open(pathlib.Path(__file__).resolve().parents[1] / "corpus.toml", "rb") as f:
+        return [k for k, g in tomllib.load(f)["games"].items() if g.get("renpy", "").startswith(prefix)]
+
+
+def main(out, games=None):
     out = pathlib.Path(out)
+    GAMES = games or globals()["GAMES"]
     print("| game | engine | " + " | ".join(CHECKS) + " |")
     print("|---|---|" + "---|" * len(CHECKS))
     fails = []
@@ -44,4 +52,5 @@ def main(out):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1])
+    arg = sys.argv[2] if len(sys.argv) > 2 else None
+    main(sys.argv[1], corpus_games("7.") if arg == "m3" else (arg.split(",") if arg else None))
