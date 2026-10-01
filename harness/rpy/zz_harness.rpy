@@ -75,8 +75,10 @@ init 999 python:
 
             def _hz_periodic():
                 t = time.time()
-                if t - _hz_last[0] >= 0.2:
-                    _hz_last[0] = t
+                # Keep a fixed 0.2 s grid. PERIODIC fires every 50 ms, so "0.2 s since the last poll" drifts to
+                # about 0.245 s and made stock Ren'Py 7 advance lines 22% slower than the player's 0.2 s timer.
+                if t >= _hz_last[0] + 0.2:
+                    _hz_last[0] = t if t - _hz_last[0] > 0.4 else _hz_last[0] + 0.2
                     _hz_poll()
 
             config.periodic_callbacks.append(_hz_periodic)
