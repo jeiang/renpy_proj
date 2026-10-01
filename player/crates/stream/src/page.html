@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>__TITLE__</title>
+<style>
+  html,body{margin:0;height:100%;background:#000;overflow:hidden;color:#ddd;font:13px/1.3 ui-monospace,Menlo,monospace}
+  #box{position:fixed;inset:0;touch-action:none;user-select:none;-webkit-user-select:none;cursor:default}
+  video{width:100%;height:100%;object-fit:contain;background:#000;display:block;pointer-events:none}
+  #connect{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);padding:14px 36px;font-size:20px;border:0;border-radius:8px;background:#3b82f6;color:#fff;cursor:pointer}
+  #hud{position:fixed;left:6px;bottom:6px;padding:2px 6px;background:rgba(0,0,0,.55);border-radius:4px;pointer-events:none;white-space:pre}
+  .hide{display:none!important}
+</style>
+</head>
+<body>
+<div id="box"><video id="v" autoplay playsinline></video></div>
+<button id="connect">Connect</button>
+<div id="hud">idle</div>
+<script>
+"use strict";
+const CFG = __CONFIG__;
+const Q = new URLSearchParams(location.search);
+const box = document.getElementById("box"), video = document.getElementById("v");
+const btn = document.getElementById("connect"), hud = document.getElementById("hud");
+if (Q.get("hud") === "0") hud.classList.add("hide");
+
+let pc = null, relCh = null, movCh = null, state = "idle";
+const sdp = { offer: null, answer: null };
+const latencySamples = [];
+let bestRtt = Infinity, serverOffset = null; // serverNow = performance.now() + serverOffset
+let frameCount = 0, fpsWindow = [], hudText = "";
+
+function setState(s) { state = s; renderHud(); }
+function renderHud() {
+  const now = performance.now();
+  fpsWindow = fpsWindow.filter(t => now - t < 1000);
+  let t = `${state}  ${video.videoWidth || 0}x${video.videoHeight || 0}  ${fpsWindow.length} fps`;
+  if (CFG.overlay && latencySamples.length) {
+    const r = latencySamples.slice(-120).sort((a, b) => a - b);
+    t += `  latency p50 ${r[r.length >> 1].toFixed(0)} ms p95 ${r[Math.floor(r.length * .95)].toFixed(0)} ms`;
+  }
+  hud.textContent = t;
+}
+setInterval(renderHud, 500);
+
+// ---- input ----------------------------------------------------------------
+function send(obj, move) {
+  const ch = move ? movCh : relCh;
+  if (ch && ch.readyState === "open") { ch.send(JSON.stringify(obj)); return true; }
+  if (move && relCh && relCh.readyState === "open") { relCh.send(JSON.stringify(obj)); return true; }
+  return false;
+}
+// Displayed rectangle of the video with object-fit: contain, in client coordinates.
+function videoRect() {
+  const r = box.getBoundingClientRect();
+  const vw = video.videoWidth || CFG.width, vh = video.videoHeight || CFG.height;
+  const s = Math.min(r.width / vw, r.height / vh);
+  const w = vw * s, h = vh * s;
+  return { x: r.left + (r.width - w) / 2, y: r.top + (r.height - h) / 2, w, h };
+}
+// Normalized 0..1 position inside the video picture, or null on the letterbox.
+function norm(e) {
+  const v = videoRect();
+  const x = (e.clientX - v.x) / v.w, y = (e.clientY - v.y) / v.h;
+  if (x < 0 || x > 1 || y < 0 || y > 1) return null;
+  return { x, y };
+}
+let moveQueued = null;
+box.addEventListener("pointermove", e => {
+  const p = norm(e); if (!p) return;
+  if (moveQueued) { moveQueued = p; return; }
+  moveQueued = p;
+  requestAnimationFrame(() => { const q = moveQueued; moveQueued = null; send({ t: "mm", x: q.x, y: q.y }, true); });
+});
+box.addEventListener("pointerdown", e => {
+  const p = norm(e); if (!p) return;
+  try { box.setPointerCapture(e.pointerId); } catch (_) {}
+  send({ t: "md", b: e.button, x: p.x, y: p.y }, false); e.preventDefault();
+});
+box.addEventListener("pointerup", e => {
+  const p = norm(e) || { x: undefined, y: undefined };
+  send({ t: "mu", b: e.button, x: p.x, y: p.y }, false); e.preventDefault();
+});
+box.addEventListener("wheel", e => {
+  const p = norm(e); if (!p) return;
+  const k = e.deltaMode === 0 ? 1 / 40 : e.deltaMode === 1 ? 1 : 20;
+  send({ t: "mm", x: p.x, y: p.y }, false); // `wh` carries deltas only; position first, same channel
+  send({ t: "wh", x: e.deltaX * k, y: -e.deltaY * k }, false);
+  e.preventDefault();
+}, { passive: false });
+box.addEventListener("contextmenu", e => e.preventDefault());
+document.addEventListener("contextmenu", e => e.preventDefault());
+function key(e, down) {
+  if (e.isComposing || e.key === "Process") return;
+  if (e.metaKey || e.key === "F5" || e.key === "F12") return;
+  send({ t: down ? "kd" : "ku", code: e.code, key: e.key, r: e.repeat ? 1 : 0 }, false);
+  e.preventDefault();
+}
+document.addEventListener("keydown", e => key(e, true));
+document.addEventListener("keyup", e => key(e, false));
+document.addEventListener("compositionend", e => { if (e.data) send({ t: "tx", s: e.data }, false); });
+window.addEventListener("focus", () => send({ t: "fc", g: 1 }, false));
+window.addEventListener("blur", () => send({ t: "fc", g: 0 }, false));
+
+// ---- latency probe --------------------------------------------------------
+const cv = document.createElement("canvas"); cv.width = 512; cv.height = 16;
+const cx = cv.getContext("2d", { willReadFrequently: true });
+function decodeTimecode() {
+  cx.drawImage(video, 0, 0, 512, 16, 0, 0, 512, 16);
+  const d = cx.getImageData(0, 0, 512, 16).data;
+  let v = 0;
+  for (let i = 0; i < 32; i++) {
+    const o = (8 * 512 + 16 * i + 8) * 4;
+    const y = 0.2126 * d[o] + 0.7152 * d[o + 1] + 0.0722 * d[o + 2];
+    v = v * 2 + (y >= 128 ? 1 : 0);
+  }
+  return v >>> 0;
+}
+function onFrame(now) {
+  frameCount++; fpsWindow.push(now);
+  if (CFG.overlay && serverOffset !== null && video.videoWidth >= 512) {
+    const cap = decodeTimecode();
+    const srv = Math.floor(now + serverOffset) >>> 0;
+    const ms = (srv - cap) >>> 0;
+    if (ms < 5000) latencySamples.push(ms);
+  }
+  if (video.requestVideoFrameCallback) video.requestVideoFrameCallback(onFrame);
+}
+
+function onPong(m) {
+  const now = performance.now(), rtt = now - m.c;
+  if (rtt < bestRtt) { bestRtt = rtt; serverOffset = m.s + rtt / 2 - now; }
+}
+function startPing() {
+  const tick = () => { if (relCh && relCh.readyState === "open") relCh.send(JSON.stringify({ t: "ping", c: performance.now() })); };
+  let n = 0;
+  const id = setInterval(() => { tick(); if (++n > 600 || !pc) clearInterval(id); }, 200);
+  tick();
+}
+
+// ---- connection -----------------------------------------------------------
+function preferH264(tr) {
+  const caps = RTCRtpReceiver.getCapabilities && RTCRtpReceiver.getCapabilities("video");
+  if (!caps || !tr.setCodecPreferences) return;
+  const h = caps.codecs.filter(c => c.mimeType.toLowerCase() === "video/h264");
+  const exact = h.filter(c => /profile-level-id=42e01f/i.test(c.sdpFmtpLine || "") && /packetization-mode=1/.test(c.sdpFmtpLine || ""));
+  const pick = exact.length ? exact : h;
+  if (pick.length) tr.setCodecPreferences(pick);
+}
+async function connect() {
+  if (pc) { try { pc.close(); } catch (_) {} }
+  setState("connecting");
+  btn.classList.add("hide");
+  const p = pc = new RTCPeerConnection({ iceServers: [] });
+  const vt = p.addTransceiver("video", { direction: "recvonly" });
+  const at = p.addTransceiver("audio", { direction: "recvonly" });
+  preferH264(vt);
+  for (const r of [vt.receiver, at.receiver]) {
+    try { if ("jitterBufferTarget" in r) r.jitterBufferTarget = 0; } catch (_) {}
+    try { if ("playoutDelayHint" in r) r.playoutDelayHint = 0; } catch (_) {}
+  }
+  relCh = p.createDataChannel("input-reliable", { ordered: true });
+  movCh = p.createDataChannel("input-move", { ordered: false, maxRetransmits: 0 });
+  relCh.onopen = () => { send({ t: "fc", g: document.hasFocus() ? 1 : 0 }, false); startPing(); };
+  relCh.onmessage = ev => { try { const m = JSON.parse(ev.data); if (m.t === "pong") onPong(m); } catch (_) {} };
+  p.ontrack = e => {
+    // One MediaStream for both tracks, even if the answer carries no usable stream id.
+    if (!(video.srcObject instanceof MediaStream)) video.srcObject = new MediaStream();
+    video.srcObject.addTrack(e.track);
+    video.play().catch(() => {});
+  };
+  p.onconnectionstatechange = () => {
+    setState(p.connectionState);
+    if (p.connectionState === "failed" || p.connectionState === "closed") btn.classList.remove("hide");
+  };
+  await p.setLocalDescription(await p.createOffer());
+  await new Promise(res => {
+    if (p.iceGatheringState === "complete") return res();
+    const t = setTimeout(res, 1500);
+    p.onicegatheringstatechange = () => { if (p.iceGatheringState === "complete") { clearTimeout(t); res(); } };
+  });
+  sdp.offer = p.localDescription.sdp;
+  const r = await fetch("offer", { method: "POST", headers: { "content-type": "application/sdp" }, body: p.localDescription.sdp });
+  if (!r.ok) { setState("offer rejected: " + await r.text()); btn.classList.remove("hide"); return; }
+  sdp.answer = await r.text();
+  await p.setRemoteDescription({ type: "answer", sdp: sdp.answer });
+  if (video.requestVideoFrameCallback) video.requestVideoFrameCallback(onFrame);
+}
+btn.addEventListener("click", () => { connect().catch(e => { setState("error: " + e); btn.classList.remove("hide"); }); });
+
+// ---- test hooks -----------------------------------------------------------
+window.__stream = {
+  config: CFG,
+  connect,
+  sendInput: obj => send(obj, obj && obj.t === "mm"),
+  latency: () => latencySamples.slice(),
+  state: () => state,
+  stats: async () => {
+    const q = video.getVideoPlaybackQuality ? video.getVideoPlaybackQuality() : {};
+    const o = { state, videoWidth: video.videoWidth, videoHeight: video.videoHeight,
+      totalVideoFrames: q.totalVideoFrames, droppedVideoFrames: q.droppedVideoFrames,
+      framesSeen: frameCount, serverOffset, bestRtt, paused: video.paused, rtp: {} };
+    if (pc) {
+      try {
+        (await pc.getStats()).forEach(s => {
+          if (s.type === "inbound-rtp") o.rtp[s.kind] = { packets: s.packetsReceived, lost: s.packetsLost, bytes: s.bytesReceived,
+            frames: s.framesDecoded, keyFrames: s.keyFramesDecoded, jitterBufferDelay: s.jitterBufferDelay, jitterBufferEmitted: s.jitterBufferEmittedCount,
+            codec: s.codecId, totalAudioEnergy: s.totalAudioEnergy, concealed: s.concealedSamples };
+        });
+      } catch (_) {}
+    }
+    return o;
+  },
+  sdp,
+  pc: () => pc,
+  video,
+};
+</script>
+</body>
+</html>

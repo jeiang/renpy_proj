@@ -298,6 +298,15 @@ impl Server {
 - Latency probe: with `latency_overlay` the server calls `encode::burn_timecode` on each frame it encodes with `capture_ms` = low 32 bits of its monotonic millisecond clock at push time, and answers `ping`. The page decodes the cells of each rendered frame (`requestVideoFrameCallback`, canvas read of the first 32 cells), estimates the server clock with the lowest-RTT pong (`serverNow = s + rtt/2`), and records `serverNow(at callback) - capture_ms`.
 - The crate has an example `examples/testpattern.rs` (synthetic moving frames and a tone through `Server`, same code path as the player) and `harness/stream_probe.py` (Playwright from `nix shell`) that opens the page headless, connects, checks that video frames decode, audio samples arrive (Web Audio analyser), that a `kd` message reaches the `input` callback, and prints the latency table.
 
+Details fixed by the implementation (no interface change):
+
+- Crypto backend: `aws-lc-rs` on macOS and Linux (builds in the Nix shell), `wincrypto` on Windows. `apple-crypto` was tried and rejected: it needs Xcode's Swift toolchain, which cannot build inside the Nix shell (SDK/compiler mismatch).
+- UDP: for a wildcard bind the server binds one UDP socket per IPv4 interface address (same port number as HTTP) and one reader thread per socket. str0m needs the local address each datagram arrived on and a plain wildcard socket does not report it. Interfaces that appear after `Server::start` are not served.
+- `Stats` also has `frames_replaced` (newest-wins drops), `frames_gated` (gate said unchanged), `keepalives`, `audio_packets`, `sessions`, `gate_ms` and `encode_ms` (moving averages). Idle repeats: after a burst of changed frames the last picture is sent once more after 2 frame periods, because the browser decoder shows a frame only when the next one arrives (without it the final frame of an animation appears up to 1 s late).
+- Messages: `wh` carries only deltas (`x`,`y` are the deltas); the page sends an `mm` first on the same channel. Wheel deltas are pygame-style lines: positive `y` scrolls up, positive `x` right (the page converts from DOM units, pixels/40). `InputEvent::Wheel` passes them unchanged. `md`/`mu` carry `x`,`y`; the server emits `MouseMove` then `MouseButton`.
+- The answer SDP is rewritten so audio and video share one stream id (str0m picks random ids per m-line); the page also puts both tracks in one `MediaStream`.
+- Page: `?hud=0` hides the status line; `window.__stream` also has `connect()`, `state()`, `sdp`, `pc()`, `video`.
+
 ## `player serve` and the library button (owner: orchestrator)
 
 ```
