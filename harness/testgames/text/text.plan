@@ -1,0 +1,51 @@
+# Text game route: menu, New Game, then one shot per case screen (say 2 to 11). Each screen is still; the say line holds it.
+# Ops: see harness/README.md "Plans".
+cmd auto on
+cmd click on
+wait menu True
+cmd click off
+settle 3
+shot 01-menu
+cmd start
+after_start
+cmd advance-to 2
+wait advance-done
+settle 3
+shot 02-kerning
+cmd advance-to 3
+wait advance-done
+settle 3
+shot 03-features
+cmd advance-to 4
+wait advance-done
+settle 3
+shot 04-rtl
+cmd advance-to 5
+wait advance-done
+settle 3
+shot 05-rtl-wrap
+cmd advance-to 6
+wait advance-done
+settle 3
+shot 06-outlines
+cmd advance-to 7
+wait advance-done
+settle 3
+shot 07-sizes
+cmd advance-to 8
+wait advance-done
+settle 3
+shot 08-variable
+cmd advance-to 9
+wait advance-done
+settle 3
+shot 09-markup
+cmd advance-to 10
+wait advance-done
+settle 3
+shot 10-layout
+cmd advance-to 11
+wait advance-done
+settle 3
+shot 11-subtitle
+quit

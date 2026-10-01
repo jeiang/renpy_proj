@@ -213,6 +213,13 @@ def main():
         elif a.host == "mac":
             lan = [u for u in urls if "127.0.0.1" not in u and "//100." not in u] or urls
             url = lan[0]
+        # Fail fast with a clear cause. On macOS every newly built (ad hoc signed) binary triggers the application
+        # firewall prompt once: until someone clicks Allow, connections to its LAN address hang.
+        try:
+            urllib.request.urlopen(url, timeout=10).read(1)
+        except Exception as e:
+            raise RuntimeError("the stream page %s does not load within 10 s (%r): connection refused or blocked. "
+                               "On macOS check the application firewall: allow incoming connections for the player binary" % (url, e))
         res["opened"] = url
         with sync_playwright() as p:
             if a.browser == "chromium":

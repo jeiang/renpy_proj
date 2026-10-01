@@ -48,6 +48,10 @@ Which artemis encoder ran is not recorded: the gate did not save the server's `/
 3. **Input mapping.** Pointer positions map to the size of the frame being encoded (the game chose 1738x978), not to the `--size` option.
 4. Flush frames (a repeat 2 frame periods after a change, so the decoder releases the last picture) keep the picture's timecode, and the page counts each timecode once; otherwise the 1 s display delay of the repeat showed up as latency.
 
+## macOS firewall
+
+Every newly built, ad hoc signed `player` binary triggers the macOS application firewall prompt ("accept incoming connections") once. Until someone clicks Allow, connections to the LAN address of the stream hang (accepted by the kernel, never served) while loopback works, and the gate fails at the page load. This looked like a code regression on a fresh main build (Page.goto timeout after 30 s) and was not one: the same sources served at once after the prompt was approved. The gate now checks that the page loads within 10 s and fails with a message that names the firewall. Artemis has no such prompt.
+
 ## Not done or not covered
 
 - No readback-free path (above). The measured cost is small at 1080p: 0.04 to 0.2 ms on the game thread.

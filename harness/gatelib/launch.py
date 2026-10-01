@@ -41,8 +41,12 @@ def main_repo():
 
 
 def resolve(path):
+    """Absolute paths stay. `harness/...` is relative to the checkout that holds this harness (the synthetic games are
+    committed there); any other relative path is relative to the main checkout (ignored corpus/ and SDKs)."""
     p = pathlib.Path(os.path.expanduser(path))
-    return p if p.is_absolute() else main_repo() / p
+    if p.is_absolute():
+        return p
+    return HARNESS.parent / p if p.parts[:1] == ("harness",) else main_repo() / p
 
 
 def load_corpus():

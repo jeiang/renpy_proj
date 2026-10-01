@@ -1,0 +1,8 @@
+# Port patch for the python block of game/script.rpy: Python 3 has no str.decode.
+[[patch]]
+file = "game/script.rpy"
+line = 17
+original_hash = "sha1:0000000000"
+source = '''
+shown = u"cafe"
+'''
