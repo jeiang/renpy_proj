@@ -1,7 +1,9 @@
-"""One game launch under research/CONVENTIONS.md: machine lock, APFS clone, scratch saves, plan replay, SIGKILL sweep.
+"""One game launch under research/CONVENTIONS.md: machine lock, clone, scratch saves, plan replay, SIGKILL sweep.
 
 `launch()` is the only place that starts a game process. Stock engines get zz_harness.rpy copied into the clone's
-game/ folder; the player gets it through `--harness-script` (it must not write into a game folder).
+game/ folder; the player gets it through `--harness-script` (it must not write into a game folder). Everything that
+differs per host (window lookup and capture, clone command, environment, `gamemoderun`, the save root that must stay
+untouched) is in `plat.py`.
 """
 import hashlib
 import os
@@ -13,15 +15,13 @@ import sys
 import time
 import tomllib
 
+from . import plat
 from . import stages as ST
 
 HARNESS = pathlib.Path(__file__).resolve().parents[1]
 LOCK = "/tmp/renpy_proj.run.lock"
 SYNC_CLIP_NAME = "harness_av_sync.webm"
 RPY = HARNESS / "rpy" / "zz_harness.rpy"
-WINTOOL_SRC = HARNESS / "tools" / "wintool.swift"
-WINTOOL = HARNESS / "bin" / "wintool"
-CLEAN_ENV_PATH = "/usr/bin:/bin:/usr/sbin:/sbin"
 
 
 def work_dir():
@@ -45,17 +45,20 @@ def resolve(path):
 
 
 def load_corpus():
+    """corpus.toml. On Linux a `linux_<key>` entry of a game replaces `<key>` (source, engine, exe, ...), so one file
+    holds the macOS and the Linux corpus."""
     with open(HARNESS / "corpus.toml", "rb") as f:
-        return tomllib.load(f)
-
-
-def sysctl_loadavg():
-    return subprocess.run(["sysctl", "-n", "vm.loadavg"], capture_output=True, text=True).stdout.strip()
+        c = tomllib.load(f)
+    if sys.platform.startswith("linux"):
+        for g in c["games"].values():
+            for k in [k for k in g if k.startswith("linux_")]:
+                g[k[len("linux_"):]] = g.pop(k)
+    return c
 
 
 def library_hash():
-    """Sorted listing (path, size, mtime) of ~/Library/RenPy, hashed. Games must never touch it."""
-    root = pathlib.Path.home() / "Library" / "RenPy"
+    """Sorted listing (path, size, mtime) of the host's Ren'Py save root (~/Library/RenPy, ~/.renpy), hashed. Games must never touch it."""
+    root = plat.get().save_root
     rows = []
     for dp, _dn, fn in os.walk(root):
         for f in fn:
@@ -80,17 +83,6 @@ def sweep(pattern):
         if not pgrep(pattern):
             return True
     return False
-
-
-def ensure_wintool():
-    if WINTOOL.exists() and WINTOOL.stat().st_mtime >= WINTOOL_SRC.stat().st_mtime:
-        return WINTOOL
-    WINTOOL.parent.mkdir(exist_ok=True)
-    env = {"PATH": CLEAN_ENV_PATH, "HOME": os.environ["HOME"]}   # the Nix shell's SDKROOT breaks the system swiftc
-    r = subprocess.run(["/usr/bin/swiftc", "-O", str(WINTOOL_SRC), "-o", str(WINTOOL)], capture_output=True, text=True, env=env)
-    if r.returncode != 0:
-        raise RuntimeError("swiftc failed: " + r.stderr[-500:])
-    return WINTOOL
 
 
 STALE_NO_OWNER_S = 1800   # a lock dir with no owner file (an older harness, a shell user) is stale after 30 min
@@ -386,37 +378,13 @@ class Run:
             time.sleep(0.1)
 
     def _pick_window(self):
-        """-> (window id, pids). Largest window of the run's pids: on-screen ones first, else any titled one."""
-        wt = ensure_wintool()
+        """-> (window id, pids): the game's window among the processes of this run."""
         pids = pgrep(self.pattern)
-        best = {}
-        for ln in (subprocess.run([str(wt), "list"] + pids, capture_output=True, text=True).stdout.splitlines() if pids else []):
-            w = ln.split()
-            try:
-                area = float(w[3]) * float(w[4])
-            except (IndexError, ValueError):
-                continue
-            rank = 2 if w[2] == "1" else (1 if len(w) > 5 else 0)
-            if rank and area > 0 and area > best.get(rank, (0, None))[0]:
-                best[rank] = (area, w[0])
-        for rank in (2, 1):
-            if rank in best:
-                return best[rank][1], pids
-        return None, pids
-
-    @staticmethod
-    def _png_size(f):
-        r = subprocess.run(["/usr/bin/sips", "-g", "pixelWidth", "-g", "pixelHeight", str(f)], capture_output=True, text=True).stdout.split()
-        return (r[-3], r[-1]) if len(r) >= 4 else None
+        return (plat.get().pick_window(pids) if pids else None), pids
 
     def window_state(self, wid):
-        """-> dict from `wintool info`: pid, onscreen (0|1), front (windows in front), visible (0..1), covered_by."""
-        out = subprocess.run([str(ensure_wintool()), "info", str(wid)], capture_output=True, text=True).stdout.split()
-        if len(out) < 2 or out[0] == "gone":
-            return {"onscreen": 0, "visible": 0.0, "covered_by": "", "gone": True}
-        st = dict(zip(out[0::2], out[1::2]))
-        return {"pid": int(st["pid"]), "onscreen": int(st["onscreen"]), "front": int(st["front"]),
-                "visible": float(st["visible"]), "covered_by": st.get("covered_by", "")}
+        """-> dict from the platform layer: pid, onscreen (0|1), front (windows in front), visible (0..1), covered_by."""
+        return plat.get().window_state(wid)
 
     def window_problem(self, wid):
         """-> None when the window is on screen and not hidden, else a short reason. The player skips presents while its
@@ -429,12 +397,8 @@ class Run:
         return None
 
     def raise_window(self, wid):
-        """Bring the game's own process to the front (System Events, by unix id; no input is sent)."""
-        st = self.window_state(wid)
-        if st.get("pid"):
-            subprocess.run(["/usr/bin/osascript", "-e", 'tell application "System Events" to set frontmost of (first process whose unix id is %d) to true' % st["pid"]],
-                           capture_output=True, timeout=20)
-            time.sleep(1.5)
+        """Bring the game's own process to the front (no input is sent)."""
+        plat.get().raise_window(wid)
 
     def op_shot(self, arg):
         name, _, flag = arg.partition(" ")
@@ -456,11 +420,9 @@ class Run:
             if why:
                 rec["error"] = "window covered: " + why
                 break
-            f.unlink(missing_ok=True)
-            subprocess.run(["/usr/sbin/screencapture", "-x", "-o", "-l" + wid, str(f)])
-            if not (f.exists() and f.stat().st_size > 0):
+            if not plat.get().capture(wid, f):
                 continue
-            size = self._png_size(f)
+            size = plat.png_size(f)
             if self.size is None:
                 self.size = size
             if size == self.size:
@@ -590,9 +552,7 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
     clone = top / "clone" / src.name
     if not clone.exists():
         (top / "clone").mkdir(parents=True, exist_ok=True)
-        subprocess.run(["/bin/cp", "-Rc", str(src), str(clone)], check=True)   # APFS clone: no disk, no copy
-        if clone.suffix == ".app":
-            subprocess.run(["xattr", "-dr", "com.apple.quarantine", str(clone)], capture_output=True)
+        plat.get().clone(src, clone)   # APFS clone (macOS) or btrfs reflink (Linux): no disk, no copy
     base = (clone / g.get("base", ".")).resolve()
     for f in ("log.txt", "traceback.txt", "errors.txt"):
         (base / f).unlink(missing_ok=True)
@@ -631,9 +591,9 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
         shutil.copy(RPY, base / "game" / "zz_harness.rpy")
     argv = engine_argv(ctx, engine, clone, base, data, saves, renpy_args)
     pattern = str(top)
-    # Games run outside the Nix shell's toolchain environment: its SDKROOT, PYTHON* and NIX_* would leak into them.
-    env = {k: v for k, v in os.environ.items() if not k.startswith(("NIX_", "PYTHON", "DYLD_", "LD_")) and k not in ("SDKROOT", "DEVELOPER_DIR")}
-    env.update(PATH=CLEAN_ENV_PATH, RENPY_PATH_TO_SAVES=str(saves), HARNESS_DIR=str(hz))
+    # Games run outside the Nix shell's toolchain environment (plat.game_env).
+    env = plat.get().game_env(os.environ)
+    env.update(RENPY_PATH_TO_SAVES=str(saves), HARNESS_DIR=str(hz))
     # The compat notice is drawn over the game; stock has none, so it would show up in frame diffs. The fix is
     # still recorded in the player's runtime.jsonl.
     env["PLAYER_COMPAT_NOTICE"] = "off"
@@ -650,10 +610,10 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
     run = None
     try:
         before = library_hash()
-        res["loadavg"] = sysctl_loadavg()
+        res["loadavg"] = plat.get().loadavg()
         stdout = open(out / "stdout.log", "w")
         t0 = time.time()
-        proc = subprocess.Popen(argv, stdout=stdout, stderr=subprocess.STDOUT, env=env, cwd=str(clone))
+        proc = subprocess.Popen(plat.get().wrap(argv), stdout=stdout, stderr=subprocess.STDOUT, env=env, cwd=str(clone))
         run = Run(proc, hz, base, out / "shots", pattern, res["plan_log"], g.get("after_start", ()), ctx.opts.get("min_visible", 0.8), st_table, g.get("volatile_shots", ()))
         try:
             if plan:
