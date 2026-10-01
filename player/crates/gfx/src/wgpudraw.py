@@ -354,6 +354,21 @@ class Texture(GL2Model):
 
         mipmap = bool(self.properties["mipmap"])
 
+        if self.width <= 0 or self.height <= 0 or min(self.surface.get_size()) <= 0:
+
+            # A zero-size surface becomes an empty texture, as in stock GL2. The mesh has no area, so nothing is
+            # drawn; wgpu cannot allocate a texture with a zero side, so the GPU texture is 1x1 and transparent.
+            mipmap = False
+            self.properties["mipmap"] = False
+            self.handle = self.loader.draw.gpu.new_texture(1, 1, False)
+
+            self.texture_width = 1
+            self.texture_height = 1
+            self.default_min_filter = GL_LINEAR
+            self.loaded = True
+            self.surface = None
+            return
+
         self.handle = self.loader.draw.gpu.texture_from_surface(
             self.surface,
             bool(self.properties.get("premultiplied", False)),
@@ -839,8 +854,24 @@ class WgpuDraw(object):
         px_padding = pwidth - view_width
         py_padding = pheight - view_height
 
-        x_padding = px_padding * vwidth / view_width
-        y_padding = py_padding * vheight / view_height
+        # Ren'Py 7 divides these integers with Python 2 `/` (floor). Ren'Py 8 divides them true, which puts the picture
+        # half a physical pixel to the right or down when the padding is odd (`px_padding / 2` is 0.5, not 0).
+        try:
+            import _player.compat
+            floor_div = _player.compat.active
+        except ImportError:
+            floor_div = False
+
+        if floor_div:
+            x_padding = px_padding * vwidth // view_width
+            y_padding = py_padding * vheight // view_height
+            px_half = px_padding // 2
+            py_half = py_padding // 2
+        else:
+            x_padding = px_padding * vwidth / view_width
+            y_padding = py_padding * vheight / view_height
+            px_half = px_padding / 2
+            py_half = py_padding / 2
 
         # The position of the physical screen, in virtual pixels
         # (x, y, w, h). Since the physical screen will always contain
@@ -855,8 +886,8 @@ class WgpuDraw(object):
         # The location of the virtual screen on the physical screen, in
         # physical pixels.
         self.physical_box = (
-            px_padding / 2,
-            py_padding / 2,
+            px_half,
+            py_half,
             pwidth - px_padding,
             pheight - py_padding,
             )
@@ -1190,7 +1221,7 @@ class WgpuDraw(object):
             w = int(surf.width * self.draw_per_virt)
             h = int(surf.height * self.draw_per_virt)
             target = self.gpu.new_texture(max(w, 1), max(h, 1), False)
-            self.gpu.begin_pass(target, (0, 0, w, h), (clear_r, clear_g, clear_b, 0.0), True)
+            self.gpu.begin_pass(target, (0, 0, max(w, 1), max(h, 1)), (clear_r, clear_g, clear_b, 0.0), True)
             transform = Matrix.screen_projection(surf.width, surf.height)
         else:
             target = None
@@ -1457,7 +1488,7 @@ class WgpuDraw(object):
 
     def _blank_surface(self, w, h):
         target = self.gpu.new_texture(max(int(w), 1), max(int(h), 1), False)
-        self.gpu.begin_pass(target, (0, 0, w, h), (0.0, 0.0, 0.0, 0.0), True)
+        self.gpu.begin_pass(target, (0, 0, max(int(w), 1), max(int(h), 1)), (0.0, 0.0, 0.0, 0.0), True)
         self.gpu.end_pass()
         return self.gpu.read_surface(target, True)
 
