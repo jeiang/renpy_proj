@@ -157,10 +157,15 @@ fn accept(data: &Path, key: &str, id: &str) -> Result<i32> {
         bail!("{} has errors; not accepted", file.display());
     }
     let side = patches::sidecar_path(&file);
-    let text = std::fs::read_to_string(&side)
-        .with_context(|| format!("{} has no sidecar ({}): it is already active", id, side.display()))?;
-    let mut meta: serde_json::Value =
-        serde_json::from_str(&text).with_context(|| format!("unreadable sidecar {}", side.display()))?;
+    let text = std::fs::read_to_string(&side).with_context(|| {
+        format!(
+            "{} has no sidecar ({}): it is already active",
+            id,
+            side.display()
+        )
+    })?;
+    let mut meta: serde_json::Value = serde_json::from_str(&text)
+        .with_context(|| format!("unreadable sidecar {}", side.display()))?;
     match meta["state"].as_str() {
         Some("proposed") => {}
         Some("accepted") => {

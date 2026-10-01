@@ -4,6 +4,7 @@
 //! Ren'Py 8.5.3, so `renpy/audio/audio.py` runs unchanged.
 
 use std::sync::atomic::Ordering;
+use std::time::Instant;
 
 use parking_lot::Mutex;
 use pyo3::exceptions::{PyException, PyValueError};
@@ -545,16 +546,96 @@ fn set_generate_audio_c_function(py: Python<'_>, r#fn: &Bound<'_, PyAny>) -> PyR
 #[pyfunction]
 fn sample_surfaces(_rgb: &Bound<'_, PyAny>, _rgba: &Bound<'_, PyAny>) {}
 
+/// Tap statistics for tests: env `PLAYER_TEST_INJECT=1` only.
+static TAP_STATS: parking_lot::Mutex<TapStats> = parking_lot::Mutex::new(TapStats::new());
+
+struct TapStats {
+    chunks: u64,
+    frames: u64,
+    nonzero: u64,
+    max_abs: f32,
+    last: Option<Instant>,
+    gaps_ms: Vec<f64>,
+    sizes: Vec<usize>,
+}
+
+impl TapStats {
+    const fn new() -> Self {
+        TapStats {
+            chunks: 0,
+            frames: 0,
+            nonzero: 0,
+            max_abs: 0.0,
+            last: None,
+            gaps_ms: Vec::new(),
+            sizes: Vec::new(),
+        }
+    }
+}
+
+/// Installs a tap that counts chunks, frames and non-zero samples.
+#[pyfunction]
+fn _tap_install_for_test(py: Python<'_>) -> PyResult<()> {
+    if !std::env::var("PLAYER_TEST_INJECT").is_ok_and(|v| v == "1") {
+        return Err(PyValueError::new_err(
+            "_tap_install_for_test needs PLAYER_TEST_INJECT=1",
+        ));
+    }
+    let _ = py;
+    *TAP_STATS.lock() = TapStats::new();
+    device::set_pcm_tap(Some(Box::new(|pcm: &[f32]| {
+        let now = Instant::now();
+        let mut s = TAP_STATS.lock();
+        s.chunks += 1;
+        s.frames += (pcm.len() / 2) as u64;
+        s.nonzero += pcm.iter().filter(|v| **v != 0.0).count() as u64;
+        s.max_abs = pcm.iter().fold(s.max_abs, |m, v| m.max(v.abs()));
+        if let Some(l) = s.last {
+            s.gaps_ms.push(now.duration_since(l).as_secs_f64() * 1000.0);
+        }
+        s.last = Some(now);
+        if s.sizes.len() < 4096 {
+            s.sizes.push(pcm.len() / 2);
+        }
+    })));
+    Ok(())
+}
+
+/// `(chunks, frames, nonzero samples, max abs, mean gap ms, max gap ms, std gap ms, distinct chunk sizes, rate)`.
+#[pyfunction]
+fn _tap_stats_for_test() -> (u64, u64, u64, f32, f64, f64, f64, Vec<usize>, u32) {
+    let s = TAP_STATS.lock();
+    let n = s.gaps_ms.len().max(1) as f64;
+    let mean = s.gaps_ms.iter().sum::<f64>() / n;
+    let var = s.gaps_ms.iter().map(|g| (g - mean).powi(2)).sum::<f64>() / n;
+    let max = s.gaps_ms.iter().fold(0.0f64, |m, g| m.max(*g));
+    let mut sizes = s.sizes.clone();
+    sizes.sort_unstable();
+    sizes.dedup();
+    (
+        s.chunks,
+        s.frames,
+        s.nonzero,
+        s.max_abs,
+        mean,
+        max,
+        var.sqrt(),
+        sizes,
+        device::mixer_rate(),
+    )
+}
+
 #[pymodule]
 #[pyo3(name = "renpysound")]
 pub mod renpysound {
     #[pymodule_export]
     use super::{
-        advance_time, busy, check_error, deallocate_audio_filter, dequeue, fadeout, get_duration,
-        get_pos, get_sample_rate, get_volume, global_pause, init, pause, periodic, play,
-        playing_name, queue, queue_depth, quit, read_video, replace_audio_filter, sample_surfaces,
-        set_channel_count, set_generate_audio_c_function, set_pan, set_secondary_volume, set_video,
-        set_volume, stop, unpause, video_ready,
+        _tap_install_for_test, _tap_stats_for_test, advance_time, busy, check_error,
+        deallocate_audio_filter, dequeue, fadeout, get_duration, get_pos, get_sample_rate,
+        get_volume, global_pause, init, pause, periodic, play, playing_name, queue, queue_depth,
+        quit, read_video, replace_audio_filter, sample_surfaces, set_channel_count,
+        set_generate_audio_c_function, set_pan, set_secondary_volume, set_video, set_volume, stop,
+        unpause, video_ready,
     };
 
     #[pymodule_export]

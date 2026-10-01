@@ -70,6 +70,7 @@ def parse():
     r.add_argument("--deep-confirm", choices=["yes", "no"], default="yes", help="deep tier: replay each error on the stock engine")
     r.add_argument("--with-proposed", action="store_true", help="player: also load proposed (not yet accepted) patches (PLAYER_PATCHES_PROPOSED=1)")
     r.add_argument("--seed-data", help="player: dir copied into every launch's scratch --data (a patch library to test)")
+    r.add_argument("--env", action="append", default=[], metavar="KEY=VALUE", help="add an environment variable to every game launch (for example MESA_LOADER_DRIVER_OVERRIDE=zink)")
     r.add_argument("--lock-timeout", type=int, default=7200)
     d = sub.add_parser("diff")
     d.add_argument("--a", required=True)
@@ -98,11 +99,12 @@ def cmd_run(a):
     out = pathlib.Path(a.out).resolve()
     out.mkdir(parents=True, exist_ok=True)
     (out / "checks").mkdir(exist_ok=True)
-    opts = {k: v for k, v in vars(a).items() if k not in ("cmd", "engine", "game", "tier", "out", "only")}
+    opts = {k: v for k, v in vars(a).items() if k not in ("cmd", "engine", "game", "tier", "out", "only", "env")}
     opts["stock_engine"] = a.stock_engine
     opts["player_bin"] = a.player_bin
+    opts["extra_env"] = dict(kv.split("=", 1) for kv in a.env)
     if a.with_proposed:
-        opts["extra_env"] = {"PLAYER_PATCHES_PROPOSED": "1"}
+        opts["extra_env"]["PLAYER_PATCHES_PROPOSED"] = "1"
     ctx = L.Ctx(key, game, a.engine, out, opts)
     names = a.only.split(",") if a.only else checks.TIERS[a.tier]
     ctx.cleanup()

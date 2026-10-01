@@ -60,7 +60,7 @@ fn set_visible(visible: bool) {
 
 #[pyfunction]
 fn get_focused() -> bool {
-    evloop::INPUT.lock().mouse_focus
+    crate::headless::is_headless() || evloop::INPUT.lock().mouse_focus
 }
 
 /// SDL1 bitmap cursors are not supported. `ColorCursor` covers the Ren'Py use.
@@ -87,7 +87,7 @@ fn get_cursor() -> Option<Py<PyAny>> {
 /// A cursor built from a surface. `activate` makes it the window cursor.
 #[pyclass(module = "renpy.pygame.mouse", unsendable)]
 struct ColorCursor {
-    cursor: CustomCursor,
+    cursor: Option<CustomCursor>,
     id: usize,
 }
 
@@ -103,8 +103,14 @@ impl ColorCursor {
         };
         let source = CustomCursor::from_rgba(rgba, w16, h16, x, y)
             .map_err(|e| util::pg_error(py, &format!("bad cursor image: {e}")))?;
-        let cursor = evloop::on_loop(move |el| el.create_custom_cursor(source))
-            .map_err(|e| util::pg_error(py, &format!("cannot create the cursor: {e}")))?;
+        let cursor = if crate::headless::is_headless() {
+            None
+        } else {
+            Some(
+                evloop::on_loop(move |el| el.create_custom_cursor(source))
+                    .map_err(|e| util::pg_error(py, &format!("cannot create the cursor: {e}")))?,
+            )
+        };
         Ok(Self {
             cursor,
             id: NEXT_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
@@ -115,8 +121,8 @@ impl ColorCursor {
         let mut active = ACTIVE_CURSOR.lock();
         if *active != Some(self.id) {
             *active = Some(self.id);
-            if let Some(w) = evloop::window() {
-                w.set_cursor(self.cursor.clone());
+            if let (Some(w), Some(c)) = (evloop::window(), &self.cursor) {
+                w.set_cursor(c.clone());
             }
         }
     }

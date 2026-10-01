@@ -9,3 +9,5 @@ research/*/upstream/
 /corpus/
 # Per-ticket git worktrees; leftovers cleaned up by the user at session end.
 /.worktrees/
+# Mesa source for the anisotropy investigation (re-fetched by hand, see harness/testgames/aniso/README.md)
+research/mesa-src/
