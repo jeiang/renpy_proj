@@ -9,6 +9,7 @@ Two parts, both held while a game runs:
 import fcntl
 import os
 import re
+import shutil
 import sys
 import time
 
@@ -51,25 +52,28 @@ def _write_owner(pid, body):
         f.write("pid=%d\nstart=%s\n%s\n" % (pid, time.strftime("%Y-%m-%dT%H:%M:%S%z"), body))
 
 
+NO_OWNER_S = 5   # a dir with no owner file this old: its creator died between mkdir and the owner file (that takes microseconds)
+
+
 def _remove_dead_dir():
-    """Called with the flock held, on a dir that exists. Remove it only when its owner pid is dead. The dir is checked
-    again right before the removal; rmdir fails on a dir that still has files, and only `owner` is unlinked."""
+    """Called with the flock held, on a dir that exists. Remove it when its owner pid is dead, or when it has no owner
+    file for NO_OWNER_S s. Wait on a dir whose owner pid is alive. rmtree tolerates a dir that vanishes meanwhile
+    (an old-protocol taker may rename it aside at the same moment)."""
     owner = read_owner()
-    if not owner or owner["pid"] is None or pid_alive(owner["pid"]):
-        return   # alive, or no owner yet (its creator is between mkdir and the owner file): wait
-    try:
-        ino = os.stat(LOCK_DIR).st_ino
-    except OSError:
-        return
-    again = read_owner()
-    if not again or again["pid"] != owner["pid"] or os.stat(LOCK_DIR).st_ino != ino:
-        return
-    _log("removed the dir of dead owner pid %d (%s)" % (owner["pid"], owner["text"].replace("\n", " ")))
-    try:
-        os.unlink(os.path.join(LOCK_DIR, "owner"))
-        os.rmdir(LOCK_DIR)
-    except OSError:
-        pass
+    if owner and owner["pid"] is not None:
+        if pid_alive(owner["pid"]):
+            return
+        why = "dead owner pid %d (%s)" % (owner["pid"], owner["text"].replace("\n", " "))
+    else:
+        try:
+            age = time.time() - os.stat(LOCK_DIR).st_mtime
+        except OSError:
+            return
+        if age < NO_OWNER_S:
+            return
+        why = "no owner file for %.0f s" % age
+    _log("removed the dir of " + why)
+    shutil.rmtree(LOCK_DIR, ignore_errors=True)
 
 
 def take(timeout, cmd=None):
