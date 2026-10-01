@@ -11,6 +11,8 @@ init python:
             return self.v * 2
 
     def synth_check_loaded():
+        if not state_ready:   # a save made before case_state holds the defaults
+            return
         bad = []
         if saved_long != 2 ** 70:
             bad.append("long")
@@ -33,6 +35,7 @@ init python:
 
     config.after_load_callbacks.append(synth_check_loaded)
 
+default state_ready = False
 default saved_long = 0
 default saved_bytes = ""
 default saved_uni = u""
@@ -52,6 +55,7 @@ label case_state:
         saved_dict = {"k": [1, 2], u"u": (3, 4)}
         saved_od = collections.OrderedDict([("x", 1), ("y", 2)])
         saved_tuple = (1, 2.5, None, True)
+        state_ready = True
         synth_check_loaded()
         state_sum = "%d %d %d" % (len(saved_bytes) > 0, len(saved_set), saved_old.double())
     e "Saved state is ready: [state_sum]."

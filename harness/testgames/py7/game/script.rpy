@@ -29,13 +29,13 @@ label start:
     if mode != "none":
         call case_math
     if mode == "all":
+        call case_state
         call case_containers
         call case_classes
         call case_exec
         call case_syntax_values
         call case_ordering
         call case_legacy
-        call case_state
         call case_syntax_loose
 
     e "All cases ran."

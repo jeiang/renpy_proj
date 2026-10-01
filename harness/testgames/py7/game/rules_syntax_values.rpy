@@ -33,7 +33,15 @@ init python:
 label case_syntax_values:
     python:
         sv = synth_syntax
-    e "Backticks [sv['backtick']]; not-equal [sv['ne'][0]] and [sv['ne'][1]]."
-    e "Octal [sv['octal']]; long [sv['long']]; raw string length [sv['ur']]."
-    e "Raise with a value: [sv['raise']]; tuple parameter: [sv['tuple_param']]."
+        v_backtick = sv["backtick"]
+        v_ne1 = sv["ne"][0]
+        v_ne2 = sv["ne"][1]
+        v_octal = sv["octal"]
+        v_long = sv["long"]
+        v_ur = sv["ur"]
+        v_raise = sv["raise"]
+        v_tuple = sv["tuple_param"]
+    e "Backticks [v_backtick]; not-equal [v_ne1] and [v_ne2]."
+    e "Octal [v_octal]; long [v_long]; raw string length [v_ur]."
+    e "Raise with a value: [v_raise]; tuple parameter: [v_tuple]."
     return
