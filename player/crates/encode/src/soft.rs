@@ -46,7 +46,7 @@ fn make(fps: u32, kbps: u32) -> Result<Encoder> {
         .max_frame_rate(FrameRate::from_hz(fps as f32))
         .usage_type(UsageType::ScreenContentRealTime)
         .rate_control_mode(RateControlMode::Bitrate)
-        .skip_frames(false)
+        .skip_frames(true)
         .profile(Profile::Baseline)
         .complexity(Complexity::Low)
         .num_threads(0)

@@ -10,6 +10,8 @@ mod ff;
 mod gate;
 mod opus;
 mod soft;
+#[cfg(target_os = "macos")]
+mod vt;
 
 pub use gate::{FrameGate, burn_timecode};
 pub use opus::OpusEncoder;
@@ -98,6 +100,10 @@ pub fn open_video_encoder(
 ) -> Result<Box<dyn VideoEncoder>> {
     ff::init();
     let try_one = |name: &str| -> Result<Box<dyn VideoEncoder>> {
+        #[cfg(target_os = "macos")]
+        if name == "h264_videotoolbox" {
+            return Ok(Box::new(vt::VtEncoder::open(width, height, fps, kbps)?));
+        }
         if name == "openh264" {
             Ok(Box::new(soft::SoftEncoder::open(width, height, fps, kbps)?))
         } else {
@@ -126,6 +132,10 @@ pub fn list_video_encoders() -> Vec<String> {
     ladder()
         .into_iter()
         .filter(|n| {
+            #[cfg(target_os = "macos")]
+            if *n == "h264_videotoolbox" {
+                return vt::VtEncoder::open(256, 144, 30, 500).is_ok();
+            }
             if *n == "openh264" {
                 soft::SoftEncoder::open(64, 64, 30, 500).is_ok()
             } else {

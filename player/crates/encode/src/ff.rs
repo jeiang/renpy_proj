@@ -1,4 +1,4 @@
-//! FFmpeg encoders: `h264_videotoolbox`, `h264_vaapi`, `h264_nvenc`.
+//! FFmpeg encoders: `h264_vaapi`, `h264_nvenc`. (VideoToolbox is native, see `vt.rs`.)
 
 use crate::annexb::{self, ParamSets};
 use crate::convert::Converter;
@@ -59,12 +59,6 @@ fn open_codec(name: &str, w: u32, h: u32, fps: u32, kbps: u32) -> Result<Opened>
     let sw_fmt = Pixel::NV12;
     let mut opts = Dictionary::new();
     match name {
-        "h264_videotoolbox" => {
-            opts.set("realtime", "1");
-            opts.set("prio_speed", "1");
-            opts.set("allow_sw", "0");
-            opts.set("profile", "baseline");
-        }
         "h264_vaapi" => {
             hw = Some(vaapi_frames(&mut ctx, w, h)?);
             opts.set("profile", "constrained_baseline");
