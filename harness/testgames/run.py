@@ -126,38 +126,34 @@ def check_compat(run_dir, game):
 def patch_seed(player, game_dir, tmp):
     """Make the seed data for Synth7Patch: patches/<fingerprint>/patch.toml with the hash the player sees at the failing node.
 
-    The committed patch.toml has a placeholder hash. One apply-test run with it in the folder of the game key makes the
-    patch library report `source hash at <file>:<line> is sha1:<h>` and the fingerprint of the script set; the seed
-    data then holds the patch under that fingerprint with that hash."""
+    The committed patch.toml has a placeholder hash. `PLAYER_PATCHES_APPLY_TEST=1` loads the game headless and prints the
+    fingerprint of the script set (first run, no patches); a second run with the placeholder patch in that fingerprint's
+    folder prints `unmatched: ... source hash at <file>:<line> is sha1:<h>`. The seed data then holds the patch under the
+    fingerprint with that hash. Both depend on the `.rpyc` bytes, which differ from build to build."""
     import re
     patch_src = (HERE / "py7patch" / "patches" / "patch.toml").read_text()
-    probe = pathlib.Path(tmp) / "probe-data"
-    r = subprocess.run([player, "patches", str(game_dir), "list", "--data", str(probe)], capture_output=True, text=True)
-    keydir = None
-    # the game key is the report folder name after one start: start the game headless via apply-test
-    (probe / "patches" / "pending").mkdir(parents=True, exist_ok=True)
-    key = re.sub(r"[^A-Za-z0-9._-]+", "_", pathlib.Path(game_dir).name)
-    import hashlib
-    full = pathlib.Path(game_dir).resolve()
-    base, gdir = (full, full / "game") if (full / "game").is_dir() else (full.parent, full)
-    key = re.sub(r"[^A-Za-z0-9._-]+", "_", base.name) + "-" + hashlib.sha1(str(gdir).encode()).hexdigest()[:8]
-    keydir = probe / "patches" / key
-    keydir.mkdir(parents=True, exist_ok=True)
-    (keydir / "patch.toml").write_text(patch_src)
     env = dict(os.environ, PLAYER_PATCHES_APPLY_TEST="1", PLAYER_COMPAT_NOTICE="off")
-    subprocess.run([player, str(game_dir), "--data", str(probe)], capture_output=True, text=True, env=env, timeout=300)
-    rep = load_json(probe / "reports" / key / "patches.json")
-    if not rep or not rep.get("fingerprint"):
-        sys.exit("synth7patch: no patches.json after the apply-test run (%s)" % (probe / "reports" / key))
-    fp = rep["fingerprint"]
-    why = " ".join(u.get("reason", "") for u in rep.get("unmatched", []))
-    m = re.search(r"is (sha1:[0-9a-f]{12})", why)
+    probe = pathlib.Path(tmp) / "probe-data"
+
+    def apply_test():
+        r = subprocess.run([player, str(game_dir), "--data", str(probe)], capture_output=True, text=True, env=env, timeout=600)
+        return r.stdout
+
+    out = apply_test()
+    m = re.search(r"^fingerprint: (\w+)", out, re.M)
     if not m:
-        sys.exit("synth7patch: cannot read the node hash from: %s" % why)
+        sys.exit("synth7patch: no fingerprint in the apply-test output:\n" + out[-1500:])
+    fp = m.group(1)
+    (probe / "patches" / fp).mkdir(parents=True)
+    (probe / "patches" / fp / "patch.toml").write_text(patch_src)
+    out = apply_test()
+    h = re.search(r"is (sha1:[0-9a-f]{12})", out)
+    if not h:
+        sys.exit("synth7patch: cannot read the node hash from:\n" + out[-1500:])
     seed = pathlib.Path(tmp) / "seed"
     (seed / "patches" / fp).mkdir(parents=True)
-    (seed / "patches" / fp / "patch.toml").write_text(patch_src.replace("sha1:0000000000", m.group(1)))
-    say("patch seed: fingerprint %s, node hash %s" % (fp, m.group(1)))
+    (seed / "patches" / fp / "patch.toml").write_text(patch_src.replace("sha1:0000000000", h.group(1)))
+    say("patch seed: fingerprint %s, node hash %s" % (fp, h.group(1)))
     return seed
 
 
