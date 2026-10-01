@@ -43,7 +43,7 @@ class Mac:
                 os.mkdir(LOCK)
                 break
             except FileExistsError:
-                time.sleep(2)
+                time.sleep(0.1)
         with open(LOCK + "/owner", "w") as f:
             f.write("pid=%d\nstart=%s\ncmd=m5 gate\n" % (os.getpid(), time.strftime("%FT%T")))
         self.lockheld = True
@@ -262,6 +262,7 @@ def main():
                     menu = (float(m.group(1)), float(m.group(2))); break
                 # the game shows splash lines before the menu: advance them through the data channel
                 click(0.5, 0.5)
+                click(0.5, 0.345)  # the first screen is a Yes/No choice
                 time.sleep(2.5)
             res["menu"] = menu
             res["checks"]["menu_seen"] = menu is not None

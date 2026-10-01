@@ -209,7 +209,7 @@ impl Server {
 
     /// Interleaved stereo f32 at 48 kHz. Dropped while nobody is connected.
     pub fn push_audio(&self, stereo_f32_48k: &[f32]) {
-        if !self.shared.connected.load(Ordering::Acquire) {
+        if !self.shared.connected.load(Ordering::Acquire) || std::env::var_os("STREAM_NO_AUDIO").is_some() {
             return;
         }
         self.shared.audio.lock().unwrap().extend_from_slice(stereo_f32_48k);
