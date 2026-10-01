@@ -487,7 +487,10 @@ def main():
     args = ap.parse_args()
 
     if not UPSTREAM.exists() or not (UPSTREAM.parent / "pywheels").is_dir():
-        run([git_tool("bash") if IS_WIN else "bash", (ENGINE / "fetch.sh").as_posix()])
+        env = None
+        if IS_WIN:  # bash.exe from Git's usr/bin needs that folder on PATH for dirname, curl, sha256sum
+            env = dict(os.environ, PATH=str(Path(git_tool("bash")).parent) + os.pathsep + os.environ["PATH"])
+        run([git_tool("bash") if IS_WIN else "bash", (ENGINE / "fetch.sh").as_posix()], env=env)
 
     if IS_WIN:
         fetch_sdl2_headers()
