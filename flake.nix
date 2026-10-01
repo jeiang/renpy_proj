@@ -92,6 +92,7 @@
             # Linux: the loader and window-system libraries that are opened with dlopen. The GPU drivers
             # come from the host (/run/opengl-driver on NixOS; the system ones elsewhere).
             shellHook = pkgs.lib.optionalString pkgs.stdenv.isLinux ''
+              export BINDGEN_EXTRA_CLANG_ARGS="-isystem ${pkgs.llvmPackages.libclang.lib}/lib/clang/${pkgs.lib.versions.major pkgs.llvmPackages.libclang.version}/include -isystem ${pkgs.glibc.dev}/include"
               export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath (with pkgs; [ vulkan-loader wayland libxkbcommon libx11 libxcursor libxrandr libxi libxcb alsa-lib systemdLibs ])}:/run/opengl-driver/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
             '';
           };
