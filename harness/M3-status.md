@@ -1,3 +1,52 @@
+# M3 status: player against stock Ren'Py 7, 17 games
+
+**Result: M3 gate met** on `main` (release player from a7239f4 and later; harness from 4e18932), 2026-10-01. Every Ren'Py 7 corpus game passes `gate.py run --engine player --tier full --baseline harness/out/m3-final/<Game>-stock` (lint, probe, route, saveresume, video; video skipped for the 3 games with no movie). Stock baselines: each game's own Ren'Py 7 version (SDKs 7.4.5 to 7.8.2 under Rosetta, or the bundled `.app` engine). The Ren'Py 8 corpus still passes its full gate on the same build (`harness/out/m3-final/r8-*`, `r8b-*`).
+
+## Final runs (`harness/out/m3-final/`)
+
+| game | engine | result | run |
+|---|---|---|---|
+| AHouseInTheRift | 7.6.1 | pass | AHouseInTheRift-player2 |
+| AWorldBetweenUs | 7.4.8 | pass | AWorldBetweenUs-player |
+| AlexsVantasticAdventure | 7.4.8 | pass (video skipped) | AlexsVantasticAdventure-player |
+| AstralLust | 7.8.2 | pass | AstralLust-player2 |
+| BlackRose | 7.7.3 | pass | BlackRose-player2 |
+| BloomWar | 7.4.11 | pass | BloomWar-player2 |
+| BraveheartAcademy | 7.4.8 | pass | BraveheartAcademy-player6 (route; other checks player5, baseline stock3) |
+| CabinByTheLake | 7.4.8 | pass (video skipped) | CabinByTheLake-player |
+| DFraction | 7.4.11 | pass (video skipped) | DFraction-player |
+| DTRemake | 7.4.11 | pass | DTRemake-player |
+| Dreamscape | 7.4.11 | pass | Dreamscape-player2 |
+| HaremHotel | 7.4.11 | pass | HaremHotel-player2 |
+| InterimDomain | 7.4.5 | pass | InterimDomain-player |
+| Bumpkin014 | 7.5.3 | pass | Bumpkin014-player2 |
+| MaidandMaidens | 7.5.3 | pass | MaidandMaidens-player2 |
+| WhiteRussian | 7.4.11 | pass | WhiteRussian-player |
+| LuckyParadox | 7.4.11 | pass | LuckyParadox-player |
+
+## Fixed in wave 2
+
+- DFraction: zero-size surfaces got no texture and crashed (gfx): now a 1x1 empty texture, as stock GL2.
+- Viewport padding: Ren'Py 7.4 and older floor `px_padding / 2`; 7.5 and newer (and Ren'Py 8) use true division. The source is the same in all versions; the split comes from the stock frames [INFERENCE: 7.5+ was built with Cython's Python 3 division].
+- Text: FreeType's kern-table pair limit reproduced; Ren'Py 7.7 games get the FreeType shaper (patch 0900); Ren'Py 7 glyph overlap blend (0901).
+- Compat notice: `PLAYER_COMPAT_NOTICE=off` for frame comparisons; fixes still go to `runtime.jsonl`.
+- Harness: exact 0.2 s poll grid on Ren'Py 7 (stock advanced lines 22% slower); dialogue compared on the common prefix between runs; per-game `input_answer` and an input-loop guard; per-game `screen_actions` for custom choice screens; Ripples boot stage 420 s (Gatekeeper stall on fresh clones).
+
+## Not player defects (recorded)
+
+- AstralLust and AHouseInTheRift menus: a timed ATL slideshow, and a random background plus a live network ad. `01-menu` is volatile for both.
+- Braveheart: before `input_answer` and `screen_actions`, the harness looped at name entry and then skipped the year screen (`year` stayed 0, `IndexError` at script.rpy:565 on stock too). Earlier "passes" for Braveheart were hollow.
+- macOS notifications covered the game window twice; the covered-window check reported an error each time, and a rerun passed. Turn on Do Not Disturb during gate runs.
+- TheStormWithinUs video showed an A/V offset of 776 ms once on the Ren'Py 8 regression run; two reruns gave 40 and 42 ms. Not reproduced, cause unknown.
+
+## Limits of the gate
+
+The driver follows the story up to custom click-only screens (Braveheart's map, AlexsVantasticAdventure's map, CabinByTheLake's hub). Play past them needs more `screen_actions`.
+
+---
+
+# Earlier status (first player pass, before wave 2)
+
 # M3 status: Ren'Py 7 games, stock baselines and the player
 
 Run 2026-09-30 and 2026-10-01 on macOS arm64 (M3 Pro, Metal). Player: release binary built in the harness worktree from `main` `eabd442` (Compat, Patches and Py2Fix are merged; engine patch 0010 is in). Gate: `harness/gate.py run --engine player --tier full --baseline <Game>-stock`. `vm.loadavg` (1 min) at launches: 1.9 to 5.4 (values in each `checks/*.json`). Evidence: `harness/out/<Game>-stock` (baselines, in the main checkout) and `harness/out/<Game>-player` (this worktree). Both hold only game text and screenshots: gitignored.
