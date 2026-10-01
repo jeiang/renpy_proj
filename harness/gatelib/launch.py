@@ -588,6 +588,7 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
     env.update(ctx.opts.get("extra_env") or {})
     env["HZ_INPUT_LIMIT"] = str(g.get("input_limit", 3))
     env["HZ_SCREEN_ACTIONS"] = ";".join("%s=%s" % kv for kv in g.get("screen_actions", {}).items())
+    env["HZ_DRIVER"] = str(HARNESS / "drivers" / (g["driver"] + ".py")) if g.get("driver") else ""   # per-game free-roam driver (harness/drivers)
     if not inject:
         env.pop("HARNESS_DIR")
     res = {"name": name, "engine": engine, "stripped_game_cache": strip, "argv": [a.replace(str(top), "<run>") for a in argv], "plan_log": []}
