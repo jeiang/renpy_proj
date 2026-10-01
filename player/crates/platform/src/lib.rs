@@ -6,7 +6,9 @@
 
 mod display;
 mod event;
+mod headless;
 mod evloop;
+pub mod inject;
 mod key;
 mod keys;
 mod mouse;
@@ -15,10 +17,12 @@ mod power;
 mod scrap;
 mod timemod;
 mod util;
+mod win;
 
 use std::ffi::CStr;
 
 pub use evloop::{create_window, drawable_size, window};
+pub use headless::{is_headless, set_headless};
 
 /// Every dotted builtin module of this crate with its init function.
 pub fn inittab() -> Vec<(

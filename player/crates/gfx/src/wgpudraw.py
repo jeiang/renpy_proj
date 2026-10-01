@@ -1166,6 +1166,13 @@ class WgpuDraw(object):
 
         end = time.time()
 
+        # An offscreen screen has no display to pace the flip: hold the refresh interval here.
+        if self.gpu.is_offscreen():
+            wait = self.last_flip_end + abs(vsync or 1) / self.refresh_rate - end
+            if wait > 0:
+                time.sleep(wait)
+                end = time.time()
+
         skipped = self.gpu.skipped_frames()
         covered = skipped != self.skipped_seen
         self.skipped_seen = skipped

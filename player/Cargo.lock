@@ -995,6 +995,7 @@ dependencies = [
  "objc2-metal 0.3.2",
  "parking_lot",
  "platform",
+ "png",
  "pollster",
  "pyo3",
  "surface",

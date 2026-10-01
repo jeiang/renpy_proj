@@ -33,7 +33,7 @@ impl KeyboardState {
 
 #[pyfunction]
 fn get_focused() -> bool {
-    evloop::window().is_some_and(|w| w.has_focus())
+    crate::win::Win::get().is_some_and(|w| w.has_focus())
 }
 
 #[pyfunction]

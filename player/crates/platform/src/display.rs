@@ -7,9 +7,10 @@ use std::time::Duration;
 use parking_lot::Mutex;
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict};
-use winit::dpi::{LogicalPosition, LogicalSize};
+use winit::dpi::LogicalPosition;
 use winit::window::{Icon, Window as WinitWindow};
 
+use crate::win::Win;
 use crate::{evloop, util};
 
 const WINDOW_FULLSCREEN: i64 = 0x1;
@@ -49,17 +50,11 @@ fn os_err(py: Python<'_>, what: &str, e: impl std::fmt::Display) -> PyErr {
     util::pg_error(py, &format!("{what}: {e}"))
 }
 
-fn need_window(py: Python<'_>) -> PyResult<std::sync::Arc<WinitWindow>> {
-    evloop::window()
-        .ok_or_else(|| util::pg_error(py, "No window exists. Call display.set_mode first."))
+fn need_window(py: Python<'_>) -> PyResult<Win> {
+    Win::get().ok_or_else(|| util::pg_error(py, "No window exists. Call display.set_mode first."))
 }
 
-fn logical_size(w: &WinitWindow) -> (i64, i64) {
-    let l = w.inner_size().to_logical::<f64>(w.scale_factor());
-    (l.width.round() as i64, l.height.round() as i64)
-}
-
-fn apply_pos(w: &WinitWindow, pos: (i64, i64)) {
+pub(crate) fn apply_native_pos(w: &WinitWindow, pos: (i64, i64)) {
     let kind = |v: i64| v & 0xFFFF_0000;
     if kind(pos.0) == WINDOWPOS_UNDEFINED && kind(pos.1) == WINDOWPOS_UNDEFINED {
         return;
@@ -106,16 +101,16 @@ fn open(
     if w <= 0 || h <= 0 {
         (w, h) = monitor_size(py)?;
     }
-    let win = evloop::create_window(w as u32, h as u32, title, flags & WINDOW_RESIZABLE != 0)
+    let win = Win::create(w as u32, h as u32, title, flags & WINDOW_RESIZABLE != 0)
         .map_err(|e| os_err(py, "cannot create the window", e))?;
     win.set_decorations(flags & WINDOW_BORDERLESS == 0);
     win.set_visible(true);
     if flags & WINDOW_FULLSCREEN != 0 {
-        evloop::set_fullscreen(&win, true);
+        win.set_fullscreen(true);
     } else if flags & WINDOW_MAXIMIZED != 0 {
         win.set_maximized(true);
     } else {
-        apply_pos(&win, pos);
+        win.apply_pos(pos);
     }
     evloop::pump(Some(Duration::ZERO));
     Ok(PyWindow {
@@ -152,7 +147,7 @@ impl PyWindow {
             return Ok(s.clone_ref(py));
         }
         let win = need_window(py)?;
-        let (w, h) = logical_size(&win);
+        let (w, h) = win.logical_size();
         let cls = py.import("renpy.pygame.surface")?.getattr("Surface")?;
         let s = cls.call1(((w, h), SRCALPHA, 32))?.unbind();
         *slot = Some(s.clone_ref(py));
@@ -166,7 +161,7 @@ impl PyWindow {
 
     fn destroy(&self) {
         *self.surface.lock() = None;
-        evloop::destroy_window();
+        Win::destroy();
     }
 
     #[pyo3(signature = (size, opengl=false, fullscreen=None, maximized=None))]
@@ -180,12 +175,12 @@ impl PyWindow {
     ) -> PyResult<()> {
         let _ = opengl;
         let win = need_window(py)?;
-        let fullscreen = fullscreen.unwrap_or_else(|| win.fullscreen().is_some());
+        let fullscreen = fullscreen.unwrap_or_else(|| win.is_fullscreen());
         let maximized = !fullscreen && maximized.unwrap_or_else(|| win.is_maximized());
         if fullscreen {
-            evloop::set_fullscreen(&win, true);
+            win.set_fullscreen(true);
         } else {
-            evloop::set_fullscreen(&win, false);
+            win.set_fullscreen(false);
             if maximized {
                 win.set_maximized(true);
             } else {
@@ -194,8 +189,8 @@ impl PyWindow {
                 if w <= 0 || h <= 0 {
                     (w, h) = monitor_size(py)?;
                 }
-                if logical_size(&win) != (w, h) {
-                    let _ = win.request_inner_size(LogicalSize::new(w as f64, h as f64));
+                if win.logical_size() != (w, h) {
+                    win.request_logical_size(w, h);
                 }
             }
         }
@@ -213,7 +208,10 @@ impl PyWindow {
     fn get_window_flags(&self, py: Python<'_>) -> PyResult<i64> {
         let win = need_window(py)?;
         let mut f = 0;
-        if win.is_visible() != Some(false) {
+        if matches!(win, Win::Virtual) {
+            return Ok(WINDOW_SHOWN | WINDOW_INPUT_FOCUS | WINDOW_MOUSE_FOCUS);
+        }
+        if win.is_visible() {
             f |= WINDOW_SHOWN;
         }
         if win.is_resizable() {
@@ -222,13 +220,13 @@ impl PyWindow {
         if !win.is_decorated() {
             f |= WINDOW_BORDERLESS;
         }
-        if win.fullscreen().is_some() {
+        if win.is_fullscreen() {
             f |= WINDOW_FULLSCREEN_DESKTOP;
         }
         if win.is_maximized() {
             f |= WINDOW_MAXIMIZED;
         }
-        if win.is_minimized() == Some(true) {
+        if win.is_minimized() {
             f |= WINDOW_MINIMIZED;
         }
         if win.has_focus() {
@@ -287,7 +285,7 @@ impl PyWindow {
 
     fn set_caption(&self, title: &Bound<'_, PyAny>) -> PyResult<()> {
         let t = text_arg(title)?;
-        if let Some(w) = evloop::window() {
+        if let Some(w) = Win::get() {
             w.set_title(&t);
         }
         Ok(())
@@ -298,19 +296,18 @@ impl PyWindow {
     }
 
     fn get_size(&self, py: Python<'_>) -> PyResult<(i64, i64)> {
-        let w = need_window(py)?;
-        Ok(logical_size(&w))
+        Ok(need_window(py)?.logical_size())
     }
 
     fn restore(&self) {
-        if let Some(w) = evloop::window() {
+        if let Some(w) = Win::get() {
             w.set_minimized(false);
             w.set_maximized(false);
         }
     }
 
     fn maximize(&self) {
-        if let Some(w) = evloop::window() {
+        if let Some(w) = Win::get() {
             w.set_maximized(true);
         }
     }
@@ -328,8 +325,8 @@ impl PyWindow {
     }
 
     fn set_position(&self, pos: (i64, i64)) {
-        if let Some(w) = evloop::window() {
-            apply_pos(&w, pos);
+        if let Some(w) = Win::get() {
+            w.apply_pos(pos);
         }
     }
 }
@@ -351,7 +348,7 @@ fn text_arg(v: &Bound<'_, PyAny>) -> PyResult<String> {
 
 fn apply_icon(py: Python<'_>, surface: &Bound<'_, PyAny>) -> PyResult<()> {
     let (w, h, rgba) = util::read_rgba(surface)?;
-    if let Some(win) = evloop::window() {
+    if let Some(Win::Native(win)) = Win::get() {
         match Icon::from_rgba(rgba.clone(), w, h) {
             Ok(icon) => win.set_window_icon(Some(icon)),
             Err(e) => return Err(os_err(py, "bad window icon", e)),
@@ -362,34 +359,30 @@ fn apply_icon(py: Python<'_>, surface: &Bound<'_, PyAny>) -> PyResult<()> {
 }
 
 fn active() -> bool {
-    match evloop::window() {
-        Some(w) => w.is_visible() != Some(false) && w.is_minimized() != Some(true),
+    match Win::get() {
+        Some(w) => w.is_visible() && !w.is_minimized(),
         None => false,
     }
 }
 
 fn do_iconify() -> bool {
-    if let Some(w) = evloop::window() {
+    if let Some(w) = Win::get() {
         w.set_minimized(true);
     }
     true
 }
 
 fn do_toggle_fullscreen() -> bool {
-    if let Some(w) = evloop::window() {
-        let on = w.fullscreen().is_none();
-        evloop::set_fullscreen(&w, on);
+    if let Some(w) = Win::get() {
+        w.set_fullscreen(!w.is_fullscreen());
     }
     true
 }
 
 fn position(py: Python<'_>) -> PyResult<(i64, i64)> {
     let w = need_window(py)?;
-    let p = w
-        .outer_position()
-        .map_err(|e| os_err(py, "cannot read the window position", e))?;
-    let l = p.to_logical::<f64>(w.scale_factor());
-    Ok((l.x.round() as i64, l.y.round() as i64))
+    w.position()
+        .map_err(|e| os_err(py, "cannot read the window position", e))
 }
 
 #[pyfunction]
@@ -450,7 +443,7 @@ fn set_mode(
     if let Some(win) = existing {
         let win = win.bind(py);
         if (flags & !resize_flags) == (win.borrow().create_flags & !resize_flags)
-            && evloop::window().is_some()
+            && Win::get().is_some()
         {
             win.borrow().resize(
                 py,
@@ -579,8 +572,8 @@ fn _info(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
     )?;
     d.set_item("shifts", (16, 8, 0, 24))?;
     d.set_item("losses", (0, 0, 0, 0))?;
-    let (cw, ch) = match evloop::window() {
-        Some(w) => logical_size(&w),
+    let (cw, ch) = match Win::get() {
+        Some(w) => w.logical_size(),
         None => (i64::from(m.w), i64::from(m.h)),
     };
     d.set_item("current_w", cw)?;
@@ -670,7 +663,7 @@ fn set_icon(py: Python<'_>, surface: &Bound<'_, PyAny>) -> PyResult<()> {
 fn set_caption(title: &Bound<'_, PyAny>, icontitle: Option<Py<PyAny>>) -> PyResult<()> {
     let _ = icontitle;
     let t = text_arg(title)?;
-    if let Some(w) = evloop::window() {
+    if let Some(w) = Win::get() {
         w.set_title(&t);
     }
     evloop::INPUT.lock().title = t;
@@ -684,17 +677,17 @@ fn get_caption() -> String {
 
 #[pyfunction]
 fn get_drawable_size() -> Option<(u32, u32)> {
-    evloop::window().map(|_| evloop::drawable_size())
+    Win::get().map(|w| w.drawable_size())
 }
 
 #[pyfunction]
 fn get_size() -> Option<(i64, i64)> {
-    evloop::window().map(|w| logical_size(&w))
+    Win::get().map(|w| w.logical_size())
 }
 
 #[pyfunction]
 fn get_position(py: Python<'_>) -> PyResult<Option<(i64, i64)>> {
-    if evloop::window().is_none() {
+    if Win::get().is_none() {
         return Ok(None);
     }
     position(py).map(Some)
@@ -702,9 +695,9 @@ fn get_position(py: Python<'_>) -> PyResult<Option<(i64, i64)>> {
 
 #[pyfunction]
 fn set_position(pos: (i64, i64)) -> bool {
-    match evloop::window() {
+    match Win::get() {
         Some(w) => {
-            apply_pos(&w, pos);
+            w.apply_pos(pos);
             true
         }
         None => false,
