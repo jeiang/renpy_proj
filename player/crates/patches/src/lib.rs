@@ -458,11 +458,24 @@ mod tests {
     fn only_accepted_sidecars_load() {
         let dir = std::env::temp_dir().join(format!("patches-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        let body = "[[patch]]\nfile='game/a.rpy'\nline=3\noriginal_hash='sha1:abcdef01'\nsource='x = 1'\n";
-        for (name, state) in [("plain", None), ("prop", Some("proposed")), ("acc", Some("accepted"))] {
-            std::fs::write(dir.join(format!("{name}.toml")), body.replace("line=3", &format!("line={}", name.len()))).unwrap();
+        let body =
+            "[[patch]]\nfile='game/a.rpy'\nline=3\noriginal_hash='sha1:abcdef01'\nsource='x = 1'\n";
+        for (name, state) in [
+            ("plain", None),
+            ("prop", Some("proposed")),
+            ("acc", Some("accepted")),
+        ] {
+            std::fs::write(
+                dir.join(format!("{name}.toml")),
+                body.replace("line=3", &format!("line={}", name.len())),
+            )
+            .unwrap();
             if let Some(st) = state {
-                std::fs::write(dir.join(format!("{name}.json")), format!("{{\"state\": \"{st}\"}}")).unwrap();
+                std::fs::write(
+                    dir.join(format!("{name}.json")),
+                    format!("{{\"state\": \"{st}\"}}"),
+                )
+                .unwrap();
             }
         }
         let lib = load_dirs(&[dir.clone()]);

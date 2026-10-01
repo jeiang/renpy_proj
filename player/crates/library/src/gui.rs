@@ -21,7 +21,7 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowId};
 
 use crate::config::{Game, Library};
-use crate::launch::spawn_player;
+use crate::launch::{Serve, spawn_player, spawn_serve};
 use crate::status::{ModsInfo, Preflight, mods_info, preflight};
 
 const REFRESH: Duration = Duration::from_secs(2);
@@ -40,6 +40,8 @@ pub fn run_window(data: PathBuf, player: PathBuf) -> Result<()> {
 
 enum Action {
     Play(usize),
+    Stream(usize),
+    StopStream(usize),
     Report(usize),
     OpenFolder(usize),
     AddFolder,
@@ -63,6 +65,7 @@ struct App {
     status: HashMap<String, (Option<Preflight>, ModsInfo)>,
     status_at: Instant,
     running: Vec<(String, Child)>,
+    streams: Vec<(String, Serve)>,
     icons: HashMap<PathBuf, Option<egui::TextureHandle>>,
     message: String,
     gpu: Option<Gpu>,
@@ -79,6 +82,7 @@ impl App {
             status: HashMap::new(),
             status_at: Instant::now(),
             running: Vec::new(),
+            streams: Vec::new(),
             icons: HashMap::new(),
             message: String::new(),
             gpu: None,
@@ -121,10 +125,29 @@ impl App {
                     false
                 }
             });
+        self.streams.retain_mut(|(key, serve)| {
+            serve.poll();
+            match serve.child.try_wait() {
+                Ok(None) => true,
+                Ok(Some(st)) => {
+                    if !st.success() {
+                        done.push(format!("{key}: the stream stopped with {st}"));
+                    }
+                    false
+                }
+                Err(e) => {
+                    done.push(format!("{key}: cannot wait for the stream: {e}"));
+                    false
+                }
+            }
+        });
         if let Some(m) = done.pop() {
             self.message = m;
         }
-        if !self.running.is_empty() || self.status_at.elapsed() > REFRESH {
+        if !self.running.is_empty()
+            || !self.streams.is_empty()
+            || self.status_at.elapsed() > REFRESH
+        {
             // A running game writes its pre-flight report; show it as soon as it appears.
             self.refresh_status();
         }
@@ -140,6 +163,24 @@ impl App {
                         self.running.push((g.key, child));
                     }
                     Err(e) => self.message = format!("Cannot start {}: {e}", g.name),
+                }
+            }
+            Action::Stream(i) => {
+                let g = self.library.games[i].clone();
+                match spawn_serve(&self.player, &g.path, &self.data) {
+                    Ok(serve) => {
+                        self.message = format!("Starting the stream of {}", g.name);
+                        self.streams.push((g.key, serve));
+                    }
+                    Err(e) => self.message = format!("Cannot stream {}: {e}", g.name),
+                }
+            }
+            Action::StopStream(i) => {
+                let key = self.library.games[i].key.clone();
+                if let Some(at) = self.streams.iter().position(|(k, _)| *k == key) {
+                    let (_, mut serve) = self.streams.remove(at);
+                    serve.stop();
+                    self.message = format!("Stopped the stream of {}", self.library.games[i].name);
                 }
             }
             Action::Report(i) => {
@@ -240,7 +281,14 @@ impl App {
             .show(ui, |ui| {
                 for (i, g) in games.iter().enumerate() {
                     let (pre, mods) = self.status.get(&g.key).cloned().unwrap_or_default();
-                    let running = self.running.iter().any(|(k, _)| *k == g.key);
+                    let streaming = self.streams.iter().any(|(k, _)| *k == g.key);
+                    let running = streaming || self.running.iter().any(|(k, _)| *k == g.key);
+                    let stream_urls: Vec<String> = self
+                        .streams
+                        .iter()
+                        .find(|(k, _)| *k == g.key)
+                        .map(|(_, s)| s.urls.clone())
+                        .unwrap_or_default();
                     let icon = self.icon(g);
                     ui.horizontal(|ui| {
                         match &icon {
@@ -257,6 +305,23 @@ impl App {
                             ui.set_min_width(340.0);
                             ui.label(RichText::new(&g.name).strong());
                             ui.label(RichText::new(g.path.display().to_string()).small().weak());
+                            if streaming {
+                                if stream_urls.is_empty() {
+                                    ui.label(RichText::new("Streaming: starting...").weak());
+                                }
+                                for u in &stream_urls {
+                                    ui.horizontal(|ui| {
+                                        ui.label(
+                                            RichText::new("Open in a browser:")
+                                                .color(Color32::LIGHT_GREEN),
+                                        );
+                                        ui.monospace(u);
+                                        if ui.small_button("Copy").clicked() {
+                                            ui.ctx().copy_text(u.clone());
+                                        }
+                                    });
+                                }
+                            }
                             ui.horizontal_wrapped(|ui| {
                                 match &g.engine {
                                     Some(v) => ui.label(format!("Ren'Py {v}")),
@@ -296,6 +361,16 @@ impl App {
                             }
                             if ui.button("Report").clicked() {
                                 actions.push(Action::Report(i));
+                            }
+                            if streaming {
+                                if ui.button("Stop stream").clicked() {
+                                    actions.push(Action::StopStream(i));
+                                }
+                            } else if ui
+                                .add_enabled(!running, egui::Button::new("Stream"))
+                                .clicked()
+                            {
+                                actions.push(Action::Stream(i));
                             }
                             let label = if running { "Running" } else { "Play" };
                             if ui.add_enabled(!running, egui::Button::new(label)).clicked() {

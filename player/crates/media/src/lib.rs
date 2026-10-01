@@ -10,6 +10,7 @@ mod types;
 
 use std::ffi::CStr;
 
+pub use device::{mixer_rate, set_pcm_tap, set_virtual_output};
 pub use source::ByteSource;
 pub use stream::{Media, Shared, advance_time};
 pub use types::{ColorInfo, Matrix, Plane, PlaneLayout, PyVideoFrame, VideoFrame};

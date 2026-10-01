@@ -210,6 +210,123 @@ Added for "M4: Linux and Windows on real GPUs" (issue #37). Scope now (user, 202
 - Platform-specific code uses `cfg(target_os)`; macOS-only pieces (objc2-metal, CoreFoundation locale) must not break other targets.
 - `gfx` (anisotropy): a sampler without mips may carry an anisotropy clamp (no mips, all filters linear, anisotropy > 1: mipmap_filter Linear with lod_max_clamp 0). The sampler tuple's anisotropy element is passed for GL_LINEAR too. On AMD Linux this differs from stock Mesa radeonsi (no-mip filter state, which Vulkan cannot express) by 0.2 to 1.5 mean in the anisotropy-on half of strongly anisotropic `linear` screens; measured and closest available, see harness/testgames/aniso/README.md.
 
+# M5 contracts
+
+Added for "M5: LAN streaming to a browser" (issue #38). Design: ARCHITECTURE.md "Streaming", `research/streaming/README.md`, `research/lan-streaming/README.md`. One game, one browser session. Branch plan: `build/m5` (integration, owned by the M5 orchestrator) merges `build/m5-headless`, `build/m5-encode`, `build/m5-rtc`.
+
+## Data flow
+
+```
+Python/Ren'Py -> gfx (offscreen screen texture) --flip--> gfx frame sink --CapturedFrame (RGBA)--> player glue
+player glue --encode::RawFrame--> stream::Server::push_frame --> FrameGate -> VideoEncoder (H.264) -> str0m (RTP)
+media mixer (virtual output, 48 kHz stereo f32) --tap--> player glue --> stream::Server::push_audio --> OpusEncoder -> str0m
+browser page JS --data channels--> stream (str0m) --InputEvent--> player glue --> platform::inject --> SDL-numbered events in the pygame queue
+```
+
+`player` (glue, owned by the orchestrator) is the only crate that sees both sides. `stream` and `encode` MUST NOT depend on `platform`, `gfx`, `media` or `pyhost` (they must link and run in a plain test binary with no libpython).
+
+## `platform::headless` and `platform::inject` (owner: stream `Headless`)
+
+- `platform::set_headless(width: u32, height: u32)` (call before Python starts; also on when env `PLAYER_HEADLESS=1`). In this mode no winit event loop and no OS window exist. The Python `pygame.display` API behaves as for a normal window of the size the game asks for: `set_mode`, `get_size`, `get_drawable_size`, `get_window_flags` (SHOWN | INPUT_FOCUS | MOUSE_FOCUS), `Window.resize/set_position/...` all work on a virtual window (scale factor 1.0, one 1920x1080 virtual display for `get_display_bounds`/`get_info`). `pygame.event.get/poll/pump/wait/peek` work without winit: `wait(timeout)` blocks up to the timeout or until an injected event arrives. The cursor, grab, icon, title and fullscreen calls are accepted and ignored (fullscreen requests report success and keep the size).
+- `platform::inject` (callable from any thread; takes the GIL itself; every call wakes a blocked `pygame.event.wait`). All coordinates are logical pixels of the game's virtual window.
+  - `fn key(down: bool, dom_code: &str, dom_key: &str, repeat: bool)`: `dom_code` is the W3C `KeyboardEvent.code` (`"KeyA"`, `"Enter"`, `"ArrowLeft"`, `"ShiftLeft"`, ...; unknown codes are dropped), `dom_key` is `KeyboardEvent.key` (`"a"`, `"A"`, `"Enter"`). It produces `KEYDOWN`/`KEYUP` with the same SDL scancode, keycode, mod, unicode and repeat fields as a native winit key event, and updates `pygame.key.get_pressed`/`get_mods`. Printable text with no Ctrl/Meta also yields `TEXTINPUT` when text input is on.
+  - `fn mouse_move(x: f64, y: f64)`, `fn mouse_button(down: bool, dom_button: u8)` (DOM numbering: 0 left, 1 middle, 2 right, 3 back, 4 forward; SDL numbering follows `evloop.rs`), `fn wheel(dx: f64, dy: f64)` (lines), `fn text(s: &str)` (a `TEXTINPUT` commit), `fn focus(gain: bool)` (`ACTIVEEVENT`), `fn size() -> (u32, u32)`.
+  - The state in `INPUT` (mouse position and mask, pressed set, mods) is updated exactly as for native events, so `pygame.mouse.get_pos/get_pressed` agree.
+
+## `gfx` offscreen output (owner: `Headless`)
+
+- In headless mode `renpy.gl2.wgpudraw.create` builds the renderer on an offscreen texture (no surface, no window; `Gpu.present()` never blocks on a display). `WgpuDraw.flip` still paces frames with its software timer at the game's refresh rate (60 Hz default); `Gpu.skipped_frames()` stays 0.
+- `pub struct gfx::CapturedFrame { pub width: u32, pub height: u32, pub rgba: Vec<u8> /* tight rows, straight (non-premultiplied) RGBA8, row 0 at top */, pub seq: u64 /* counts flips from 1 */ }`
+- `pub fn gfx::set_frame_sink(sink: Option<Box<dyn FnMut(gfx::CapturedFrame) + Send + 'static>>)`: while set, every `Gpu.present()` copies the screen to a staging buffer and hands the pixels to the sink from a background thread, in order, with at most 2 frames in flight (a flip that finds both busy replaces the pending slot, so the newest frame wins and the game thread never waits). `Gpu.screenshot` keeps working.
+- Readback-free: not required for M5 where wgpu offers no safe path. The orchestrator records measured readback cost in `harness/M5-status.md`.
+
+## `media` virtual output and tap (owner: `Headless`)
+
+- `media::set_virtual_output(on: bool)`: before the first `renpysound.init`, makes the output the existing timer-driven "dummy" device (no cpal), regardless of `SDL_AUDIODRIVER`. Also on when env `PLAYER_HEADLESS=1`.
+- `media::set_pcm_tap(tap: Option<Box<dyn FnMut(&[f32]) + Send + 'static>>)`: called from the output thread after every mixer pass with interleaved stereo f32 at the mixer rate (`media::mixer_rate() -> u32`, 48000 unless the game sets `config.sound_sample_rate`). It is also called with silence when nothing plays, so the stream has a steady clock. It works with cpal output too.
+
+## `encode` crate (owner: `Encode`) `player/crates/encode`
+
+Plain Rust library on `ffmpeg-next` (the LGPL FFmpeg of the dev shell) and `openh264`. No GPL code.
+
+```rust
+pub enum PixelFormat { Rgba, Bgra, Nv12 }
+pub struct RawFrame { pub width: u32, pub height: u32, pub format: PixelFormat, pub data: Vec<u8> /* tight; Nv12 = Y plane then interleaved UV */, pub capture_ms: u32 /* server clock, see Latency probe */ }
+pub struct EncodedVideo { pub data: Vec<u8> /* Annex B, SPS/PPS before every IDR */, pub keyframe: bool }
+pub trait VideoEncoder: Send { fn name(&self) -> &str; fn encode(&mut self, f: &RawFrame, force_idr: bool) -> anyhow::Result<Vec<EncodedVideo>>; fn set_bitrate(&mut self, kbps: u32); }
+pub fn open_video_encoder(width: u32, height: u32, fps: u32, kbps: u32, prefer: Option<&str>) -> anyhow::Result<Box<dyn VideoEncoder>>;
+pub fn list_video_encoders() -> Vec<String>;
+pub struct FrameGate; impl FrameGate { pub fn new() -> Self; pub fn changed(&mut self, f: &RawFrame) -> bool }
+pub fn burn_timecode(f: &mut RawFrame);
+pub struct OpusEncoder; impl OpusEncoder { pub fn new(kbps: u32) -> anyhow::Result<Self>; pub fn encode(&mut self, pcm_stereo_48k: &[f32] /* exactly 960 frames = 1920 f32 */) -> anyhow::Result<Vec<u8>> }
+```
+
+- Encoder ladder, by `prefer` or default order: macOS `h264_videotoolbox`; Linux `h264_vaapi` (render node, hwupload NV12), then `h264_nvenc` if present; any OS then `openh264`. Constrained Baseline or Main profile, no B-frames, `realtime`, CBR-ish at `kbps`, low latency (no lookahead), SPS/PPS repeated on every IDR, IDR on demand and when the frame size changes. Output must decode in Chrome and Safari WebRTC with payload type 102 / packetization-mode 1 / profile-level-id 42e01f (or 42001f).
+- `FrameGate::changed` is the damage test: true for the first frame, and when the pixels differ from the previous gated frame (a fast hash plus equality check on the first mismatching block). It ignores the timecode cells.
+- Timecode: the top-left of the frame holds 32 cells of 16x16 px in a row (x = 16*i, y = 0, i = 0 is the most significant bit), white for 1 and black for 0, encoding `capture_ms`. The page decodes it by luma threshold 128 at the cell centres.
+- Opus: libopus through FFmpeg's `libopus` encoder (no extra C dependency), 48 kHz stereo, 20 ms frames, VOIP-free "audio" application, low-delay, `kbps` default 96.
+
+## `stream` crate (owner: `Rtc`) `player/crates/stream`
+
+str0m (MIT/Apache-2.0, crypto backend by target: `apple-crypto` on macOS, `aws-lc-rs` or `rust-crypto` on Linux, `wincrypto` on Windows) plus axum 0.8 and tokio for HTTP only. No GPL code.
+
+```rust
+pub struct ServeConfig { pub bind: std::net::IpAddr, pub port: u16 /* 0 = pick */, pub size: (u32, u32), pub fps: u32, pub kbps: u32, pub latency_overlay: bool, pub title: String, pub encoder: Option<String> }
+pub enum InputEvent {
+    Key { down: bool, code: String, key: String, repeat: bool },
+    MouseMove { x: f64, y: f64 }, // logical px of ServeConfig::size
+    MouseButton { down: bool, button: u8 },
+    Wheel { dx: f64, dy: f64 },
+    Text(String),
+    Focus(bool),
+}
+pub struct Server;
+impl Server {
+    pub fn start(cfg: ServeConfig, input: Box<dyn Fn(InputEvent) + Send + Sync>) -> anyhow::Result<Server>;
+    pub fn urls(&self) -> Vec<String>;          // http://<lan ip>:<port>/ for every non-loopback IPv4 interface, plus loopback when bound to it
+    pub fn push_frame(&self, f: encode::RawFrame);  // called for every flip; the server gates, encodes, keepalives
+    pub fn push_audio(&self, stereo_f32_48k: &[f32]);
+    pub fn stats(&self) -> Stats;               // frames in/gated/encoded, bytes, encoder name, connected, keyframes, rtt
+    pub fn stop(self);
+}
+```
+
+- HTTP: `GET /` serves the single static page (`include_str!`, no build step, no external assets); `POST /offer` takes the SDP offer (`application/sdp`) and returns the SDP answer (host candidates only: one per non-loopback IPv4 interface, plus loopback when it is bound), `GET /stats` returns `Stats` as JSON. `--bind` default `0.0.0.0`. One session: a new offer replaces the old session.
+- UDP: one socket on the same port number as HTTP (or a printed second port) is acceptable; ICE-lite is allowed.
+- Media: one H.264 video m-line (sendonly, PT negotiated, profile 42e01f, packetization-mode 1), one Opus m-line (sendonly, PT 111). Video and audio use the same stream id. Keyframe on first connect, on PLI/FIR, on resolution change. Keepalive: when no changed frame arrived for 100 ms the last frame is encoded again (the first version used 1 s, see the integration notes) (a P-frame of an unchanged picture).
+- Data channels created by the browser, negotiated by label: `input-reliable` (ordered) and `input-move` (unordered, `maxRetransmits: 0`). Messages are text JSON, one object per message: `{"t":"kd","code":"Enter","key":"Enter","r":0}`, `kd`/`ku` (key down/up, `r` repeat), `{"t":"md","b":0}` / `mu` (button; sent with the position first as `mm`), `{"t":"mm","x":0.5,"y":0.25}` (normalized 0..1 of the video box, mapped to `size` by the server; on `input-move`), `{"t":"wh","x":0,"y":-1}`, `{"t":"tx","s":"é"}`, `{"t":"fc","g":1}`, and `{"t":"ping","c":<page ms>}` which the server answers on the same channel with `{"t":"pong","c":<same>,"s":<server clock ms>}` (clock sync for the latency probe). Button messages carry `x`,`y` too so a click lands where it was made.
+- Page (`/`): one "Connect" button (user gesture unlocks audio), `<video autoplay playsinline>`, creates the two data channels, forwards DOM events (keyboard on `document`, pointer on the video box, `contextmenu` suppressed), prefers H.264 through `setCodecPreferences`, sets `jitterBufferTarget`/`playoutDelayHint` to 0 where supported. A `?probe=1` mode (and `window.__stream` hooks) exposes: `window.__stream.sendInput(obj)`, `window.__stream.latency()` (array of measured ms), `window.__stream.stats()`, so a Playwright script can drive and measure without OS input.
+- Latency probe: with `latency_overlay` the server calls `encode::burn_timecode` on each frame it encodes with `capture_ms` = low 32 bits of its monotonic millisecond clock at push time, and answers `ping`. The page decodes the cells of each rendered frame (`requestVideoFrameCallback`, canvas read of the first 32 cells), estimates the server clock with the lowest-RTT pong (`serverNow = s + rtt/2`), and records `serverNow(at callback) - capture_ms`.
+- The crate has an example `examples/testpattern.rs` (synthetic moving frames and a tone through `Server`, same code path as the player) and `harness/stream_probe.py` (Playwright from `nix shell`) that opens the page headless, connects, checks that video frames decode, audio samples arrive (Web Audio analyser), that a `kd` message reaches the `input` callback, and prints the latency table.
+
+Details fixed by the implementation (no interface change):
+
+- Crypto backend: `aws-lc-rs` on macOS and Linux (builds in the Nix shell), `wincrypto` on Windows. `apple-crypto` was tried and rejected: it needs Xcode's Swift toolchain, which cannot build inside the Nix shell (SDK/compiler mismatch).
+- UDP: for a wildcard bind the server binds one UDP socket per IPv4 interface address (same port number as HTTP) and one reader thread per socket. str0m needs the local address each datagram arrived on and a plain wildcard socket does not report it. Interfaces that appear after `Server::start` are not served.
+- `Stats` also has `frames_replaced` (newest-wins drops), `frames_gated` (gate said unchanged), `keepalives`, `audio_packets`, `sessions`, `gate_ms` and `encode_ms` (moving averages). Idle repeats: after a burst of changed frames the last picture is sent once more after 2 frame periods, because the browser decoder shows a frame only when the next one arrives (without it the final frame of an animation appears up to 1 s late).
+- Messages: `wh` carries only deltas (`x`,`y` are the deltas); the page sends an `mm` first on the same channel. Wheel deltas are pygame-style lines: positive `y` scrolls up, positive `x` right (the page converts from DOM units, pixels/40). `InputEvent::Wheel` passes them unchanged. `md`/`mu` carry `x`,`y`; the server emits `MouseMove` then `MouseButton`.
+- The answer SDP is rewritten so audio and video share one stream id (str0m picks random ids per m-line); the page also puts both tracks in one `MediaStream`.
+- Page: `?hud=0` hides the status line; `window.__stream` also has `connect()`, `state()`, `sdp`, `pc()`, `video`.
+
+## `player serve` and the library button (owner: orchestrator)
+
+```
+player serve <game-dir> [--bind <addr>] [--port <n>] [--size <WxH>] [--fps <n>] [--kbps <n>] [--encoder <name>] [--latency-overlay] [--data <dir>] [--harness-script <file>] [ren'py args]
+```
+
+Headless (no window, no audio device): prints `Stream URL: http://<ip>:<port>/` for each LAN address, runs until the game quits or Ctrl-C. The library window's Stream button launches `player serve` as a child process, shows the URL and a Stop button.
+
+- `gfx` (anisotropy): a sampler without mips may carry an anisotropy clamp (no mips, all filters linear, anisotropy > 1: mipmap_filter Linear with lod_max_clamp 0). The sampler tuple's anisotropy element is passed for GL_LINEAR too.
+
+## M5 integration notes (orchestrator)
+
+- `Server::push_frame` stamps `capture_ms` itself when `latency_overlay` is on; the player passes 0. Input `mm` coordinates map to the size of the frame being encoded (the game picks its window size, for example 1738x978), not to `ServeConfig::size`.
+- A repeated picture sent so the browser releases its last decoder frame ("flush", 2 frame periods after a changed frame) keeps that picture's timecode; the keepalive (default every 100 ms while the picture is static, `STREAM_KEEPALIVE_MS`) restamps it. A 1 s keepalive made Chromium's video jitter buffer grow to 1.4 s over NetBird (sparse frames look like network jitter), so the gate runs at 100 ms; a static VideoToolbox picture then costs about 0.3 Mbit/s. The page counts each timecode once.
+- Headless extras (`gfx`/`media`/`platform`): `renpy.gl2.wgpudraw.dump_frames(dir, every_n)`, `capture_stats()`, `bench_capture(w, h, n)`; `Gpu.is_offscreen()`. `platform::inject::wheel(dx, dy)` is in lines with positive dy = up (the page sends negated DOM deltas). Test hooks `renpy.pygame.event._inject_for_test`, `renpysound._tap_install_for_test` and `_tap_stats_for_test` need env `PLAYER_TEST_INJECT=1`. `PLAYER_HEADLESS=1` also selects the dummy audio device. A headless window defaults to 1280x720 until the game asks for a size.
+- Stream crate backends: `aws-lc-rs` on macOS and Linux, `wincrypto` on Windows. Per-interface UDP sockets for a wildcard bind. `STREAM_NO_AUDIO=1` drops audio (debug switch).
+- `player serve` pass the game as `<base>/game` (the project root makes the player load the game's own `renpy/common`).
+- Gate: `harness/m5/gate_m5.py` (Playwright, data-channel input only), observer script `harness/m5/zz_m5observe.rpy`; results in `harness/M5-status.md`.
+
 # M6 contracts
 
 Added for "M6: AI upgrade pass for Ren'Py 7 games" (issue #39). Design: issue #20 (resolution comment), ARCHITECTURE.md "Ren'Py 7 games". The M3 patch library contract above still holds, with the state rule below.

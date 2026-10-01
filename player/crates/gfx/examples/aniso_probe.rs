@@ -92,8 +92,11 @@ fn mips(level0: Vec<u8>) -> Vec<(u32, Vec<u8>)> {
         for y in 0..n {
             for x in 0..n {
                 for c in 0..4 {
-                    let at = |dx: u32, dy: u32| prev[(((2 * y + dy) * s + 2 * x + dx) * 4 + c) as usize] as u32;
-                    next[((y * n + x) * 4 + c) as usize] = ((at(0, 0) + at(1, 0) + at(0, 1) + at(1, 1) + 2) / 4) as u8;
+                    let at = |dx: u32, dy: u32| {
+                        prev[(((2 * y + dy) * s + 2 * x + dx) * 4 + c) as usize] as u32
+                    };
+                    next[((y * n + x) * 4 + c) as usize] =
+                        ((at(0, 0) + at(1, 0) + at(0, 1) + at(1, 1) + 2) / 4) as u8;
                 }
             }
         }
@@ -123,28 +126,162 @@ fn main() {
     }))
     .expect("adapter");
     println!("adapter: {:?}", adapter.get_info());
-    let (device, queue) = pollster::block_on(adapter.request_device(&DeviceDescriptor::default())).expect("device");
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&DeviceDescriptor::default())).expect("device");
 
     let cfgs = [
-        Cfg { name: "tri_a1", tex: 1, mip_linear: true, lod_max: 32., aniso: 1, emu: 0 },
-        Cfg { name: "tri_a16", tex: 1, mip_linear: true, lod_max: 32., aniso: 16, emu: 0 },
-        Cfg { name: "base_nomip", tex: 1, mip_linear: false, lod_max: 0., aniso: 1, emu: 0 },
-        Cfg { name: "base_lin_a1", tex: 1, mip_linear: true, lod_max: 0., aniso: 1, emu: 0 },
-        Cfg { name: "base_lin_a16", tex: 1, mip_linear: true, lod_max: 0., aniso: 16, emu: 0 },
-        Cfg { name: "single_a1", tex: 0, mip_linear: true, lod_max: 0., aniso: 1, emu: 0 },
-        Cfg { name: "single_a16", tex: 0, mip_linear: true, lod_max: 0., aniso: 16, emu: 0 },
-        Cfg { name: "view1_a1", tex: 2, mip_linear: true, lod_max: 0., aniso: 1, emu: 0 },
-        Cfg { name: "view1_a16", tex: 2, mip_linear: true, lod_max: 0., aniso: 16, emu: 0 },
-        Cfg { name: "view1_a16_lod32", tex: 2, mip_linear: true, lod_max: 32., aniso: 16, emu: 0 },
-        Cfg { name: "single_a16_lod32", tex: 0, mip_linear: true, lod_max: 32., aniso: 16, emu: 0 },
-        Cfg { name: "base_a16_lod0p5", tex: 1, mip_linear: true, lod_max: 0.5, aniso: 16, emu: 0 },
-        Cfg { name: "base_a16_lod1", tex: 1, mip_linear: true, lod_max: 1., aniso: 16, emu: 0 },
-        Cfg { name: "base_a8", tex: 1, mip_linear: true, lod_max: 0., aniso: 8, emu: 0 },
-        Cfg { name: "base_a4", tex: 1, mip_linear: true, lod_max: 0., aniso: 4, emu: 0 },
-        Cfg { name: "base_a2", tex: 1, mip_linear: true, lod_max: 0., aniso: 2, emu: 0 },
-        Cfg { name: "emu_ceil", tex: 1, mip_linear: false, lod_max: 0., aniso: 1, emu: 1 },
-        Cfg { name: "emu_round", tex: 1, mip_linear: false, lod_max: 0., aniso: 1, emu: 2 },
-        Cfg { name: "emu_floor1", tex: 1, mip_linear: false, lod_max: 0., aniso: 1, emu: 3 },
+        Cfg {
+            name: "tri_a1",
+            tex: 1,
+            mip_linear: true,
+            lod_max: 32.,
+            aniso: 1,
+            emu: 0,
+        },
+        Cfg {
+            name: "tri_a16",
+            tex: 1,
+            mip_linear: true,
+            lod_max: 32.,
+            aniso: 16,
+            emu: 0,
+        },
+        Cfg {
+            name: "base_nomip",
+            tex: 1,
+            mip_linear: false,
+            lod_max: 0.,
+            aniso: 1,
+            emu: 0,
+        },
+        Cfg {
+            name: "base_lin_a1",
+            tex: 1,
+            mip_linear: true,
+            lod_max: 0.,
+            aniso: 1,
+            emu: 0,
+        },
+        Cfg {
+            name: "base_lin_a16",
+            tex: 1,
+            mip_linear: true,
+            lod_max: 0.,
+            aniso: 16,
+            emu: 0,
+        },
+        Cfg {
+            name: "single_a1",
+            tex: 0,
+            mip_linear: true,
+            lod_max: 0.,
+            aniso: 1,
+            emu: 0,
+        },
+        Cfg {
+            name: "single_a16",
+            tex: 0,
+            mip_linear: true,
+            lod_max: 0.,
+            aniso: 16,
+            emu: 0,
+        },
+        Cfg {
+            name: "view1_a1",
+            tex: 2,
+            mip_linear: true,
+            lod_max: 0.,
+            aniso: 1,
+            emu: 0,
+        },
+        Cfg {
+            name: "view1_a16",
+            tex: 2,
+            mip_linear: true,
+            lod_max: 0.,
+            aniso: 16,
+            emu: 0,
+        },
+        Cfg {
+            name: "view1_a16_lod32",
+            tex: 2,
+            mip_linear: true,
+            lod_max: 32.,
+            aniso: 16,
+            emu: 0,
+        },
+        Cfg {
+            name: "single_a16_lod32",
+            tex: 0,
+            mip_linear: true,
+            lod_max: 32.,
+            aniso: 16,
+            emu: 0,
+        },
+        Cfg {
+            name: "base_a16_lod0p5",
+            tex: 1,
+            mip_linear: true,
+            lod_max: 0.5,
+            aniso: 16,
+            emu: 0,
+        },
+        Cfg {
+            name: "base_a16_lod1",
+            tex: 1,
+            mip_linear: true,
+            lod_max: 1.,
+            aniso: 16,
+            emu: 0,
+        },
+        Cfg {
+            name: "base_a8",
+            tex: 1,
+            mip_linear: true,
+            lod_max: 0.,
+            aniso: 8,
+            emu: 0,
+        },
+        Cfg {
+            name: "base_a4",
+            tex: 1,
+            mip_linear: true,
+            lod_max: 0.,
+            aniso: 4,
+            emu: 0,
+        },
+        Cfg {
+            name: "base_a2",
+            tex: 1,
+            mip_linear: true,
+            lod_max: 0.,
+            aniso: 2,
+            emu: 0,
+        },
+        Cfg {
+            name: "emu_ceil",
+            tex: 1,
+            mip_linear: false,
+            lod_max: 0.,
+            aniso: 1,
+            emu: 1,
+        },
+        Cfg {
+            name: "emu_round",
+            tex: 1,
+            mip_linear: false,
+            lod_max: 0.,
+            aniso: 1,
+            emu: 2,
+        },
+        Cfg {
+            name: "emu_floor1",
+            tex: 1,
+            mip_linear: false,
+            lod_max: 0.,
+            aniso: 1,
+            emu: 3,
+        },
     ];
 
     let module = device.create_shader_module(ShaderModuleDescriptor {
@@ -181,7 +318,12 @@ fn main() {
         device.create_render_pipeline(&RenderPipelineDescriptor {
             label: None,
             layout: Some(&pl),
-            vertex: VertexState { module, entry_point: Some("vs"), compilation_options: Default::default(), buffers: &[] },
+            vertex: VertexState {
+                module,
+                entry_point: Some("vs"),
+                compilation_options: Default::default(),
+                buffers: &[],
+            },
             fragment: Some(FragmentState {
                 module,
                 entry_point: Some(fs),
@@ -202,14 +344,21 @@ fn main() {
     let mut pipelines = vec![make_pipeline(&module, "fs")];
     for n in ["ceil(ratio)", "round(ratio)", "floor(ratio) + 1."] {
         let src = format!("{SHADER}{}", EMU.replace("__N__", n));
-        let m = device.create_shader_module(ShaderModuleDescriptor { label: None, source: ShaderSource::Wgsl(src.into()) });
+        let m = device.create_shader_module(ShaderModuleDescriptor {
+            label: None,
+            source: ShaderSource::Wgsl(src.into()),
+        });
         pipelines.push(make_pipeline(&m, "fs_emu"));
     }
 
     let make_tex = |levels: &[(u32, Vec<u8>)], count: u32| {
         let t = device.create_texture(&TextureDescriptor {
             label: None,
-            size: Extent3d { width: TEX, height: TEX, depth_or_array_layers: 1 },
+            size: Extent3d {
+                width: TEX,
+                height: TEX,
+                depth_or_array_layers: 1,
+            },
             mip_level_count: count,
             sample_count: 1,
             dimension: TextureDimension::D2,
@@ -219,16 +368,32 @@ fn main() {
         });
         for (i, (s, data)) in levels.iter().take(count as usize).enumerate() {
             queue.write_texture(
-                TexelCopyTextureInfo { texture: &t, mip_level: i as u32, origin: Origin3d::ZERO, aspect: TextureAspect::All },
+                TexelCopyTextureInfo {
+                    texture: &t,
+                    mip_level: i as u32,
+                    origin: Origin3d::ZERO,
+                    aspect: TextureAspect::All,
+                },
                 data,
-                TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(s * 4), rows_per_image: Some(*s) },
-                Extent3d { width: *s, height: *s, depth_or_array_layers: 1 },
+                TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(s * 4),
+                    rows_per_image: Some(*s),
+                },
+                Extent3d {
+                    width: *s,
+                    height: *s,
+                    depth_or_array_layers: 1,
+                },
             );
         }
         t
     };
 
-    for (tname, f) in [("checker", checker as fn(u32, u32) -> [u8; 4]), ("grating", grating)] {
+    for (tname, f) in [
+        ("checker", checker as fn(u32, u32) -> [u8; 4]),
+        ("grating", grating),
+    ] {
         let mut l0 = Vec::with_capacity((TEX * TEX * 4) as usize);
         for y in 0..TEX {
             for x in 0..TEX {
@@ -245,7 +410,11 @@ fn main() {
                 address_mode_v: AddressMode::ClampToEdge,
                 mag_filter: FilterMode::Linear,
                 min_filter: FilterMode::Linear,
-                mipmap_filter: if c.mip_linear { MipmapFilterMode::Linear } else { MipmapFilterMode::Nearest },
+                mipmap_filter: if c.mip_linear {
+                    MipmapFilterMode::Linear
+                } else {
+                    MipmapFilterMode::Nearest
+                },
                 lod_min_clamp: 0.,
                 lod_max_clamp: c.lod_max,
                 anisotropy_clamp: c.aniso,
@@ -254,19 +423,33 @@ fn main() {
             let view = match c.tex {
                 0 => single.create_view(&Default::default()),
                 1 => multi.create_view(&Default::default()),
-                _ => multi.create_view(&TextureViewDescriptor { base_mip_level: 0, mip_level_count: Some(1), ..Default::default() }),
+                _ => multi.create_view(&TextureViewDescriptor {
+                    base_mip_level: 0,
+                    mip_level_count: Some(1),
+                    ..Default::default()
+                }),
             };
             let bg = device.create_bind_group(&BindGroupDescriptor {
                 label: None,
                 layout: &bgl,
                 entries: &[
-                    BindGroupEntry { binding: 0, resource: BindingResource::TextureView(&view) },
-                    BindGroupEntry { binding: 1, resource: BindingResource::Sampler(&sampler) },
+                    BindGroupEntry {
+                        binding: 0,
+                        resource: BindingResource::TextureView(&view),
+                    },
+                    BindGroupEntry {
+                        binding: 1,
+                        resource: BindingResource::Sampler(&sampler),
+                    },
                 ],
             });
             let target = device.create_texture(&TextureDescriptor {
                 label: None,
-                size: Extent3d { width: W, height: H, depth_or_array_layers: 1 },
+                size: Extent3d {
+                    width: W,
+                    height: H,
+                    depth_or_array_layers: 1,
+                },
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: TextureDimension::D2,
@@ -291,7 +474,12 @@ fn main() {
                         depth_slice: None,
                         resolve_target: None,
                         ops: Operations {
-                            load: LoadOp::Clear(Color { r: 0.44, g: 0.44, b: 0.44, a: 1. }),
+                            load: LoadOp::Clear(Color {
+                                r: 0.44,
+                                g: 0.44,
+                                b: 0.44,
+                                a: 1.,
+                            }),
                             store: StoreOp::Store,
                         },
                     })],
@@ -305,9 +493,25 @@ fn main() {
                 pass.draw(0..6, 0..1);
             }
             enc.copy_texture_to_buffer(
-                TexelCopyTextureInfo { texture: &target, mip_level: 0, origin: Origin3d::ZERO, aspect: TextureAspect::All },
-                TexelCopyBufferInfo { buffer: &buf, layout: TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(bpr), rows_per_image: Some(H) } },
-                Extent3d { width: W, height: H, depth_or_array_layers: 1 },
+                TexelCopyTextureInfo {
+                    texture: &target,
+                    mip_level: 0,
+                    origin: Origin3d::ZERO,
+                    aspect: TextureAspect::All,
+                },
+                TexelCopyBufferInfo {
+                    buffer: &buf,
+                    layout: TexelCopyBufferLayout {
+                        offset: 0,
+                        bytes_per_row: Some(bpr),
+                        rows_per_image: Some(H),
+                    },
+                },
+                Extent3d {
+                    width: W,
+                    height: H,
+                    depth_or_array_layers: 1,
+                },
             );
             queue.submit([enc.finish()]);
             let slice = buf.slice(..);
