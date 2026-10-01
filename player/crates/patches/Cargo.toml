@@ -1,0 +1,12 @@
+[package]
+name = "patches"
+description = "Patch library: parses and validates port-patch TOML files (Ren'Py 7 and 8 games)."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+pyo3 = { workspace = true }
+pyo3-ffi = { workspace = true }
+toml = "1"
+serde_json = "1"

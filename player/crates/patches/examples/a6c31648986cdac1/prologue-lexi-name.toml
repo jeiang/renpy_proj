@@ -1,0 +1,8 @@
+# Port patch (test): replaces the code of one node. Keyed by build fingerprint (directory name).
+[[patch]]
+file = "game/events/special/prologue.rpy"
+line = 236
+original_hash = "sha1:ec7114f770f047daac600a26e31613a2ea05516c"
+source = '''
+Lexi.name = _("PatchedGirl")
+'''

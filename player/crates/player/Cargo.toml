@@ -16,4 +16,7 @@ anyhow = { workspace = true }
 library = { path = "../library" }
 saves = { path = "../saves" }
 vfs = { path = "../vfs" }
+patches = { path = "../patches" }
+serde_json = "1"
 text = { path = "../text" }
+py2fix = { path = "../py2fix" }

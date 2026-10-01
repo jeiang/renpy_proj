@@ -212,8 +212,21 @@ def path_to_common(renpy_base):
     renpy.vfs.register(commondir, settings["provider"])
     install_loader(settings["provider"], commondir)
 
+    # compat slice (begin): hooks for a Ren'Py 7 game; Ren'Py is imported and no script has loaded yet.
+    import _player.compat
+
+    _player.compat.install(settings)
+    # compat slice (end)
+
     if settings["harness"]:
         install_harness(settings["harness"], settings["harnessdir"])
+
+    # py2fix slice (begin): the script-parser leniencies (engine patches 0750-0799) are on for a Ren'Py 7 game.
+    import renpy.lexer
+
+    detection = settings.get("compat")
+    renpy.lexer.renpy7_syntax = bool(detection and detection.renpy7)
+    # py2fix slice (end)
 
     return commondir
 
@@ -232,6 +245,13 @@ def path_to_saves(gamedir, save_directory=None):
     rv = os.path.join(settings["data"], "saves", key)
     os.makedirs(rv, exist_ok=True)
 
+    # patches slice (begin): port patches replace node code after load and before the first init block.
+    if own_call:
+        import _player.patches
+
+        _player.patches.on_script_loaded(settings)
+    # patches slice (end)
+
     # saves slice (begin): the script is loaded and init has not run. Import stock saves on the first
     # open, then write the pre-flight report (_player/preflight.py).
     if own_call:
@@ -239,6 +259,13 @@ def path_to_saves(gamedir, save_directory=None):
 
         _player.preflight.on_script_loaded(settings, rv)
     # saves slice (end)
+
+    # compat slice (begin): scan the game's Python, write the rewrite events.
+    if own_call:
+        import _player.compat
+
+        _player.compat.loaded(settings)
+    # compat slice (end)
 
     return rv
 
@@ -302,6 +329,12 @@ def main():
         settings["harnessdir"] = renpy_base + "/harness"
 
     os.makedirs(settings["cachedir"], exist_ok=True)
+
+    # compat slice (begin): Ren'Py 7 detection, from the game's own engine files, before any script loads.
+    import _player.compat
+
+    settings["compat"] = _player.compat.detect(basedir, gamedir)
+    # compat slice (end)
 
     if renderer:
         os.environ["RENPY_RENDERER"] = renderer

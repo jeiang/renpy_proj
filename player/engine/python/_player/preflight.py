@@ -356,7 +356,20 @@ def build_report(settings, savedir, record, files, features, errors):
 
     engine, source, pymajor = detect_engine(settings["basedir"])
     renpy7 = None if engine is None else int(engine.split(".")[0]) < 8
+
+    # compat slice (begin): Ren'Py 7 status and engine version come from the one detection (_player.compat.detect).
+    import _player.compat
+
+    detection = settings.get("compat") or _player.compat.detect(settings["basedir"], settings["gamedir"])
+    engine = detection.engine_version
+    renpy7 = True if detection.renpy7 else (None if engine is None and "assuming Ren'Py 8" in detection.reason else False)
+    # compat slice (end)
     mods, patches = _mods_and_patches(settings["data"], settings["key"])
+    # patches slice (begin): applied and unmatched patches of this run.
+    import _player.patches
+
+    patches["library"] = _player.patches.results
+    # patches slice (end)
     summary = _summary(files)
 
     unsupported = []
@@ -380,12 +393,13 @@ def build_report(settings, savedir, record, files, features, errors):
         summary["resumes_earlier"] or summary["load_fails"] or summary["class_missing"] or summary["unreadable"] or summary["warnings"] or blocked_files or errors or renpy7 or mods["missing"] or any(u["severity"] == "warning" for u in unsupported)
     )
     blocking = any(u["severity"] == "blocking" for u in unsupported)
+    warn = warn or bool(patches["library"]["unmatched"] or patches["library"]["errors"])  # patches slice
     status = "blocked" if blocking else "warning" if warn else "ok"
 
     if renpy7 is None:
-        r7 = "unknown: the game has no readable renpy/ folder"
+        r7 = "unknown: " + detection.reason
     elif renpy7:
-        r7 = "Ren'Py 7 game (%s, Python %s); it runs on the embedded Ren'Py %s layer" % (engine, pymajor or "?", renpy.version_only)
+        r7 = "Ren'Py 7 game (%s, Python %s; %s); it runs on the embedded Ren'Py %s layer" % (engine or "version unknown", pymajor or "?", detection.reason, renpy.version_only)
     else:
         r7 = "not Ren'Py 7"
 
@@ -470,6 +484,13 @@ def _markdown(rep):
     if rep["mods"]["missing"]:
         out.append("- Listed in order.txt but missing: %s" % ", ".join(rep["mods"]["missing"]))
     out.append("- Patch files: %d" % len(rep["patches"]["files"]))
+    # patches slice (begin)
+    lib = rep["patches"].get("library") or {}
+    out.append("- Port patches applied: %d" % len(lib.get("applied", [])))
+    out += ["  - applied: %s (%s:%d, node %s)" % (x["patch"], x["file"], x["line"], x["node"]) for x in lib.get("applied", [])]
+    out += ["  - **not applied**: %s (%s:%d): %s" % (x["patch"], x["file"], x["line"], x["reason"]) for x in lib.get("unmatched", [])]
+    out += ["  - **patch file problem**: %s" % x for x in lib.get("errors", [])]
+    # patches slice (end)
 
     out += ["", "## Unsupported features", ""]
     out += ["- **%s** (%s): %s" % (u["feature"], u["severity"], u["detail"]) for u in rep["unsupported"]] or ["- none found"]
