@@ -26,6 +26,7 @@ fn main() -> anyhow::Result<()> {
     let mut file = std::fs::File::create(&out)?;
     let mut total = 0;
     let mut access_units = 0;
+    let mut sizes = String::new();
     let mut idrs = Vec::new();
     for t in 0..n {
         let mut f = common::frame_from(&base, w, h, PixelFormat::Rgba, t, moving);
@@ -53,8 +54,10 @@ fn main() -> anyhow::Result<()> {
             total += e.data.len();
             access_units += 1;
             file.write_all(&e.data)?;
+            sizes.push_str(&format!("{} {}\n", e.data.len(), e.keyframe as u8));
         }
     }
+    std::fs::write(format!("{out}.sizes"), sizes)?; // "<bytes> <keyframe>" per access unit
     println!("{}: {n} frames in, {access_units} access units, {total} bytes, IDR at access units {idrs:?} -> {out}", enc.name());
     Ok(())
 }
