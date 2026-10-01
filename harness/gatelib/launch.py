@@ -582,6 +582,9 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
     # The compat notice is drawn over the game; stock has none, so it would show up in frame diffs. The fix is
     # still recorded in the player's runtime.jsonl.
     env["PLAYER_COMPAT_NOTICE"] = "off"
+    # Ren'Py backs up the .rpy files it compiles into ~/Library/RenPy/backups (~/.renpy/backups), outside every scratch
+    # save dir: a game with loose scripts would change the host's save root (the hygiene check below).
+    env["RENPY_DISABLE_BACKUPS"] = "I take responsibility for this."
     env["HZ_INPUT_ANSWER"] = str(g.get("input_answer", "Tester"))
     env["HZ_INPUT_EXPLICIT"] = "1" if "input_answer" in g else "0"   # deep runs vary the answer unless the game needs one
     env["HZ_AFTER_START"] = json.dumps(list(g.get("after_start", ())))   # deep runs replay it when a play ends and the next starts
