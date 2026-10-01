@@ -69,9 +69,34 @@
               libiconv
               git
               gh
-            ];
+            ] ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux (with pkgs; [
+              # Linux (M4): CPython build tools, link-time audio and input libs, and the libraries
+              # that wgpu, winit and the Wayland/X11 stack open at run time.
+              gnumake
+              patchelf
+              curl
+              xz
+              alsa-lib # cpal (ALSA, reaches PipeWire through its plugin)
+              systemdLibs # libudev for gilrs
+              vulkan-loader
+              wayland
+              libxkbcommon
+              libx11
+              libxcursor
+              libxrandr
+              libxi
+              libxcb
+              libdrm # libva-drm (VA-API)
+            ]);
             LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
             FFMPEG_LGPL = "${ffmpegLgpl pkgs}";
+            # Linux: the loader and window-system libraries that are opened with dlopen. The GPU drivers
+            # come from the host (/run/opengl-driver on NixOS; the system ones elsewhere).
+            PLAYER_DLOPEN_RPATH = pkgs.lib.optionalString pkgs.stdenv.hostPlatform.isLinux "${pkgs.lib.makeLibraryPath (with pkgs; [ vulkan-loader wayland libxkbcommon libx11 libxcursor libxrandr libxi libxcb alsa-lib systemdLibs libdrm ])}:/run/opengl-driver/lib";
+            shellHook = pkgs.lib.optionalString pkgs.stdenv.hostPlatform.isLinux ''
+              export BINDGEN_EXTRA_CLANG_ARGS="-isystem ${pkgs.llvmPackages.libclang.lib}/lib/clang/${pkgs.lib.versions.major pkgs.llvmPackages.libclang.version}/include -isystem ${pkgs.glibc.dev}/include"
+              export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath (with pkgs; [ vulkan-loader wayland libxkbcommon libx11 libxcursor libxrandr libxi libxcb alsa-lib systemdLibs libdrm ])}:/run/opengl-driver/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+            '';
           };
         });
     };
