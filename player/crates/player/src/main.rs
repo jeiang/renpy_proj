@@ -19,6 +19,13 @@ fn absolute(p: &str) -> Result<String> {
     Ok(std::path::absolute(p)?.to_string_lossy().into_owned())
 }
 
+/// A path as text for Python. On Windows `canonicalize` gives a verbatim `\\?\C:\...` path, and Windows
+/// does not translate `/` inside those; Ren'Py joins paths with `/`, so the prefix must go.
+fn py_path(p: &Path) -> String {
+    let s = p.to_string_lossy();
+    s.strip_prefix(r"\\?\").unwrap_or(&s).to_string()
+}
+
 fn build_argv(args: Vec<String>) -> Result<Vec<String>> {
     let mut game: Option<PathBuf> = None;
     let mut boot = vec!["player".to_string()];
@@ -41,7 +48,7 @@ fn build_argv(args: Vec<String>) -> Result<Vec<String>> {
                     .canonicalize()
                     .with_context(|| format!("harness script not found: {v}"))?;
                 boot.push(a);
-                boot.push(p.to_string_lossy().into_owned());
+                boot.push(py_path(&p));
             }
             "-h" | "--help" => bail!("{USAGE}\n{SUBCOMMANDS}"),
             // The first bare argument is the game; everything after it that is not ours goes to Ren'Py.
@@ -51,7 +58,7 @@ fn build_argv(args: Vec<String>) -> Result<Vec<String>> {
     }
     let game = game.with_context(|| USAGE.to_string())?;
     boot.push("--game".into());
-    boot.push(resolve_game(&game)?.to_string_lossy().into_owned());
+    boot.push(py_path(&resolve_game(&game)?));
     boot.extend(rest);
     Ok(boot)
 }
