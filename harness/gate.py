@@ -57,6 +57,7 @@ def parse():
     r.add_argument("--video-min-ratio", type=float, default=0.85, help="min presented (engine_frames)/expected frames")
     r.add_argument("--video-zero-drop", action="store_true",
                    help="quiet-machine run: fail if any presented or decoded frame interval is beyond 1.5x nominal")
+    r.add_argument("--video-shared", action="store_true", help="parallel workers: run the video check beside the other slots (a load test; default: it takes the whole machine)")
     r.add_argument("--video-max-av-ms", type=float, default=150, help="max frame-vs-audio offset")
     r.add_argument("--video-max-drift-ms", type=float, default=100, help="max audio-vs-wall clock drift over the window")
     r.add_argument("--no-sync-clip", dest="sync_clip", action="store_false",

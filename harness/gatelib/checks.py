@@ -308,7 +308,7 @@ def _video_run(ctx, name, path, fps, extra=None):
     o = ctx.opts
     plan = L.parse_plan("cmd auto on\ncmd click on\nwait menu True\ncmd click off\nsettle 2\ncmd movie %s %s %s %s %s\n"
                         "wait video-result\nshot video volatile\nquit\n" % (fps, o["video_secs"], o["video_warm"], VIDEO_HOLD, path))
-    r = L.launch(ctx, name, plan=plan, timeout=o["video_secs"] + o["video_warm"] + 400, extra_files=extra, exclusive=True)   # timing: nothing else may run
+    r = L.launch(ctx, name, plan=plan, timeout=o["video_secs"] + o["video_warm"] + 400, extra_files=extra, exclusive=not o.get("video_shared"))   # timing: nothing else may run
     if not any(x["file"] or x.get("error") for x in r["shots"]) and not r["aborted"]:
         r["aborted"] = "no screenshot of the video window"
     vj = ctx.out / name / "video.json"

@@ -3,7 +3,7 @@
 
   python3 harness/tools/parrun.py --workers 4 --out harness/out/par4 --games A,B --tier m1 --engine player --player-bin <abs path> [--baseline-root DIR] [-- gate args]
 
-Output of game G lands in <out>/G. With --baseline-root, game G gets `--baseline <baseline-root>/G`. Wall time of the whole pool is printed.
+Output of game G lands in <out>/G (<out>/G.rK with --replicas). With --baseline-root, game G gets `--baseline <baseline-root>/G`. Wall time of the whole pool is printed.
 """
 import argparse
 import pathlib
@@ -23,18 +23,21 @@ ap.add_argument("--engine", default="player")
 ap.add_argument("--player-bin")
 ap.add_argument("--baseline-root")
 ap.add_argument("--work")
+ap.add_argument("--replicas", type=int, default=1, help="run each game R times as <game>.r0 .. (measurement runs)")
 a, rest = ap.parse_known_args()
 if rest[:1] == ["--"]:
     rest = rest[1:]
 out = pathlib.Path(a.out).resolve()
 jobs = []
-for k in a.games.split(","):
-    argv = [sys.executable, str(L.HARNESS / "gate.py"), "run", "--engine", a.engine, "--game", k, "--tier", a.tier, "--out", str(out / k)]
+for r in range(a.replicas):
+  for k in a.games.split(","):
+    name = "%s.r%d" % (k, r) if a.replicas > 1 else k
+    argv = [sys.executable, str(L.HARNESS / "gate.py"), "run", "--engine", a.engine, "--game", k, "--tier", a.tier, "--out", str(out / name)]
     if a.player_bin:
         argv += ["--player-bin", a.player_bin]
-    if a.baseline_root:
-        argv += ["--baseline", str(pathlib.Path(a.baseline_root).resolve() / k)]
-    jobs.append((k, argv + rest))
+    if a.baseline_root:   # replicas all compare with replica 0 of the baseline run
+        argv += ["--baseline", str(pathlib.Path(a.baseline_root).resolve() / ("%s.r0" % k if a.replicas > 1 else k))]
+    jobs.append((name, argv + rest))
 t0 = time.time()
 res = W.run_pool(jobs, a.workers, a.work or L.work_dir(), log=lambda m: print(m, flush=True))
 print("[parrun] width %d wall %.1f s rc %s" % (a.workers, time.time() - t0, res), flush=True)
