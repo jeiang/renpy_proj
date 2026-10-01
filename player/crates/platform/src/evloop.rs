@@ -22,6 +22,7 @@ use winit::window::{Fullscreen, Icon, Window, WindowId};
 
 use crate::event::{self, consts};
 use crate::keys;
+use crate::win::Win;
 
 /// Keyboard, mouse and text-input state that `pygame.key` and `pygame.mouse` read back.
 pub struct Input {
@@ -85,14 +86,12 @@ pub fn destroy_window() {
 
 /// Size of the window in physical pixels; `(0, 0)` without a window.
 pub fn drawable_size() -> (u32, u32) {
-    window().map_or((0, 0), |w| {
-        let s = w.inner_size();
-        (s.width, s.height)
-    })
+    Win::get().map_or((0, 0), |w| w.drawable_size())
 }
 
 /// Wakes a blocked `pump` (from any thread).
 pub fn wake() {
+    crate::win::wake();
     if let Some(p) = PROXY.lock().as_ref() {
         let _ = p.send_event(());
     }
@@ -118,6 +117,10 @@ fn ensure_loop() -> anyhow::Result<()> {
 
 /// Runs winit for at most `timeout`. Does nothing when no loop exists yet or it is already running.
 pub fn pump(timeout: Option<Duration>) {
+    if crate::headless::is_headless() {
+        crate::win::block(timeout.unwrap_or(Duration::from_millis(100)));
+        return;
+    }
     let Some(mut el) = EVENT_LOOP.with(|l| l.borrow_mut().take()) else {
         return;
     };
@@ -143,6 +146,9 @@ fn run_jobs(el: &ActiveEventLoop) {
 
 /// Runs `f` on the event loop thread with access to the `ActiveEventLoop` and returns its result.
 pub fn on_loop<R: 'static>(f: impl FnOnce(&ActiveEventLoop) -> R + 'static) -> anyhow::Result<R> {
+    if crate::headless::is_headless() {
+        return Err(anyhow!("there is no winit event loop in headless mode"));
+    }
     ensure_loop()?;
     let slot: Rc<RefCell<Option<R>>> = Rc::new(RefCell::new(None));
     let out = slot.clone();
@@ -216,6 +222,17 @@ pub struct Monitor {
 
 /// All monitors, primary first.
 pub fn monitors() -> anyhow::Result<Vec<Monitor>> {
+    if crate::headless::is_headless() {
+        let (w, h) = crate::headless::DISPLAY;
+        return Ok(vec![Monitor {
+            x: 0,
+            y: 0,
+            w,
+            h,
+            refresh: 60,
+            modes: vec![(w, h), (1280, 720), (1024, 768), (800, 600)],
+        }]);
+    }
     on_loop(|el| {
         let primary = el.primary_monitor();
         let mut list: Vec<_> = el.available_monitors().collect();
@@ -390,22 +407,49 @@ fn printable(text: &str) -> bool {
         })
 }
 
+/// A key press or release in plain data, shared by winit events and `inject`.
+pub(crate) struct KeyIn {
+    pub pressed: bool,
+    pub physical: Option<winit::keyboard::KeyCode>,
+    /// The single character of the key without modifiers, if it has one.
+    pub base_char: Option<char>,
+    pub text: Option<String>,
+    pub repeat: bool,
+}
+
 fn key_event(py: Python<'_>, e: &KeyEvent) -> PyResult<()> {
-    let pressed = e.state == ElementState::Pressed;
-    let (sc, phys) = match e.physical_key {
-        PhysicalKey::Code(c) => (keys::scancode(c), keys::keycode_from_physical(c)),
-        PhysicalKey::Unidentified(_) => (0, 0),
-    };
-    let sym = match e.key_without_modifiers() {
+    let base_char = match e.key_without_modifiers() {
         Key::Character(s) => {
             let mut it = s.chars();
             match (it.next(), it.next()) {
-                (Some(ch), None) => keys::keycode_from_char(ch),
-                _ => phys,
+                (Some(ch), None) => Some(ch),
+                _ => None,
             }
         }
-        _ => phys,
+        _ => None,
     };
+    key_core(
+        py,
+        &KeyIn {
+            pressed: e.state == ElementState::Pressed,
+            physical: match e.physical_key {
+                PhysicalKey::Code(c) => Some(c),
+                PhysicalKey::Unidentified(_) => None,
+            },
+            base_char,
+            text: e.text.as_ref().map(|t| t.to_string()),
+            repeat: e.repeat,
+        },
+    )
+}
+
+pub(crate) fn key_core(py: Python<'_>, k: &KeyIn) -> PyResult<()> {
+    let pressed = k.pressed;
+    let (sc, phys) = match k.physical {
+        Some(c) => (keys::scancode(c), keys::keycode_from_physical(c)),
+        None => (0, 0),
+    };
+    let sym = k.base_char.map_or(phys, keys::keycode_from_char);
 
     let (mods, text_input) = {
         let mut inp = INPUT.lock();
@@ -418,7 +462,7 @@ fn key_event(py: Python<'_>, e: &KeyEvent) -> PyResult<()> {
     };
 
     let text = if pressed {
-        e.text.as_deref().filter(|t| printable(t))
+        k.text.as_deref().filter(|t| printable(t))
     } else {
         None
     };
@@ -445,7 +489,7 @@ fn key_event(py: Python<'_>, e: &KeyEvent) -> PyResult<()> {
         d.set_item("key", sym)?;
         d.set_item("mod", mods)?;
         d.set_item("unicode", unicode)?;
-        d.set_item("repeat", i64::from(e.repeat))?;
+        d.set_item("repeat", i64::from(k.repeat))?;
         Ok(())
     })?;
 
@@ -468,6 +512,11 @@ fn wheel(py: Python<'_>, delta: MouseScrollDelta) -> PyResult<()> {
             (p.x / s * 0.1, p.y / s * 0.1)
         }
     };
+    wheel_lines(py, lines_x, lines_y)
+}
+
+/// A wheel movement in lines (positive y scrolls up).
+pub(crate) fn wheel_lines(py: Python<'_>, lines_x: f64, lines_y: f64) -> PyResult<()> {
     let (ix, iy, pos, as_buttons) = {
         let mut inp = INPUT.lock();
         inp.wheel_acc.0 += lines_x;
@@ -510,6 +559,74 @@ fn wheel(py: Python<'_>, delta: MouseScrollDelta) -> PyResult<()> {
     Ok(())
 }
 
+/// The pointer moved to a logical position.
+pub(crate) fn cursor_moved(py: Python<'_>, x: f64, y: f64) -> PyResult<()> {
+    let (pos, rel, mask) = {
+        let mut inp = INPUT.lock();
+        let rel = match inp.last_cursor {
+            Some((px, py_)) => ((x - px).round() as i32, (y - py_).round() as i32),
+            None => (0, 0),
+        };
+        inp.last_cursor = Some((x, y));
+        let pos = (x as i32, y as i32);
+        inp.mouse_pos = pos;
+        inp.rel_acc.0 += rel.0;
+        inp.rel_acc.1 += rel.1;
+        (pos, rel, inp.mouse_mask)
+    };
+    event::push_native(py, consts::MOUSEMOTION, |d| {
+        d.set_item("pos", pos)?;
+        d.set_item("rel", rel)?;
+        d.set_item("which", 0)?;
+        d.set_item("buttons", buttons_tuple(mask))?;
+        d.set_item("touch", false)
+    })
+}
+
+/// A mouse button (SDL numbering: 1 left, 2 middle, 3 right, 4 back, 5 forward) changed.
+pub(crate) fn mouse_button(py: Python<'_>, n: i64, down: bool) -> PyResult<()> {
+    let pos = {
+        let mut inp = INPUT.lock();
+        if down {
+            inp.mouse_mask |= button_mask(n);
+        } else {
+            inp.mouse_mask &= !button_mask(n);
+        }
+        inp.mouse_pos
+    };
+    let reported = if INPUT.lock().mousewheel_buttons && n >= 4 {
+        n + 2
+    } else {
+        n
+    };
+    event::push_native(
+        py,
+        if down {
+            consts::MOUSEBUTTONDOWN
+        } else {
+            consts::MOUSEBUTTONUP
+        },
+        |d| {
+            d.set_item("button", reported)?;
+            d.set_item("pos", pos)?;
+            d.set_item("which", 0)?;
+            d.set_item("touch", false)
+        },
+    )
+}
+
+/// Keyboard focus changed.
+pub(crate) fn focus_changed(py: Python<'_>, gain: bool) -> PyResult<()> {
+    if !gain {
+        INPUT.lock().pressed.clear();
+    }
+    simple(
+        py,
+        consts::ACTIVEEVENT,
+        &[("state", 2), ("gain", i64::from(gain))],
+    )
+}
+
 fn translate(py: Python<'_>, ev: WindowEvent) -> PyResult<()> {
     match ev {
         WindowEvent::CloseRequested => simple(py, consts::QUIT, &[]),
@@ -532,17 +649,7 @@ fn translate(py: Python<'_>, ev: WindowEvent) -> PyResult<()> {
                 d.set_item("y", y)
             })
         }
-        WindowEvent::Focused(gain) => {
-            if !gain {
-                let mut inp = INPUT.lock();
-                inp.pressed.clear();
-            }
-            simple(
-                py,
-                consts::ACTIVEEVENT,
-                &[("state", 2), ("gain", i64::from(gain))],
-            )
-        }
+        WindowEvent::Focused(gain) => focus_changed(py, gain),
         WindowEvent::Occluded(hidden) => simple(
             py,
             consts::ACTIVEEVENT,
@@ -595,58 +702,10 @@ fn translate(py: Python<'_>, ev: WindowEvent) -> PyResult<()> {
         },
         WindowEvent::CursorMoved { position, .. } => {
             let l: LogicalPosition<f64> = position.to_logical(scale());
-            let (pos, rel, mask) = {
-                let mut inp = INPUT.lock();
-                let rel = match inp.last_cursor {
-                    Some((px, py_)) => ((l.x - px).round() as i32, (l.y - py_).round() as i32),
-                    None => (0, 0),
-                };
-                inp.last_cursor = Some((l.x, l.y));
-                let pos = (l.x as i32, l.y as i32);
-                inp.mouse_pos = pos;
-                inp.rel_acc.0 += rel.0;
-                inp.rel_acc.1 += rel.1;
-                (pos, rel, inp.mouse_mask)
-            };
-            event::push_native(py, consts::MOUSEMOTION, |d| {
-                d.set_item("pos", pos)?;
-                d.set_item("rel", rel)?;
-                d.set_item("which", 0)?;
-                d.set_item("buttons", buttons_tuple(mask))?;
-                d.set_item("touch", false)
-            })
+            cursor_moved(py, l.x, l.y)
         }
         WindowEvent::MouseInput { state, button, .. } => {
-            let n = button_number(button);
-            let down = state == ElementState::Pressed;
-            let pos = {
-                let mut inp = INPUT.lock();
-                if down {
-                    inp.mouse_mask |= button_mask(n);
-                } else {
-                    inp.mouse_mask &= !button_mask(n);
-                }
-                inp.mouse_pos
-            };
-            let reported = if INPUT.lock().mousewheel_buttons && n >= 4 {
-                n + 2
-            } else {
-                n
-            };
-            event::push_native(
-                py,
-                if down {
-                    consts::MOUSEBUTTONDOWN
-                } else {
-                    consts::MOUSEBUTTONUP
-                },
-                |d| {
-                    d.set_item("button", reported)?;
-                    d.set_item("pos", pos)?;
-                    d.set_item("which", 0)?;
-                    d.set_item("touch", false)
-                },
-            )
+            mouse_button(py, button_number(button), state == ElementState::Pressed)
         }
         WindowEvent::MouseWheel { delta, .. } => wheel(py, delta),
         WindowEvent::DroppedFile(path) => {

@@ -1,9 +1,10 @@
 //! Audio output. A cpal stream runs on a helper thread (cpal streams are not
 //! `Send` on every platform) and calls the mixer. With `SDL_AUDIODRIVER=dummy`
-//! a timer thread calls the mixer instead, so that the audio system works
-//! without a sound device.
+//! (or `set_virtual_output`, or `PLAYER_HEADLESS=1`) a timer thread calls the
+//! mixer instead, so that the audio system works without a sound device. An
+//! optional PCM tap sees every mixer pass.
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::mpsc;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -11,11 +12,42 @@ use std::time::{Duration, Instant};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{FromSample, SampleFormat, SizedSample, StreamConfig};
 
+use parking_lot::Mutex;
+
 use crate::mixer::MIXER;
 use crate::stream;
 
 /// Set by `global_pause`: the device then outputs silence and the mixer stands still.
 pub static PAUSED: AtomicBool = AtomicBool::new(false);
+
+static VIRTUAL: AtomicBool = AtomicBool::new(false);
+static RATE: AtomicU32 = AtomicU32::new(48000);
+
+type Tap = Box<dyn FnMut(&[f32]) + Send + 'static>;
+static TAP: Mutex<Option<Tap>> = Mutex::new(None);
+
+/// Makes the output the timer-driven dummy device (no cpal), regardless of `SDL_AUDIODRIVER`.
+/// Call it before the first `renpysound.init`. Env `PLAYER_HEADLESS=1` does the same.
+pub fn set_virtual_output(on: bool) {
+    VIRTUAL.store(on, Ordering::SeqCst);
+}
+
+/// Sets or removes the PCM tap. The output thread calls it after every mixer pass with
+/// interleaved stereo f32 at `mixer_rate()`, with silence when nothing plays.
+pub fn set_pcm_tap(tap: Option<Tap>) {
+    *TAP.lock() = tap;
+}
+
+/// The mixer sample rate: what the output was opened with (48000 before that).
+pub fn mixer_rate() -> u32 {
+    RATE.load(Ordering::Relaxed)
+}
+
+fn tap(pcm: &[f32]) {
+    if let Some(t) = TAP.lock().as_mut() {
+        t(pcm);
+    }
+}
 
 pub struct Device {
     stop: mpsc::Sender<()>,
@@ -39,7 +71,9 @@ pub fn start(
 ) -> Result<Device, String> {
     let (stop_tx, stop_rx) = mpsc::channel::<()>();
     let (ready_tx, ready_rx) = mpsc::channel::<Result<u32, String>>();
-    let dummy = std::env::var("SDL_AUDIODRIVER").is_ok_and(|v| v == "dummy");
+    let dummy = VIRTUAL.load(Ordering::SeqCst)
+        || std::env::var("PLAYER_HEADLESS").is_ok_and(|v| v == "1")
+        || std::env::var("SDL_AUDIODRIVER").is_ok_and(|v| v == "dummy");
 
     let thread = std::thread::Builder::new()
         .name("audio output".into())
@@ -83,6 +117,7 @@ pub fn start(
 }
 
 fn configure(rate: u32, equal_mono: bool, linear_fades: bool) {
+    RATE.store(rate, Ordering::Relaxed);
     stream::set_params(rate, equal_mono);
     let mut m = MIXER.lock();
     m.rate = rate;
@@ -112,10 +147,11 @@ fn run_dummy(
             Err(mpsc::RecvTimeoutError::Timeout) => {}
         }
         next += period;
+        mix.fill(0.0);
         if !PAUSED.load(Ordering::Relaxed) {
-            mix.fill(0.0);
             MIXER.lock().mix(&mut mix, &mut scratch);
         }
+        tap(&mix);
     }
 }
 
@@ -195,6 +231,7 @@ where
                 if !PAUSED.load(Ordering::Relaxed) {
                     MIXER.lock().mix(m, &mut scratch);
                 }
+                tap(m);
                 for (f, frame) in data.chunks_exact_mut(channels).enumerate() {
                     let (l, r) = (m[f * 2], m[f * 2 + 1]);
                     if channels == 1 {

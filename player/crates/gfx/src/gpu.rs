@@ -508,6 +508,8 @@ pub struct Renderer {
     pub yuv: Option<crate::yuv::Yuv>,
     /// Frames drawn into the spare target because the window gave no texture (covered or minimized).
     pub skipped_frames: u64,
+    /// Flips so far (the `seq` of captured frames).
+    flips: u64,
 }
 
 fn pad4(v: &mut Vec<u8>) {
@@ -593,7 +595,13 @@ impl Renderer {
             bytes_this_frame: 0,
             yuv: None,
             skipped_frames: 0,
+            flips: 0,
         }
+    }
+
+    /// True when the screen is an offscreen texture (no window).
+    pub fn is_offscreen(&self) -> bool {
+        matches!(self.screen, Screen::Headless { .. })
     }
 
     /// Selects the present mode. `sync` is Fifo (the display paces the frames); otherwise frames show at once.
@@ -1051,9 +1059,19 @@ impl Renderer {
     /// Presents the window frame, if one was drawn.
     pub fn present(&mut self) -> Result<(), String> {
         self.flush()?;
-        if let Screen::Window { frame, .. } = &mut self.screen
-            && let Some(f) = frame.take()
-        {
+        self.flips += 1;
+        let capture = crate::capture::sink_active();
+        let (tex, frame) = match &mut self.screen {
+            Screen::Window { frame, .. } => {
+                let f = frame.take();
+                (f.as_ref().filter(|_| capture).map(|f| f.texture.clone()), f)
+            }
+            Screen::Headless { tex } => (Some(tex.clone()).filter(|_| capture), None),
+        };
+        if let Some(t) = &tex {
+            self.capture_tex(t);
+        }
+        if let Some(f) = frame {
             self.sh.queue.present(f);
         }
         // Depth targets are cheap to rebuild and can be resized away.
@@ -1061,6 +1079,17 @@ impl Renderer {
             self.depth.clear();
         }
         Ok(())
+    }
+
+    fn capture_tex(&self, tex: &Texture) {
+        crate::capture::capture(
+            &self.sh.device,
+            &self.sh.queue,
+            Arc::as_ptr(&self.sh) as usize,
+            tex,
+            self.screen_format == TextureFormat::Bgra8Unorm,
+            self.flips,
+        );
     }
 
     /// Flushes, then reads level 0 of `t` (or the screen when `None`) as tightly packed RGBA bytes in the target's own

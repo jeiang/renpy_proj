@@ -130,7 +130,7 @@ Each milestone is a GitHub issue labelled `build`. Gates are the harness tiers f
 | M3 | **Ren'Py 7:** the Python 2 compatibility module, including the syntax fixer, the patch library and the runtime report. | The full gate on all Ren'Py 7 corpus games, including Harem_Hotel. AlexsVantasticAdventure's menu-only probe is investigated. **Passed** (`harness/M3-status.md`). |
 | M4 | **Linux and Windows on real GPUs:** D3D12 and Vulkan, D3D11VA and VAAPI/NVDEC video, and Windows `/MT` packaging. | The full gate on both platforms, plus the anisotropic-filtering visual check on each GPU backend. |
 | M5 | **Streaming:** `player serve` and the library button. | A LAN browser session plays a corpus game with input, audio and video. Glass-to-glass latency is measured. |
-| M6 | **AI upgrade pass:** produce port patches for Ren'Py 7 games the module can't fix alone (design in [its ticket](https://github.com/jeiang/renpy_proj/issues/20)). | Patches pass the M3 gate on the targeted games. |
+| M6 | **AI upgrade pass** ([design](https://github.com/jeiang/renpy_proj/issues/20)): seeded deep runs find errors past the gate; a maintainer CLI sends a bounded slice to an OpenAI-compatible model; patches are verified from a save before the failing node, written as proposed, and activated by a human. Patches stay local. | Every Python 2 error the deep runs find on the 17 Ren'Py 7 games gets a verified patch, or is reported unpatchable or "needs human" with evidence. |
 | Later | **Strangler:** move Python subsystems to Rust in the order profiling gives. Also build-phase optimisations such as zero-copy IOSurface video. | Each move passes the full corpus gate on all three desktops. |
 
 ## Known gaps

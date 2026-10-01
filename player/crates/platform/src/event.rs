@@ -427,7 +427,7 @@ fn wait(py: Python<'_>, timeout: Option<i64>) -> PyResult<Py<PyAny>> {
             limit = limit.min(t.saturating_duration_since(now));
         }
         py.check_signals()?;
-        if evloop::loop_ready() {
+        if evloop::loop_ready() || crate::headless::is_headless() {
             py.detach(|| evloop::pump(Some(limit)));
         } else {
             py.detach(|| std::thread::sleep(limit.min(Duration::from_millis(5))));
@@ -608,6 +608,54 @@ fn quit() {
     st.timers.clear();
 }
 
+/// Test entry for `platform::inject`, enabled by env `PLAYER_TEST_INJECT=1`.
+/// Kinds: `key(down, code, key, repeat)`, `mouse_move(x, y)`, `mouse_button(down, button)`,
+/// `wheel(dx, dy)`, `text(s)`, `focus(gain)`, `size()`. The call runs without the GIL, as a stream thread would.
+#[pyfunction]
+#[pyo3(signature = (kind, *args))]
+fn _inject_for_test(
+    py: Python<'_>,
+    kind: &str,
+    args: &Bound<'_, pyo3::types::PyTuple>,
+) -> PyResult<Option<(u32, u32)>> {
+    use crate::inject;
+    if std::env::var("PLAYER_TEST_INJECT").is_ok_and(|v| v == "1") {
+        let bad = |what: &str| util::pg_error(py, &format!("_inject_for_test: bad arguments for {what}"));
+        match kind {
+            "key" => {
+                let (down, code, key, repeat): (bool, String, String, bool) =
+                    args.extract().map_err(|_| bad(kind))?;
+                py.detach(|| inject::key(down, &code, &key, repeat));
+            }
+            "mouse_move" => {
+                let (x, y): (f64, f64) = args.extract().map_err(|_| bad(kind))?;
+                py.detach(|| inject::mouse_move(x, y));
+            }
+            "mouse_button" => {
+                let (down, b): (bool, u8) = args.extract().map_err(|_| bad(kind))?;
+                py.detach(|| inject::mouse_button(down, b));
+            }
+            "wheel" => {
+                let (dx, dy): (f64, f64) = args.extract().map_err(|_| bad(kind))?;
+                py.detach(|| inject::wheel(dx, dy));
+            }
+            "text" => {
+                let (s,): (String,) = args.extract().map_err(|_| bad(kind))?;
+                py.detach(|| inject::text(&s));
+            }
+            "focus" => {
+                let (g,): (bool,) = args.extract().map_err(|_| bad(kind))?;
+                py.detach(|| inject::focus(g));
+            }
+            "size" => return Ok(Some(inject::size())),
+            other => return Err(util::pg_error(py, &format!("unknown inject kind {other:?}"))),
+        }
+        Ok(None)
+    } else {
+        Err(util::pg_error(py, "_inject_for_test needs PLAYER_TEST_INJECT=1"))
+    }
+}
+
 #[pymodule(gil_used = false)]
 pub mod renpy_pygame_event {
     use super::*;
@@ -649,6 +697,6 @@ pub mod renpy_pygame_event {
     use super::{
         clear, copy_event_queue, event_name, get, get_blocked, get_grab, get_mousewheel_buttons,
         get_standard_events, init, peek, poll, post, pump, quit, register, set_allowed,
-        set_blocked, set_grab, set_mousewheel_buttons, wait,
+        set_blocked, set_grab, set_mousewheel_buttons, wait, _inject_for_test,
     };
 }
