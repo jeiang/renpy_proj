@@ -854,12 +854,21 @@ class WgpuDraw(object):
         px_padding = pwidth - view_width
         py_padding = pheight - view_height
 
-        # Ren'Py 7 divides these integers with Python 2 `/` (floor). Ren'Py 8 divides them true, which puts the picture
-        # half a physical pixel to the right or down when the padding is odd (`px_padding / 2` is 0.5, not 0).
+        # Ren'Py 7.4 and older divide these integers with Python 2 `/` (floor): `px_padding / 2` is 0 when the padding is 1.
+        # Ren'Py 8, and Ren'Py 7.5 and newer (measured against stock 7.5.3, 7.6.1 and 7.7.3), divide true, which puts
+        # the picture half a physical pixel to the right or down when the padding is odd.
+        floor_div = False
+
         try:
+            import _player.boot
             import _player.compat
-            floor_div = _player.compat.active
-        except ImportError:
+
+            detection = _player.boot.settings.get("compat")
+
+            if _player.compat.active and detection is not None and detection.engine_version:
+                major, minor = (int(x) for x in detection.engine_version.split(".")[:2])
+                floor_div = (major, minor) < (7, 5)
+        except (ImportError, ValueError):
             floor_div = False
 
         if floor_div:
