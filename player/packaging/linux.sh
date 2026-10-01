@@ -28,7 +28,7 @@ cp "$PLAYER/target/release/player" "$PKG/player"
 chmod u+w "$PKG/player"
 
 # Libraries the host provides. Everything else that ldd resolves is bundled.
-SYSTEM='^(linux-vdso|ld-linux.*|libc|libm|libdl|libpthread|librt|libutil|libresolv|libgcc_s|libasound|libudev|libvulkan|libwayland-.*|libxkbcommon.*|libX.*|libxcb.*|libpipewire.*|libdrm.*|libGL.*|libEGL.*)\.so'
+SYSTEM='^(linux-vdso|ld-linux.*|libc|libm|libdl|libpthread|librt|libutil|libresolv|libmvec|libnsl|libanl|libnss_[a-z]*|libthread_db|libBrokenLocale|libgcc_s|libdrm.*|libasound|libudev|libvulkan|libwayland-.*|libxkbcommon.*|libX.*|libxcb.*|libpipewire.*|libdrm.*|libGL.*|libEGL.*)\.so'
 bundle() { # copy the non-system libraries of $1 (recursively) into lib/
   ldd "$1" | awk '/=> \//{print $1, $3}' | while read -r soname path; do
     soname=${soname##*/}
@@ -49,7 +49,7 @@ strip --strip-unneeded "$PKG/player" "$PKG"/lib/*.so* 2>/dev/null || true
 echo "== ldd =="
 LDD=$(NIX_LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}" ldd "$PKG/player")
 echo "$LDD"
-bad=$(echo "$LDD" | awk '/=> \//{print $3}' | grep -v "^$PKG/lib/" | grep -Ev '/(libc|libm|libdl|libpthread|librt|libutil|libresolv|libgcc_s|libasound|libudev|libvulkan|libwayland-[a-z-]*|libxkbcommon[a-z-]*|libX[a-z0-9]*|libxcb[a-z-]*)\.so' || true)
+bad=$(echo "$LDD" | awk '/=> \//{print $3}' | grep -v "^$PKG/lib/" | grep -Ev '/(ld-linux-x86-64|libc|libm|libdl|libpthread|librt|libutil|libresolv|libmvec|libgcc_s|libdrm|libasound|libudev|libvulkan|libwayland-[a-z-]*|libxkbcommon[a-z-]*|libX[a-z0-9]*|libxcb[a-z-]*)\.so' || true)
 if [ -n "$bad" ]; then echo "linux.sh: unexpected dependencies:" >&2; echo "$bad" >&2; exit 1; fi
 (cd "$OUT" && tar -czf "$NAME.tar.gz" "$NAME")
 echo "linux.sh: $OUT/$NAME.tar.gz"

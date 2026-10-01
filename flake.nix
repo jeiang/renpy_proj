@@ -86,6 +86,7 @@
               libxrandr
               libxi
               libxcb
+              libdrm # libva-drm (VA-API)
             ]);
             LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
             FFMPEG_LGPL = "${ffmpegLgpl pkgs}";
@@ -93,7 +94,7 @@
             # come from the host (/run/opengl-driver on NixOS; the system ones elsewhere).
             shellHook = pkgs.lib.optionalString pkgs.stdenv.hostPlatform.isLinux ''
               export BINDGEN_EXTRA_CLANG_ARGS="-isystem ${pkgs.llvmPackages.libclang.lib}/lib/clang/${pkgs.lib.versions.major pkgs.llvmPackages.libclang.version}/include -isystem ${pkgs.glibc.dev}/include"
-              export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath (with pkgs; [ vulkan-loader wayland libxkbcommon libx11 libxcursor libxrandr libxi libxcb alsa-lib systemdLibs ])}:/run/opengl-driver/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+              export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath (with pkgs; [ vulkan-loader wayland libxkbcommon libx11 libxcursor libxrandr libxi libxcb alsa-lib systemdLibs libdrm ])}:/run/opengl-driver/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
             '';
           };
         });
