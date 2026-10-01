@@ -2,6 +2,7 @@
 import os
 import pathlib
 import subprocess
+import sys
 import tempfile
 
 HARNESS = pathlib.Path(__file__).resolve().parents[2]
@@ -26,7 +27,9 @@ def sdk7():
 
 def run_renpy7(base, args, timeout=300):
     """Run the 7.4.11 SDK on the project `base` without a display, with scratch saves (never ~/Library/RenPy or ~/.renpy)."""
-    env = dict(os.environ, SDL_VIDEODRIVER="dummy", SDL_AUDIODRIVER="dummy")
+    sys.path.insert(0, str(HARNESS))
+    from gatelib import plat   # the gate's launch environment (nix-ld libraries on NixOS)
+    env = dict(plat.get().game_env(os.environ), SDL_VIDEODRIVER="dummy", SDL_AUDIODRIVER="dummy")
     with tempfile.TemporaryDirectory() as sav:
         r = subprocess.run([str(sdk7() / "renpy.sh"), str(base)] + list(args) + ["--savedir", sav], capture_output=True, text=True, env=env, timeout=timeout)
     out = r.stdout + r.stderr
