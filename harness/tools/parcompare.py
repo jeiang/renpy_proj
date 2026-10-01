@@ -58,7 +58,7 @@ def main(dirs):
         for g in sorted(p for p in d.iterdir() if p.is_dir()):
             game = g.name.split(".")[0]
             row = {"game": g.name}
-            for c in ("lint", "probe", "route", "saveresume", "deep"):
+            for c in ("lint", "probe", "route", "saveresume", "deep", "video"):
                 j = load(g / "checks" / (c + ".json"))
                 if j is None:
                     continue
@@ -74,6 +74,12 @@ def main(dirs):
                     row["route_base"] = worst(j.get("baseline_diff"))
                 if c == "saveresume":
                     row["resume_says"] = j.get("says_after_load")
+                if c == "video":
+                    m = j.get("metrics") or {}
+                    row.update(presented_fps=round(j.get("presented_fps") or 0, 2), decoded_fps=round(j.get("decoded_fps") or 0, 2),
+                               p50=round(m.get("interval_p50", 0), 2), p95=round(m.get("interval_p95", 0), 2), max=round(m.get("interval_max", 0), 1),
+                               late=m.get("late"), over2x=m.get("over2x"), av_max_ms=round(m.get("av_offset_ms_max", 0)),
+                               drift_ms=round(m.get("audio_wall_drift_ms", 0)))
                 if c == "deep":
                     row["deep_errors"] = len(j.get("errors") or [])
             cov = load(g / "deep-s1" / "deep" / "coverage.json")
