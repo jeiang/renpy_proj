@@ -3,12 +3,12 @@
 
 Run with the Playwright venv (see harness/stream_probe.py header):
   export PLAYWRIGHT_BROWSERS_PATH=$(nix build --no-link --print-out-paths nixpkgs#playwright-driver.browsers) PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=true
-  /tmp/pwenv/bin/python harness/m5/gate_m5.py --host mac --player player/target/release/player --out harness/out/m5-mac
+  python3 harness/tools/runlock.py -- /tmp/pwenv/bin/python harness/m5/gate_m5.py --host mac --out harness/out/m5-mac
   /tmp/pwenv/bin/python harness/m5/gate_m5.py --host artemis --out harness/out/m5-artemis
 
 --host mac: serve on this Mac; the browser opens the Mac's LAN URL. --host artemis: serve on artemis over ssh (the player
 binary there is --remote-player); the browser opens artemis' NetBird address. The serving host holds
-/tmp/renpy_proj.run.lock (owner `pid=` file) for the whole run, as the harness does. Nothing sends OS input: the page
+the machine lock for the whole run: the Mac case runs under harness/tools/runlock.py, the artemis case starts runlock.py there. Nothing sends OS input: the page
 sends JSON messages through the data channels. Evidence: result.json, page.png, video.png, progress.txt in --out.
 """
 import argparse, json, os, re, shlex, signal, subprocess, sys, time, shutil, urllib.request
@@ -38,24 +38,10 @@ class Mac:
         return subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=timeout).stdout
 
     def take_lock(self):
-        while True:
-            try:
-                os.mkdir(LOCK)
-                break
-            except FileExistsError:
-                time.sleep(0.1)
-        with open(LOCK + "/owner", "w") as f:
-            f.write("pid=%d\nstart=%s\ncmd=m5 gate\n" % (os.getpid(), time.strftime("%FT%T")))
-        self.lockheld = True
+        pass  # the caller runs this script under harness/tools/runlock.py
 
     def release_lock(self):
-        if self.lockheld:
-            for p in (LOCK + "/owner",):
-                try: os.remove(p)
-                except OSError: pass
-            try: os.rmdir(LOCK)
-            except OSError: pass
-            self.lockheld = False
+        pass
 
     def start(self, extra):
         shutil.rmtree(self.scratch, ignore_errors=True)
@@ -137,10 +123,7 @@ class Artemis(Mac):
         a = self.a
         script = r'''
 set -u
-LOCK=/tmp/renpy_proj.run.lock
-until mkdir $LOCK 2>/dev/null; do sleep 2; done
-printf 'pid=%%s\nstart=%%s\ncmd=m5 gate\n' $$ > $LOCK/owner
-cleanup() { pkill -9 -f %(scratch)s/game; rm -f $LOCK/owner; rmdir $LOCK; }
+cleanup() { pkill -9 -f %(scratch)s/game; }
 trap cleanup EXIT
 rm -rf %(scratch)s; mkdir -p %(scratch)s
 cp -a --reflink=auto ~/Projects/renpy_proj-remote/corpus/%(game)s %(scratch)s/game
@@ -152,7 +135,7 @@ echo $! > %(scratch)s/player.pid
 wait
 ''' % dict(scratch=self.scratch, game=GAME, player=a.remote_player, obs=a.remote_observe, port=a.port, extra=" ".join(extra))
         # the script runs under one ssh session; killing the session ends the run (the trap releases the lock)
-        self.proc = subprocess.Popen(self.SSH + ["bash -s"], stdin=subprocess.PIPE, text=True)
+        self.proc = subprocess.Popen(self.SSH + ["cd ~/Projects/renpy_proj-remote/m5 && nix shell nixpkgs#python312 -c python3 harness/tools/runlock.py -- bash -s"], stdin=subprocess.PIPE, text=True)
         self.proc.stdin.write(script); self.proc.stdin.close()
         for _ in range(240):
             if self.sh("test -s %s/player.pid && echo y" % self.scratch).strip() == "y":
