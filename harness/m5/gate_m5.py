@@ -142,7 +142,12 @@ wait
                 break
             time.sleep(1)
         # gamemoderun wraps the player: find the real process
-        self.pid = int(self.sh("pgrep -f '[r]elease/player serve %s/game' | tail -1" % self.scratch).split()[0])
+        self.pid = 0
+        for _ in range(120):
+            out = self.sh("pgrep -f '[p]layer serve %s/game' | tail -1" % self.scratch).split()
+            if out:
+                self.pid = int(out[0]); break
+            time.sleep(1)
 
     def urls(self, timeout=180):
         t0 = time.time()
