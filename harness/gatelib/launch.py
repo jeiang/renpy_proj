@@ -604,6 +604,7 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
     deadline = 0
     run = None
     try:
+        plat.get().session_start(env)   # Xvfb for CI, nothing elsewhere
         before = library_hash()
         res["loadavg"] = plat.get().loadavg()
         stdout = open(out / "stdout.log", "w")
@@ -632,6 +633,7 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
         stdout.close()
     finally:
         res["sweep_ok"] = sweep(pattern)
+        plat.get().session_stop()
         res["library_unchanged"] = before is not None and library_hash() == before
         if res["sweep_ok"]:
             release_lock()
