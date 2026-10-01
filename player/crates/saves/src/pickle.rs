@@ -125,6 +125,8 @@ impl<'a> Decoder<'a> {
     }
 
     /// The next opcode, or an error for truncated or unknown input.
+    // Not an Iterator: it returns Result and the stream end is an opcode.
+    #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> Result<Op<'a>, String> {
         let code = self.u8()?;
         Ok(match code {

@@ -160,9 +160,9 @@ impl Format {
             return u32::from_le_bytes(c);
         }
         let mut px = 0u32;
-        for i in 0..4 {
-            if self.masks[i] != 0 {
-                px |= (((c[i] as u32) >> self.losses[i]) << self.shifts[i]) & self.masks[i];
+        for (i, &mask) in self.masks.iter().enumerate() {
+            if mask != 0 {
+                px |= (((c[i] as u32) >> self.losses[i]) << self.shifts[i]) & mask;
             }
         }
         px
@@ -187,7 +187,7 @@ impl Format {
         }
     }
 
-    pub fn to_sdl(&self) -> SdlPixelFormat {
+    pub fn to_sdl(self) -> SdlPixelFormat {
         SdlPixelFormat {
             format: self.sdl_enum(),
             palette: std::ptr::null_mut(),

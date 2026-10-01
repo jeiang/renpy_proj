@@ -222,7 +222,7 @@ pub fn bilinear(
     };
     par::rows(dst.w, dst.h, move |y| {
         let sline = (syoff * 256.0 + (y as f32 + dyoff) * ydelta) as i32;
-        let s1frac = (sline & 255);
+        let s1frac = sline & 255;
         let s0frac = 256 - s1frac;
         let row_off = (sline >> 8) as isize * src.pitch as isize;
         let mut scol = sxoff * 256.0 + dxoff * xdelta;

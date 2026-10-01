@@ -212,6 +212,8 @@ impl Snapshot {
 
 /// Blits `w` x `h` pixels from (`sx`, `sy`) of `src` to (`dx`, `dy`) of `dst`.
 /// The region must already be clipped to both surfaces.
+// Mirrors the argument list of the pygame_sdl2 blit it implements.
+#[allow(clippy::too_many_arguments)]
 pub fn blit_region(
     src: &Img,
     st: SrcState,
@@ -298,6 +300,8 @@ pub fn blit_region(
 
 /// Copies a clipped region without blending, converting pixel formats.
 /// This is `SDL_UpperBlit` with `SDL_BLENDMODE_NONE`.
+// Mirrors the argument list of the pygame_sdl2 blit it implements.
+#[allow(clippy::too_many_arguments)]
 pub fn copy_region(
     src: &Img,
     sx: usize,
