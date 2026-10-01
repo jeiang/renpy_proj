@@ -13,3 +13,8 @@ screen choice(items):
         yalign 0.5
         for i in items:
             textbutton i.caption action i.action
+
+# The minimal game has no gui: show the menu screen ourselves, or Ren'Py starts the story without a main menu.
+label main_menu:
+    call screen main_menu
+    jump start
