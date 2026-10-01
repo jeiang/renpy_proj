@@ -115,6 +115,10 @@ class Mac:
                            capture_output=True, timeout=20)
             time.sleep(1.5)
 
+    def prepare(self, wid):
+        """Make the window show its true pixels before a capture. Nothing to do on macOS."""
+        return None
+
     def capture(self, wid, dest):
         """Capture that one window to the PNG `dest`. -> True when a file was written."""
         dest.unlink(missing_ok=True)
@@ -307,6 +311,21 @@ class Hypr:
         if st.get("pid"):
             self._ctl("dispatch", "focuswindow", "pid:%d" % st["pid"])
             time.sleep(1.5)
+
+    OPAQUE_PROPS = (("opaque", "1"), ("alpha", "1"), ("alphainactive", "1"), ("alphafullscreen", "1"))
+
+    def prepare(self, wid):
+        """Hyprland's default config draws windows slightly transparent (decoration:active_opacity 0.95, inactive 0.85), so
+        a capture would blend the game with the wallpaper. Set the window's opacity properties to 1 (`hyprctl setprop
+        address:<addr> <prop> 1 lock`, Hyprland 0.56; a property change, no input) and check them back with `getprop`.
+        -> list of problems (empty when the window is opaque)."""
+        problems = []
+        for prop, val in self.OPAQUE_PROPS:
+            r = self._ctl("setprop", "address:" + wid, prop, val, "lock")
+            out = (r.stdout + r.stderr).strip()
+            if r.returncode != 0 or (out and out != "ok"):
+                problems.append("setprop %s %s: %s" % (prop, val, out[:120] or "rc %d" % r.returncode))
+        return problems
 
     def capture(self, wid, dest):
         """`grim -g` of the window geometry only (never the whole output), as raw PPM that is written to `dest` as a PNG.

@@ -420,6 +420,8 @@ class Run:
             if why:
                 rec["error"] = "window covered: " + why
                 break
+            for prob in plat.get().prepare(wid) or []:
+                self.log.append("shot %s: window not made opaque: %s" % (name, prob))
             if not plat.get().capture(wid, f):
                 continue
             size = plat.png_size(f)
