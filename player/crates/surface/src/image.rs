@@ -204,12 +204,11 @@ pub fn load(
     size: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<Surface> {
     // A prefetched image (see `loader`) skips the read and the decode.
-    if size.is_none_or(|s| s.is_none()) {
-        if let Some(name) = namehint.and_then(|n| namehint_str(n)) {
-            if let Some(img) = crate::loader::take(py, &name) {
-                return Ok(Surface::from_rgba(img.width, img.height, img.rgba));
-            }
-        }
+    if size.is_none_or(|s| s.is_none())
+        && let Some(name) = namehint.and_then(|n| namehint_str(n))
+        && let Some(img) = crate::loader::take(py, &name)
+    {
+        return Ok(Surface::from_rgba(img.width, img.height, img.rgba));
     }
     let data: Vec<u8> = if fi.is_instance_of::<PyString>() || fi.is_instance_of::<PyBytes>() {
         let path: std::path::PathBuf = if let Ok(s) = fi.extract::<String>() {

@@ -334,7 +334,7 @@ pub fn decode(data: &[u8]) -> Result<Decoded, String> {
                 return Err("alpha plane size differs from the colour plane".into());
             }
             let plane = convert(af, ffi::AVPixelFormat::AV_PIX_FMT_GRAY8, 1)?;
-            for (px, a) in rgba.chunks_exact_mut(4).zip(plane) {
+            for (px, a) in rgba.as_chunks_mut::<4>().0.iter_mut().zip(plane) {
                 px[3] = a;
             }
         }

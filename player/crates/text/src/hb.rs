@@ -71,7 +71,9 @@ pub struct Features {
     features: Vec<([u8; 4], u32)>,
 }
 
-static FEATURE_CACHE: Mutex<Option<HashMap<Vec<([u8; 4], u32)>, Py<Features>>>> = Mutex::new(None);
+type FeatureKey = Vec<([u8; 4], u32)>;
+
+static FEATURE_CACHE: Mutex<Option<HashMap<FeatureKey, Py<Features>>>> = Mutex::new(None);
 
 #[pymethods]
 impl Features {
