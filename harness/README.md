@@ -112,3 +112,13 @@ nix shell nixpkgs#python312 nixpkgs#grim nixpkgs#ffmpeg -c python3 harness/gate.
 - **Launch.** The environment is a whitelist (`HOME`, `USER`, `LANG`, `NIX_LD`, `NIX_LD_LIBRARY_PATH`, a clean `PATH`, `XDG_RUNTIME_DIR`, `WAYLAND_DISPLAY`, `DISPLAY` of XWayland, the user D-Bus address for gamemode). Every game process, stock and player, starts as `gamemoderun <argv>`. The clone is `cp -a --reflink=auto`. The machine lock is the same `/tmp/renpy_proj.run.lock` directory with an owner file. The hygiene hash covers `~/.renpy` (Ren'Py's Linux save root) in place of `~/Library/RenPy`. Ren'Py 7 still gets `--savedir`.
 - **Corpus.** On Linux a `linux_<key>` entry of a game in `corpus.toml` replaces `<key>`. The four M4 games point at `~/Projects/renpy_proj-remote/corpus/<copy>`. SecretIsland and WaifuAcademy run their own `<Game>.sh` (`linux_engine = "bundled"`); BlackRose and HaremHotel use the Ren'Py 7.7.3 and 7.4.11 SDKs, fetched into the gitignored `research/test-corpus/sdk/` with `curl -fL https://www.renpy.org/dl/<v>/renpy-<v>-sdk.tar.bz2 | tar -xj -C research/test-corpus/sdk`.
 - **Stock engines are dynamic ELF files.** NixOS needs `nix-ld` (`NIX_LD`, `NIX_LD_LIBRARY_PATH` are passed through).
+
+## Deep runs and the upgrade pass (M6)
+
+```sh
+nix develop .#player -c python3 harness/gate.py run --engine player --game DFraction --tier deep --out harness/out/m6/DFraction
+nix develop .#player -c python3 harness/deep_all.py --player-bin <player> --out harness/out/m6     # the whole corpus, 17 Ren'Py 7 games first
+nix develop .#player -c player upgrade DFraction --errors harness/out/m6/DFraction/errors --data <dir>
+```
+
+The `deep` tier plays each seed (default 1,2,3, 30 min each; `deep_seeds`, `deep_minutes` in corpus.toml) with the seeded driver of `rpy/zz_harness.rpy`, saves before each PyCode node, and writes coverage and error folders (`errors/<id>/error.json`). Errors are sorted `python2`, `game-bug` (stock replays the same seed and fails the same way) or `player-bug`. `player upgrade` turns each patchable `python2` error into a verified, inactive (`proposed`) patch; `player patches <game> accept <id>` activates it. Contract: player/CONTRACTS.md, "M6 contracts". Deep output holds game text and saves: `out/` is gitignored. The deep tier does not screenshot, but it launches a window like every other tier, so it holds the machine lock for each seed.

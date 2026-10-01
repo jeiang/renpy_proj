@@ -81,6 +81,8 @@ impl std::error::Error for PatchError {}
 pub struct Library {
     /// Patch files that were read, in load order.
     pub files: Vec<PathBuf>,
+    /// Patch files that were not read because their sidecar state is not active, with that state.
+    pub inactive: Vec<(PathBuf, String)>,
     pub patches: Vec<Patch>,
     pub errors: Vec<PatchError>,
 }
@@ -308,7 +310,30 @@ pub fn parse_file(path: &Path) -> (Vec<Patch>, Vec<PatchError>) {
 /// Loads every `*.toml` directly inside each directory, in the order given, files sorted by name.
 /// A missing directory is not an error. Two patches for the same file, line and hash are reported
 /// for the later one (the earlier one stays).
-pub fn load_dirs(dirs: &[PathBuf]) -> Library {
+/// The sidecar of a patch file: same folder and stem, extension `.json`.
+pub fn sidecar_path(patch_file: &Path) -> PathBuf {
+    patch_file.with_extension("json")
+}
+
+/// The state recorded in the sidecar of `patch_file`: `None` when there is no sidecar (a hand-written patch file is
+/// active), else the `state` string (`proposed`, `accepted`, `needs-human`, ...). An unreadable sidecar gives
+/// `Some("unreadable")`, so a damaged file is never loaded.
+pub fn sidecar_state(patch_file: &Path) -> Option<String> {
+    let side = sidecar_path(patch_file);
+    let text = match std::fs::read_to_string(&side) {
+        Ok(t) => t,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return None,
+        Err(_) => return Some("unreadable".into()),
+    };
+    match serde_json::from_str::<serde_json::Value>(&text) {
+        Ok(v) => Some(v["state"].as_str().unwrap_or("unreadable").to_string()),
+        Err(_) => Some("unreadable".into()),
+    }
+}
+
+/// Reads the patch files of `dirs`. A file with a sidecar is read only when its state is `accepted`; with
+/// `include_proposed` (verification of an AI patch) `proposed` is read too.
+pub fn load_dirs_with(dirs: &[PathBuf], include_proposed: bool) -> Library {
     let mut lib = Library::default();
     let mut seen: HashMap<(String, u32, String), (PathBuf, usize)> = HashMap::new();
 
@@ -323,6 +348,13 @@ pub fn load_dirs(dirs: &[PathBuf]) -> Library {
             .collect();
         names.sort();
         for path in names {
+            if let Some(state) = sidecar_state(&path)
+                && state != "accepted"
+                && !(include_proposed && state == "proposed")
+            {
+                lib.inactive.push((path, state));
+                continue;
+            }
             let (patches, errors) = parse_file(&path);
             lib.files.push(path);
             lib.errors.extend(errors);
@@ -354,6 +386,11 @@ pub fn load_dirs(dirs: &[PathBuf]) -> Library {
 }
 
 /// Python module `_player_patches` for `PyImport_AppendInittab`.
+/// [`load_dirs_with`] without proposed patches: what the player loads.
+pub fn load_dirs(dirs: &[PathBuf]) -> Library {
+    load_dirs_with(dirs, false)
+}
+
 pub fn inittab() -> Vec<(&'static CStr, InitFn)> {
     vec![(c"_player_patches", patches_py::__pyo3_init as InitFn)]
 }
@@ -377,9 +414,14 @@ mod patches_py {
     /// `file`, `line`, `original_hash`, `source`; `errors` are dicts with `file`, `index`,
     /// `field`, `line`, `message`, `text`.
     #[pyfunction]
-    fn load_dirs<'py>(py: Python<'py>, dirs: Vec<String>) -> PyResult<Bound<'py, PyAny>> {
+    #[pyo3(signature = (dirs, include_proposed=false))]
+    fn load_dirs<'py>(
+        py: Python<'py>,
+        dirs: Vec<String>,
+        include_proposed: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
         let dirs: Vec<PathBuf> = dirs.into_iter().map(PathBuf::from).collect();
-        let lib = super::load_dirs(&dirs);
+        let lib = super::load_dirs_with(&dirs, include_proposed);
         let files = PyList::new(py, lib.files.iter().map(|p| p.to_string_lossy()))?;
         let patches = PyList::empty(py);
         for p in &lib.patches {
@@ -396,7 +438,13 @@ mod patches_py {
         for e in &lib.errors {
             errors.append(error_dict(py, e)?)?;
         }
-        (files, patches, errors)
+        let inactive = PyList::new(
+            py,
+            lib.inactive
+                .iter()
+                .map(|(p, st)| (p.to_string_lossy().into_owned(), st.clone())),
+        )?;
+        (files, patches, errors, inactive)
             .into_pyobject(py)
             .map(|t| t.into_any())
     }
@@ -405,6 +453,24 @@ mod patches_py {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_accepted_sidecars_load() {
+        let dir = std::env::temp_dir().join(format!("patches-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let body = "[[patch]]\nfile='game/a.rpy'\nline=3\noriginal_hash='sha1:abcdef01'\nsource='x = 1'\n";
+        for (name, state) in [("plain", None), ("prop", Some("proposed")), ("acc", Some("accepted"))] {
+            std::fs::write(dir.join(format!("{name}.toml")), body.replace("line=3", &format!("line={}", name.len()))).unwrap();
+            if let Some(st) = state {
+                std::fs::write(dir.join(format!("{name}.json")), format!("{{\"state\": \"{st}\"}}")).unwrap();
+            }
+        }
+        let lib = load_dirs(&[dir.clone()]);
+        assert_eq!(lib.patches.len(), 2, "{:?}", lib.errors);
+        assert_eq!(lib.inactive.len(), 1);
+        assert_eq!(load_dirs_with(&[dir.clone()], true).patches.len(), 3);
+        std::fs::remove_dir_all(dir).ok();
+    }
 
     #[test]
     fn located_errors() {

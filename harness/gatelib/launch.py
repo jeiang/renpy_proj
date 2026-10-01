@@ -6,6 +6,7 @@ differs per host (window lookup and capture, clone command, environment, `gamemo
 untouched) is in `plat.py`.
 """
 import hashlib
+import json
 import os
 import pathlib
 import re
@@ -305,6 +306,7 @@ class Run:
         self.shots = []
         self.size = None   # pixel size of this run's first screenshot: every later shot must match
         self.aborted = None
+        self.verify_line = None
 
     def dead(self):
         return self.proc.poll() is not None or (self.base / "traceback.txt").exists()
@@ -356,6 +358,12 @@ class Run:
 
     def op_wait(self, arg):
         tok = arg.strip()
+        if tok.startswith("deep-done "):   # wait deep-done SECS: a deep run, until the driver says it is done
+            return self.wait_token(("deep-done",), float(tok.split()[1]), "deep") is not None
+        if tok.startswith("verify "):      # wait verify SECS: verify-ok or verify-fail
+            ln = self.wait_token(("verify-ok", "verify-fail"), float(tok.split()[1]), "verify")
+            self.verify_line = ln
+            return ln is not None
         for known in ("menu True", "advance-done", "saved", "say", "video-result"):   # a trailing "SECS" of older plans is ignored
             if tok == known or (tok.startswith(known + " ") and tok[len(known):].strip().isdigit()):
                 tok = known
@@ -396,6 +404,49 @@ class Run:
             if time.time() - last > gap:
                 return self.fail_stage("say", "say %d" % (n + 1), gap, "no 'say %d' within %.0f s of the previous line (%d seen since the command)" % (n + 1, gap, n))
             time.sleep(0.1)
+
+    def wait_token(self, prefix, secs, label):
+        """Wait for a progress line that starts with one of `prefix` (a tuple), reading only the new bytes of progress.txt
+        (a deep run writes tens of thousands of lines). Ends early when the process exits. -> the line, or None (and the
+        run is marked aborted when the time is up or the process died without the line)."""
+        path = self.hz / "progress.txt"
+        pos, buf = 0, b""
+        t0 = time.time()
+        while True:
+            try:
+                with open(path, "rb") as f:
+                    f.seek(pos)
+                    chunk = f.read()
+            except OSError:
+                chunk = b""
+            if chunk:
+                pos += len(chunk)
+                buf += chunk
+                lines = buf.split(b"\n")
+                buf = lines.pop()
+                for ln in lines:
+                    t = ln.decode("utf-8", "replace")
+                    if t.startswith(prefix):
+                        self.stage_times[label] = round(time.time() - t0, 1)
+                        return t
+            if self.proc.poll() is not None:
+                self.fail_stage(label, "/".join(prefix), secs, "process ended before a '%s' line" % "/".join(prefix))
+                return None
+            if time.time() - t0 > secs:
+                self.fail_stage(label, "/".join(prefix), secs)
+                return None
+            time.sleep(1.0)
+
+    def op_end(self):
+        """Leave a game that may sit on an error screen: ask it to quit, give it 20 s, never fail (the sweep kills it)."""
+        try:
+            send_cmd(self.hz, "quit")
+        except OSError:
+            pass
+        try:
+            self.proc.wait(timeout=20)
+        except subprocess.TimeoutExpired:
+            self.log.append("end: the game did not quit within 20 s; the sweep kills it")
 
     def _pick_window(self):
         """-> (window id, pids): the game's window among the processes of this run."""
@@ -538,6 +589,8 @@ class Run:
                 self.log.append("note: " + arg)
             elif op == "quit":
                 self.op_quit()
+            elif op == "end":
+                self.op_end()
             else:
                 raise ValueError("unknown plan op: " + op)
 
@@ -607,6 +660,8 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
         # Ren'Py 7 reads its saves from --savedir (saves/_stock7), flat: seed the files of every seeded folder there too
         for d in sorted({p.parent for p in pathlib.Path(seed_saves).rglob("*") if p.is_file()}):
             shutil.copytree(d, saves / STOCK7_SAVEDIR, dirs_exist_ok=True, ignore=lambda _d, names: [n for n in names if (d / n).is_dir()])
+    if ctx.opts.get("seed_data"):   # M6 verification: a patch library (patches/<fingerprint>/) for the player under test
+        shutil.copytree(ctx.opts["seed_data"], data, dirs_exist_ok=True)
     for fname, fsrc in (extra_files or {}).items():   # into the scratch clone only
         shutil.copy(fsrc, base / "game" / fname)
     if inject and engine == "stock":
@@ -620,6 +675,9 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
     # still recorded in the player's runtime.jsonl.
     env["PLAYER_COMPAT_NOTICE"] = "off"
     env["HZ_INPUT_ANSWER"] = str(g.get("input_answer", "Tester"))
+    env["HZ_INPUT_EXPLICIT"] = "1" if "input_answer" in g else "0"   # deep runs vary the answer unless the game needs one
+    env["HZ_AFTER_START"] = json.dumps(list(g.get("after_start", ())))   # deep runs replay it when a play ends and the next starts
+    env.update(ctx.opts.get("extra_env") or {})
     env["HZ_INPUT_LIMIT"] = str(g.get("input_limit", 3))
     env["HZ_SCREEN_ACTIONS"] = ";".join("%s=%s" % kv for kv in g.get("screen_actions", {}).items())
     if not inject:
@@ -692,6 +750,8 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
     nest_stock7_saves(ctx, engine, saves, res["progress"])
     (out / "progress.txt").write_text("\n".join(res["progress"]) + "\n")
     (out / "plan.log").write_text("\n".join(res["plan_log"]) + "\n")
+    if (hz / "deep").exists():   # deep runs: coverage.json, lines.json, err-N.json
+        shutil.copytree(hz / "deep", out / "deep", dirs_exist_ok=True)
     if (hz / "video.json").exists():
         shutil.copy(hz / "video.json", out / "video.json")
     if keep_saves:
