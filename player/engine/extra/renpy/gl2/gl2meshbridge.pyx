@@ -504,7 +504,7 @@ cdef class DrawContext:
         if min_filter == GL_NEAREST:
             return (handle, wrap_s, wrap_t, mag_linear, False, 0, 1)
         elif min_filter == GL_LINEAR:
-            return (handle, wrap_s, wrap_t, mag_linear, True, 0, 1)
+            return (handle, wrap_s, wrap_t, mag_linear, True, 0, anisotropy)
         elif min_filter == GL_NEAREST_MIPMAP_NEAREST:
             return (handle, wrap_s, wrap_t, mag_linear, False, 1, 1)
         elif min_filter == GL_LINEAR_MIPMAP_NEAREST:

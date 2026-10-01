@@ -28,6 +28,7 @@ def parse():
     r.add_argument("--tier", choices=list(checks.TIERS), required=True)
     r.add_argument("--plan", help="route plan: name in plans/ or a file")
     r.add_argument("--out", required=True)
+    r.add_argument("--renpy-version", help="--game <folder> only: the Ren'Py version of that game (\"7.4.8\"): the deep check sorts errors of a Ren'Py 7 game as Python 2 candidates")
     r.add_argument("--only", help="comma list: run just these checks of the tier")
     r.add_argument("--stock-engine", help="stock engine id from corpus.toml (default: the game's)")
     r.add_argument("--strip-game-cache", choices=["auto", "yes", "no"], default="auto",
@@ -62,6 +63,13 @@ def parse():
                    help="do not build and play the synthetic A/V clip when the game movie has no audio")
     r.add_argument("--player-import-only", dest="player_import_only", action="store_true",
                    help="saveresume: seed stock saves only under RENPY_PATH_TO_SAVES (the player's first-open import), not into <data>/saves")
+    r.add_argument("--deep-seeds", default=None, help="deep tier: comma list of seeds (default 1,2,3; a game's deep_seeds wins)")
+    r.add_argument("--deep-minutes", type=float, default=None, help="deep tier: time budget per seed (default 30)")
+    r.add_argument("--deep-stall", type=int, default=None, help="deep tier: seconds without a new script line that count as a loop (default 300)")
+    r.add_argument("--deep-save-gap", type=float, default=None, help="deep tier: min seconds between saves (default 0: save before every PyCode node)")
+    r.add_argument("--deep-confirm", choices=["yes", "no"], default="yes", help="deep tier: replay each error on the stock engine")
+    r.add_argument("--with-proposed", action="store_true", help="player: also load proposed (not yet accepted) patches (PLAYER_PATCHES_PROPOSED=1)")
+    r.add_argument("--seed-data", help="player: dir copied into every launch's scratch --data (a patch library to test)")
     r.add_argument("--lock-timeout", type=int, default=7200)
     d = sub.add_parser("diff")
     d.add_argument("--a", required=True)
@@ -82,7 +90,7 @@ def resolve_game(arg):
     p = pathlib.Path(arg).expanduser().resolve()
     if not (p / "game").is_dir():
         sys.exit("--game: '%s' is neither a corpus key (%s) nor a folder that holds game/" % (arg, ", ".join(corpus["games"])))
-    return p.name, {"source": str(p), "base": ".", "engine": "sdk-853", "plan": "route"}
+    return p.name, {"source": str(p), "base": ".", "engine": "sdk-853", "plan": "route", "renpy": ARGS.renpy_version or "8.5.3"}
 
 
 def cmd_run(a):
@@ -93,6 +101,8 @@ def cmd_run(a):
     opts = {k: v for k, v in vars(a).items() if k not in ("cmd", "engine", "game", "tier", "out", "only")}
     opts["stock_engine"] = a.stock_engine
     opts["player_bin"] = a.player_bin
+    if a.with_proposed:
+        opts["extra_env"] = {"PLAYER_PATCHES_PROPOSED": "1"}
     ctx = L.Ctx(key, game, a.engine, out, opts)
     names = a.only.split(",") if a.only else checks.TIERS[a.tier]
     ctx.cleanup()
@@ -136,4 +146,5 @@ def cmd_diff(a):
 if __name__ == "__main__":
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))   # let launch() sweep and release the machine lock
     args = parse()
+    ARGS = args
     sys.exit(cmd_run(args) if args.cmd == "run" else cmd_diff(args))

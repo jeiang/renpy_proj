@@ -32,7 +32,12 @@ from pathlib import Path
 
 ENGINE = Path(__file__).resolve().parent
 PLAYER = ENGINE.parent
-UPSTREAM = PLAYER / "upstream" / "renpy-8.5.3"
+# Prefetched inputs (hermetic builds such as the Nix package): PLAYER_RENPY_SRC is an unpacked Ren'Py source
+# tree of TAG (read only; no .git needed, so PLAYER_RENPY_COMMIT gives its commit) and PLAYER_PYWHEELS is the
+# folder of wheels listed in engine/wheels.txt. Without them fetch.sh fills player/upstream/.
+PREFETCHED = bool(os.environ.get("PLAYER_RENPY_SRC"))
+UPSTREAM = Path(os.environ.get("PLAYER_RENPY_SRC") or PLAYER / "upstream" / "renpy-8.5.3")
+PYWHEELS = Path(os.environ.get("PLAYER_PYWHEELS") or PLAYER / "upstream" / "pywheels")
 OUT = PLAYER / "build-out" / "engine"
 TAG = "8.5.3.26051504"
 VERSION_NAME = "We Can Go to the Moon"
@@ -153,7 +158,8 @@ def digest_inputs(extra_files):
     s = hashlib.sha256(fingerprint.encode())
     for p in extra_files:
         s.update(os.path.relpath(p, ENGINE).encode() + b"\0" + p.read_bytes() + b"\0")
-    commit = subprocess.check_output(["git", "-C", str(UPSTREAM), "rev-parse", "HEAD"], text=True).strip()
+    commit = os.environ.get("PLAYER_RENPY_COMMIT") or subprocess.check_output(
+        ["git", "-C", str(UPSTREAM), "rev-parse", "HEAD"], text=True).strip()
     s.update(commit.encode())
     return fingerprint, s.hexdigest()
 
@@ -172,6 +178,12 @@ def prepare_tree(tree: Path):
         shutil.copytree(UPSTREAM / d, tree / d, ignore=ignore)
     (tree / "scripts").mkdir()
     shutil.copy2(UPSTREAM / "scripts" / "generate_styles.py", tree / "scripts" / "generate_styles.py")
+    # A prefetched source tree lives in a read-only store: the copy must be writable for the patches.
+    for dirpath, dirnames, filenames in os.walk(tree):
+        for n in dirnames + filenames:
+            p = Path(dirpath) / n
+            if not p.is_symlink():
+                p.chmod(p.stat().st_mode | 0o200)
 
     for patch in sorted((ENGINE / "patches").glob("*.patch")):
         log("apply", patch.name)
@@ -385,7 +397,7 @@ def build_layer_zip(tree: Path, dest: Path):
                 add_pyc(z, p, rel)
                 n += 1
         # Bundled pure-Python packages (see fetch.sh).
-        for wheel in sorted((UPSTREAM.parent / "pywheels").glob("*.whl")):
+        for wheel in sorted(PYWHEELS.glob("*.whl")):
             with zipfile.ZipFile(wheel) as w:
                 for name in sorted(w.namelist()):
                     if name.endswith(".py") and ".dist-info/" not in name:
@@ -451,7 +463,7 @@ def compile_common(tree: Path, cdir: Path, mods) -> Path:
     run([sys.executable, str(PACKAGING / "compile_common.py"),
          "--hosttree", str(work / "host"),
          "--common", str(tree / COMMON_DIR), "--out", str(work / "out"),
-         "--workdir", str(work / "scratch"), "--pywheels", str(UPSTREAM.parent / "pywheels")])
+         "--workdir", str(work / "scratch"), "--pywheels", str(PYWHEELS)])
     return work / "out" / "rpyc" / "common"
 
 
@@ -486,7 +498,10 @@ def main():
     ap.add_argument("--py-include", help="Python 3.12 headers (default: pyhost's build, else this python)")
     args = ap.parse_args()
 
-    if not UPSTREAM.exists() or not (UPSTREAM.parent / "pywheels").is_dir():
+    if PREFETCHED:
+        if not (UPSTREAM.is_dir() and PYWHEELS.is_dir()):
+            raise SystemExit("PLAYER_RENPY_SRC and PLAYER_PYWHEELS must name existing folders")
+    elif not UPSTREAM.exists() or not PYWHEELS.is_dir():
         env = None
         if IS_WIN:  # bash.exe from Git's usr/bin needs that folder on PATH for dirname, curl, sha256sum
             env = dict(os.environ, PATH=str(Path(git_tool("bash")).parent) + os.pathsep + os.environ["PATH"])
@@ -502,7 +517,7 @@ def main():
     log("python headers:", py_include)
 
     inputs = [p for root in (ENGINE / "patches", ENGINE / "python", ENGINE / "extra") for p in files_under(root)]
-    inputs += [ENGINE / "build.py", ENGINE / "fetch.sh", PACKAGING / "compile_common.py"]
+    inputs += [ENGINE / "build.py", ENGINE / "fetch.sh", ENGINE / "wheels.txt", PACKAGING / "compile_common.py"]
     fingerprint, stamp = digest_inputs(inputs)
     stamp += py_include
     stamp_file = OUT / "stamp.txt"

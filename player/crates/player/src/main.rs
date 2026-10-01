@@ -3,6 +3,7 @@
 //! Contract: player/CONTRACTS.md.
 
 mod patches_cli;
+mod upgrade_cli;
 mod report_cli;
 mod serve_cli;
 mod vfs_cli;
@@ -69,7 +70,8 @@ const SUBCOMMANDS: &str = "\
        player scan [<folder>...] [--data <dir>]   add folders to the library and rescan
        player list [--data <dir>]            list the games in the library
        player report <game> [--data <dir>]   pre-flight report of a game
-       player patches <game> list|validate|apply-test   port patches of a game
+       player patches <game> list|validate|apply-test|accept <id>   port patches of a game
+       player upgrade <game> [--errors <dir>] [--data <dir>] ...   AI upgrade pass (maintainers; see player/CONTRACTS.md, M6)
        player mods <game> list|enable|disable|order ... [--data <dir>]
        player serve <game> [--bind <addr>] [--port <n>] [--size <WxH>] [--fps <n>] [--kbps <n>]
                   [--encoder <name>] [--latency-overlay]   stream the game to a browser (headless)";
@@ -184,6 +186,10 @@ fn main() -> Result<()> {
                 args.remove(0);
                 let (rest, data) = take_data(args)?;
                 patches_cli::run(&rest, &data, &std::env::current_exe()?)?
+            }
+            "upgrade" => {
+                args.remove(0);
+                upgrade_cli::run(&args, &std::env::current_exe()?)?
             }
             "mods" | "report" => {
                 let cmd = args.remove(0);

@@ -2,8 +2,10 @@
   description = "renpy_proj: a Ren'Py 7/8 player (research + build)";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  # Ren'Py 8.5.3 source (tag 8.5.3.26051504), pinned by flake.lock; the Nix build never clones.
+  inputs.renpy-src = { url = "github:renpy/renpy/8.5.3.26051504"; flake = false; };
 
-  outputs = { nixpkgs, ... }:
+  outputs = { nixpkgs, renpy-src, ... }:
     let
       forAllSystems = nixpkgs.lib.genAttrs [ "aarch64-darwin" "x86_64-darwin" "x86_64-linux" "aarch64-linux" ];
       # LGPL-only FFmpeg 7 (ARCHITECTURE.md, Licensing): never GPL or nonfree.
@@ -22,11 +24,37 @@
         withDav1d = true;
         withSmallBuild = false;
       };
+      # The pure player package is built for the two platforms of the M4 gate.
+      playerSystems = [ "aarch64-darwin" "x86_64-linux" ];
+      playerPackages = system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+          sources = import ./nix/sources.nix { inherit pkgs; };
+          cpython = import ./nix/cpython.nix { inherit pkgs sources; };
+        in
+        {
+          player-cpython = cpython;
+          player = import ./nix/player.nix {
+            inherit pkgs sources cpython;
+            ffmpegLgpl = ffmpegLgpl pkgs;
+            renpySrc = renpy-src;
+            renpyRev = renpy-src.rev;
+          };
+          default = (playerPackages system).player;
+        };
     in
     {
-      packages = forAllSystems (system: {
-        ffmpeg-lgpl = ffmpegLgpl nixpkgs.legacyPackages.${system};
-      });
+      packages = forAllSystems (system:
+        let pkgs = nixpkgs.legacyPackages.${system}; in
+        {
+          ffmpeg-lgpl = ffmpegLgpl pkgs;
+        } // nixpkgs.lib.optionalAttrs (builtins.elem system playerSystems) (playerPackages system));
+
+      checks = nixpkgs.lib.genAttrs playerSystems (system:
+        let pkgs = nixpkgs.legacyPackages.${system}; in
+        {
+          player-smoke = import ./nix/smoke.nix { inherit pkgs; player = (playerPackages system).player; };
+        });
 
       devShells = forAllSystems (system:
         let pkgs = nixpkgs.legacyPackages.${system}; in

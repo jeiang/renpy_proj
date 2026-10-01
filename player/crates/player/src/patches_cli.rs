@@ -12,7 +12,8 @@ use std::process::Command;
 
 use anyhow::{Context, Result, bail};
 
-const USAGE: &str = "usage: player patches <game> list|validate|apply-test [--data <dir>]";
+const USAGE: &str =
+    "usage: player patches <game> list|validate|apply-test|accept <id> [--data <dir>]";
 
 fn game_key_of(game: &str) -> Result<String> {
     let path = Path::new(game)
@@ -68,8 +69,18 @@ fn note_fingerprint(fp: &Option<String>) {
 }
 
 pub fn run(args: &[String], data: &Path, exe: &Path) -> Result<i32> {
-    let [game, sub] = args else { bail!("{USAGE}") };
+    let (game, sub, rest) = match args {
+        [game, sub, rest @ ..] => (game, sub, rest),
+        _ => bail!("{USAGE}"),
+    };
     let key = game_key_of(game)?;
+    if sub == "accept" {
+        let [id] = rest else { bail!("{USAGE}") };
+        return accept(data, &key, id);
+    }
+    if !rest.is_empty() {
+        bail!("{USAGE}");
+    }
 
     match sub.as_str() {
         "list" | "validate" => {
@@ -77,6 +88,9 @@ pub fn run(args: &[String], data: &Path, exe: &Path) -> Result<i32> {
             note_fingerprint(&fp);
             let lib = patches::load_dirs(&dirs);
             if sub == "list" {
+                for (p, state) in &lib.inactive {
+                    println!("inactive\t{}\t{}", state, p.display());
+                }
                 for p in &lib.patches {
                     println!(
                         "{}:{}\tsha1:{}\t{} #{}",
@@ -120,4 +134,50 @@ pub fn run(args: &[String], data: &Path, exe: &Path) -> Result<i32> {
         }
         _ => bail!("{USAGE}"),
     }
+}
+
+/// `accept <id>`: sets the sidecar state of `<id>.toml` from `proposed` to `accepted`. Only a patch file that parses
+/// without errors is accepted. The id is the file stem; it is searched in the library folders of the game.
+fn accept(data: &Path, key: &str, id: &str) -> Result<i32> {
+    if id.is_empty() || id.contains(['/', '\\']) || id.contains("..") {
+        bail!("`{id}` is not a patch id (the file name without .toml)");
+    }
+    let (dirs, fp) = folders(data, key);
+    note_fingerprint(&fp);
+    let file = dirs
+        .iter()
+        .map(|d| d.join(format!("{id}.toml")))
+        .find(|p| p.is_file())
+        .with_context(|| format!("no patch file {id}.toml in the library of this game"))?;
+    let (_, errors) = patches::parse_file(&file);
+    if !errors.is_empty() {
+        for e in &errors {
+            eprintln!("error: {e}");
+        }
+        bail!("{} has errors; not accepted", file.display());
+    }
+    let side = patches::sidecar_path(&file);
+    let text = std::fs::read_to_string(&side)
+        .with_context(|| format!("{} has no sidecar ({}): it is already active", id, side.display()))?;
+    let mut meta: serde_json::Value =
+        serde_json::from_str(&text).with_context(|| format!("unreadable sidecar {}", side.display()))?;
+    match meta["state"].as_str() {
+        Some("proposed") => {}
+        Some("accepted") => {
+            println!("{id}: already accepted");
+            return Ok(0);
+        }
+        other => bail!(
+            "{id} is `{}`, not `proposed`: only a verified patch can be accepted",
+            other.unwrap_or("?")
+        ),
+    }
+    meta["state"] = "accepted".into();
+    meta["accepted_at_unix"] = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs())
+        .into();
+    std::fs::write(&side, serde_json::to_string_pretty(&meta)? + "\n")?;
+    println!("{id}: accepted ({})", file.display());
+    Ok(0)
 }
