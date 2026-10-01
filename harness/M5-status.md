@@ -33,13 +33,13 @@ The script waits for the main menu, clicks the splash Yes/No choice and Start th
 |---|---|---|---|---|---|---|---|
 | Mac, Chromium | Mac, VideoToolbox | Mac | LAN address 192.0.2.210 | pass | 119 / 160 | 127 / 170 | 13.7% |
 | Mac, WebKit (headed) | Mac | Mac | LAN | pass | 117 / 147 | 120 / 148 | 15.8% |
-| artemis, Chromium | artemis, `h264_vaapi` or openh264 (see below) | Mac | NetBird 198.51.100.91, RTT 86 ms | pass | 147 / 185 | 150 / 187 | 10.5% |
+| artemis, Chromium | artemis, encoder not recorded (see below) | Mac | NetBird 198.51.100.91, RTT 86 ms | pass | 147 / 185 | 150 / 187 | 10.5% |
 
-Latency is glass to glass: the server burns its millisecond clock as 32 black/white cells into the top-left of each encoded frame (`--latency-overlay`); the page decodes the cells of each rendered frame (`requestVideoFrameCallback`) and subtracts it from the server clock estimated by the lowest-RTT ping/pong over the data channel. It therefore includes capture, readback, convert, encode, network, jitter buffer, decode and render, and excludes the display scan-out. The artemis figure includes about half of the 86 ms RTT only through the clock offset estimate (the offset is the lowest-RTT sample, so one way delay is counted once). Timelines are in `result.json` (`latency_timeline`). Evidence (gitignored): `harness/out/m5-{mac,artemis,mac-webkit}/` with `result.json`, `page.png`, `video.png`, `progress.txt`.
+Latency is glass to glass: the server burns its millisecond clock as 32 black/white cells into the top-left of each encoded frame (`--latency-overlay`); the page decodes the cells of each rendered frame (`requestVideoFrameCallback`) and subtracts it from the server clock estimated by the lowest-RTT ping/pong over the data channel. It therefore includes capture, readback, convert, encode, network, jitter buffer, decode and render, and excludes the display scan-out. The clock offset comes from the lowest-RTT sample and assumes a symmetric path; over NetBird (86 ms RTT) an asymmetric path would shift the artemis figure by up to half the RTT. Timelines are in `result.json` (`latency_timeline`). Evidence (gitignored): `harness/out/m5-{mac,artemis,mac-webkit}/` with `result.json`, `page.png`, `video.png`, `progress.txt`.
 
 Observed: 5 of 5 checks pass in all three runs. Dialogue advanced on clicks every time; Enter advanced a say in some presses only (some lines are click-only in this game, or a transition ate the key). Audio RMS max 0.053 on all runs. Frame rate during play was 14.8 fps on both hosts, because the game redraws about 3 fps and the 100 ms repeat fills the rest.
 
-Which artemis encoder ran: the player ladder tries `h264_vaapi` first on Linux. Its encoder name is in `stream_stats` of `/stats` (`encoder`); `result.json` keeps the page-side stats only. M5Encode measured `h264_vaapi` at 3.6 ms per NV12 and 12.9 ms per RGBA 1080p frame on artemis.
+Which artemis encoder ran is not recorded: the gate did not save the server's `/stats`. The ladder tries `h264_vaapi` first on Linux, and M5Encode measured it passing `verify` on artemis at 3.6 ms per NV12 and 12.9 ms per RGBA 1080p frame; a fallback to openh264 would also stream, so treat the artemis CPU figure as unattributed.
 
 ## Findings that changed the code
 
