@@ -305,6 +305,7 @@ def main():
             log = page.evaluate("window.__stream.latencyLog()")
             near = [ms for (t, ms, _c) in log if any(0 <= t - c <= 1500 for c in clicks)]
             res["latency_after_input_ms"] = {"n": len(near), "p50": pct(near, .5), "p95": pct(near, .95), "min": min(near) if near else None, "max": max(near) if near else None}
+            res["latency_timeline"] = [[round((t - log[0][0]) / 1000, 2), ms] for (t, ms, _c) in log][::3]
             res["latency_ms"] = {"n": len(lat), "p50": pct(lat, .5), "p95": pct(lat, .95), "min": min(lat) if lat else None, "max": max(lat) if lat else None}
             res["stream_stats"] = page.evaluate("window.__stream.stats()")
             page.screenshot(path=a.out + "/page.png")

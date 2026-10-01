@@ -27,7 +27,6 @@ fn keepalive() -> Duration {
 }
 const IDR_MIN_GAP: Duration = Duration::from_millis(150);
 const OPUS_CHUNK: usize = 1920; // 960 frames, 20 ms, interleaved stereo
-const AUDIO_QUEUE_MAX: usize = 48_000 * 2; // 1 s
 
 struct Session {
     rtc: Rtc,
@@ -109,7 +108,7 @@ pub(crate) fn run(sh: Arc<Shared>, socks: Vec<UdpSocket>, rx: Receiver<Msg>) {
             deadline = deadline.min(t);
         }
         if m.sess.as_ref().is_some_and(|s| s.connected) {
-            deadline = deadline.min(m.last_sent + keepalive());
+            deadline = deadline.min(m.last_sent + keepalive()).min(now + Duration::from_millis(10)); // audio pacing
             if let Some(t) = m.flush_at {
                 deadline = deadline.min(t);
             }
@@ -417,12 +416,14 @@ impl Media {
         }
     }
 
+    /// Sends audio locked to the wall clock: exactly 48000 frames per second leave, whatever the rate at which the
+    /// mixer delivered them. A short input is padded with silence after 40 ms of underrun, a long one is trimmed to
+    /// 100 ms. The RTP timeline then matches the RTCP wall clock, so the browser has no reason to hold video back
+    /// for audio (with the timeline taken from the sample count alone, a mixer that ran slightly slow made the
+    /// browser delay the video by up to a second).
     fn pump_audio(&mut self, now: Instant) {
         let incoming = std::mem::take(&mut *self.sh.audio.lock().unwrap());
         self.audio_pending.extend_from_slice(&incoming);
-        if self.audio_pending.len() < OPUS_CHUNK {
-            return;
-        }
         if self.opus.is_none() && !self.opus_failed {
             match OpusEncoder::new(96) {
                 Ok(o) => self.opus = Some(o),
@@ -433,18 +434,31 @@ impl Media {
             }
         }
         let Some(s) = self.sess.as_mut() else { return };
-        // Keep latency bounded: drop the oldest whole chunks beyond one second.
-        if self.audio_pending.len() > AUDIO_QUEUE_MAX {
-            let drop = (self.audio_pending.len() - AUDIO_QUEUE_MAX) / OPUS_CHUNK * OPUS_CHUNK;
-            self.audio_pending.drain(..drop);
-            s.audio_samples += (drop / 2) as u64;
+        if !s.connected {
+            return;
         }
         let base = *s.audio_base.get_or_insert(now);
+        let expected = (now.duration_since(base).as_micros() * 48_000 / 1_000_000) as u64;
+        const KEEP: usize = 2 * 4800; // 100 ms of interleaved stereo
+        if self.audio_pending.len() > KEEP + OPUS_CHUNK {
+            let drop = (self.audio_pending.len() - KEEP) / OPUS_CHUNK * OPUS_CHUNK;
+            self.audio_pending.drain(..drop);
+        }
+        let silence = [0f32; OPUS_CHUNK];
         let mut used = 0;
-        while self.audio_pending.len() - used >= OPUS_CHUNK {
-            let chunk = &self.audio_pending[used..used + OPUS_CHUNK];
-            used += OPUS_CHUNK;
+        loop {
             let n = s.audio_samples;
+            let have = self.audio_pending.len() - used >= OPUS_CHUNK;
+            // Send a chunk when its start time has come; pad with silence when the mixer is more than 40 ms late.
+            let due = n + 960 <= expected + 960;
+            let starved = n + 3 * 960 <= expected;
+            if !(due && (have || starved)) {
+                break;
+            }
+            let chunk: &[f32] = if have { &self.audio_pending[used..used + OPUS_CHUNK] } else { &silence };
+            if have {
+                used += OPUS_CHUNK;
+            }
             s.audio_samples += (OPUS_CHUNK / 2) as u64;
             let Some(opus) = self.opus.as_mut() else { continue };
             let Ok(data) = opus.encode(chunk) else { continue };
