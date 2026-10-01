@@ -18,7 +18,10 @@ init 999 python:
     import os, io, time, json, hashlib, collections, sys, types
     _hz_D = sys.modules.get("_hz_deep")
     if _hz_D is None:
-        _hz_D = types.ModuleType("_hz_deep")
+        try:
+            _hz_D = types.ModuleType("_hz_deep")
+        except TypeError:   # Ren'Py 7: string literals are unicode, module names must be bytes
+            _hz_D = types.ModuleType(b"_hz_deep")
         sys.modules["_hz_deep"] = _hz_D
         _hz_D.on = False
         _hz_D.started = False
