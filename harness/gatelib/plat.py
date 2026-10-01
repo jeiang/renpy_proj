@@ -460,6 +460,22 @@ class Xvfb(Hypr):
             shutil.rmtree(self._tmp, ignore_errors=True)
         self._tmp = None
 
+    SOFT_PKGS = ("mesa", "vulkan-loader", "libglvnd")   # software GL and Vulkan, in place of /run/opengl-driver/lib
+
+    _soft = None
+
+    def soft_libs(self):
+        """-> (lib dirs, lavapipe ICD JSON) of the nixpkgs Mesa. NixOS only (nix-ld): Ubuntu has these in /usr/lib and /usr/share/vulkan."""
+        if Xvfb._soft is None:
+            r = subprocess.run(["nix", "build", "--no-link", "--print-out-paths"] + ["nixpkgs#" + p for p in LINUX_RUNTIME_PKGS + self.SOFT_PKGS],
+                               capture_output=True, text=True)
+            if r.returncode != 0:
+                raise RuntimeError("nix build of the runtime libraries failed: " + r.stderr.strip()[-300:])
+            outs = [p for p in r.stdout.split() if os.path.isdir(p + "/lib")]
+            icd = next((p + "/share/vulkan/icd.d/lvp_icd.x86_64.json" for p in outs if os.path.exists(p + "/share/vulkan/icd.d/lvp_icd.x86_64.json")), None)
+            Xvfb._soft = ([p + "/lib" for p in outs], icd)
+        return Xvfb._soft
+
     def game_env(self, environ):
         """`env -i` plus: HOME, USER, LANG, a clean PATH, the lavapipe ICD, software GL, a dummy audio driver, and the extra
         variables of HARNESS_GAME_ENV. DISPLAY and XDG_RUNTIME_DIR come from `session_start`. Nothing of a desktop session."""
@@ -469,6 +485,11 @@ class Xvfb(Hypr):
         env.update(LIBGL_ALWAYS_SOFTWARE="1", GALLIUM_DRIVER="llvmpipe", WGPU_BACKEND="vulkan", SDL_AUDIODRIVER="dummy",
                    XDG_SESSION_TYPE="x11")
         icd = environ.get("HARNESS_VK_ICD")
+        if "NIX_LD" in environ:   # NixOS: dynamic ELF files (stock SDK, the player's host libraries) get Mesa's software drivers only
+            libs, nix_icd = self.soft_libs()
+            env["NIX_LD"] = environ["NIX_LD"]
+            env["NIX_LD_LIBRARY_PATH"] = ":".join([environ.get("NIX_LD_LIBRARY_PATH", "/run/current-system/sw/share/nix-ld/lib")] + libs)
+            icd = icd or nix_icd
         if icd:
             env["VK_ICD_FILENAMES"] = env["VK_DRIVER_FILES"] = icd
         for ln in environ.get("HARNESS_GAME_ENV", "").splitlines():
