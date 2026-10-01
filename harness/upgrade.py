@@ -14,6 +14,7 @@ ended `proposed` or was reported unpatchable / needs-human with evidence; 3 when
 """
 import argparse
 import json
+import os
 import pathlib
 import shutil
 import sys
@@ -85,7 +86,7 @@ def upgrade_error(a, key, game, game_arg, cfg, data, err_dir, err):
         return dict(status, outcome="dry-run", why="prompt stored in %s" % (udir / "prompt.txt"))
     out = L.HARNESS / "work" / ("upgrade-" + eid)
     seed = out / "seed"
-    work_out = out / "out"
+    work_out = out / ("out-%d" % os.getpid())
     attempts = []
     pdir = data / "patches" / fp
     pdir.mkdir(parents=True, exist_ok=True)
