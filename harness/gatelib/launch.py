@@ -277,9 +277,10 @@ def parse_plan(text):
 class Run:
     """State shared by the plan ops of one launch."""
 
-    def __init__(self, proc, hz, base, shots_dir, pattern, log, after_start=(), min_visible=0.8, stages=None):
+    def __init__(self, proc, hz, base, shots_dir, pattern, log, after_start=(), min_visible=0.8, stages=None, volatile_shots=()):
         self.proc, self.hz, self.base, self.shots_dir, self.pattern, self.log = proc, hz, base, shots_dir, pattern, log
         self.min_visible = min_visible
+        self.volatile_shots = set(volatile_shots)   # corpus.toml `volatile_shots`: shots of this game that hold an animation
         self.stages = stages or ST.table({})
         self.stage_times = {}      # stage -> seconds it took (the measured values behind the stage table)
         self.stage_failed = None   # {"stage", "expected", "timeout_s", "last_line", "last_age_s"} of the missed stage
@@ -437,7 +438,7 @@ class Run:
 
     def op_shot(self, arg):
         name, _, flag = arg.partition(" ")
-        rec = {"name": name, "volatile": flag == "volatile", "file": None, "error": None}
+        rec = {"name": name, "volatile": flag == "volatile" or name in self.volatile_shots, "file": None, "error": None}
         f = self.shots_dir / (name + ".png")
         self.shots_dir.mkdir(parents=True, exist_ok=True)
         raised = False
@@ -647,7 +648,7 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
         stdout = open(out / "stdout.log", "w")
         t0 = time.time()
         proc = subprocess.Popen(argv, stdout=stdout, stderr=subprocess.STDOUT, env=env, cwd=str(clone))
-        run = Run(proc, hz, base, out / "shots", pattern, res["plan_log"], g.get("after_start", ()), ctx.opts.get("min_visible", 0.8), st_table)
+        run = Run(proc, hz, base, out / "shots", pattern, res["plan_log"], g.get("after_start", ()), ctx.opts.get("min_visible", 0.8), st_table, g.get("volatile_shots", ()))
         try:
             if plan:
                 run.run(plan)
