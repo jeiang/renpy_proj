@@ -244,7 +244,12 @@ impl Mixer {
     pub fn get_pos_ms(&self, ch: usize) -> i64 {
         match self.channels.get(ch) {
             Some(c) if c.playing.is_some() => {
-                self.samples_to_ms(c.pos) + c.playing.as_ref().map_or(0, |t| t.start_ms as i64)
+                let t = c.playing.as_ref();
+                // A file with video and no audio is positioned by its video clock.
+                if let Some(p) = t.and_then(|t| t.media.video_position()) {
+                    return (p * 1000.0) as i64;
+                }
+                self.samples_to_ms(c.pos) + t.map_or(0, |t| t.start_ms as i64)
             }
             _ => -1,
         }

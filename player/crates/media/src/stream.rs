@@ -116,6 +116,10 @@ struct State {
     vq: VecDeque<Arc<VideoFrame>>,
     video_pts_offset: Option<f64>,
     video_read_time: f64,
+    /// The frame interval of the video stream, and the end of the last frame handed out
+    /// (its pts plus the interval): the play position of a file with no audio.
+    video_frame_dur: f64,
+    video_shown_end: f64,
     pause_time: f64,
     time_offset: f64,
 }
@@ -209,6 +213,9 @@ impl Shared {
             let f = st.vq.pop_front();
             st.needs_decode = true;
             st.video_read_time = offset_time;
+            if let Some(fr) = &f {
+                st.video_shown_end = fr.pts + st.video_frame_dur;
+            }
             self.cv.notify_all();
             return Ok(f);
         }
@@ -257,6 +264,8 @@ impl Media {
                 vq: VecDeque::new(),
                 video_pts_offset: None,
                 video_read_time: 0.0,
+                video_frame_dur: 1.0 / 30.0,
+                video_shown_end: 0.0,
                 pause_time: 0.0,
                 time_offset: 0.0,
             }),
@@ -292,6 +301,22 @@ impl Media {
             && st.video_finished
             && st.vq.is_empty()
             && (st.video_only || (st.audio_finished && st.audio_q.is_empty()))
+    }
+
+    /// The play position in seconds of a file with video and no audio track: the end of the last
+    /// frame handed out, which is the frames handed out over the frame rate. The mixer's sample
+    /// clock for such a file only counts silence, in device-buffer steps, and runs past the last
+    /// frame. `None` for any file with audio, and before the first frame is handed out.
+    pub fn video_position(&self) -> Option<f64> {
+        let st = self.sh.st.lock();
+        if !st.video_only || st.video_pts_offset.is_none() || st.video_shown_end <= 0.0 {
+            return None;
+        }
+        Some(if st.total_duration > 0.0 {
+            st.video_shown_end.min(st.total_duration)
+        } else {
+            st.video_shown_end
+        })
     }
 
     pub fn is_ready(&self) -> bool {
@@ -693,6 +718,7 @@ impl Decoder {
                 if fr.num > 0 && fr.den > 0 {
                     d.frame_dur = fr.den as f64 / fr.num as f64;
                 }
+                sh.st.lock().video_frame_dur = d.frame_dur;
                 d.vctx = d.open_video_context(s);
                 if d.vctx.is_null() {
                     note(format!("{}: no usable video decoder", sh.name));
