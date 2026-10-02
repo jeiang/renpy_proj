@@ -1,5 +1,7 @@
 """Parallel workers for correctness runs (deep, lint, probe, route, saveresume) on the Linux GPU host.
 
+Windows are 1896x1056 inside a 1920x1080 output (outer gap 12), the size Hyprland gives them on artemis, so frames compare with the Hyprland baselines.
+
 Each worker (slot) owns a headless sway (`WLR_BACKENDS=headless`, so no output of the real session is used), a work dir
 (`<work>/slot<N>`: clones, save dirs, data dirs) and a slot lock (machinelock.take_shared). The gate runs inside the slot with
 HARNESS_SLOT, HARNESS_COMPOSITOR=sway and the worker's WAYLAND_DISPLAY, DISPLAY and SWAYSOCK. Timing checks (`video`) take the
@@ -20,6 +22,8 @@ import time
 
 COMP_DIR = pathlib.Path("/tmp/renpy_proj.comp")
 SWAY_CFG = """default_border none
+gaps inner 0
+gaps outer 12
 output * resolution 1920x1080
 exec sh -c 'printf "WAYLAND_DISPLAY=%s\\nDISPLAY=%s\\nSWAYSOCK=%s\\n" "$WAYLAND_DISPLAY" "$DISPLAY" "$SWAYSOCK" > {envfile}'
 """
@@ -77,26 +81,26 @@ def slot_env(comp, slot, work_root):
     return env
 
 
-def run_pool(jobs, width, work_root, log=print):
+def run_pool(jobs, width, work_root, log=print, base=0):
     """jobs: list of (name, argv). Runs them `width` at a time, each worker on its own slot, compositor and work dir.
-    -> {name: return code}. A job runs `argv` as a child (usually `gate.py run ...`); the pool never holds a lock itself."""
+    -> {name: return code}. Slots are numbered `base` .. `base`+width-1 (a second pool beside a running campaign uses a higher base). A job runs `argv` as a child (usually `gate.py run ...`); the pool never holds a lock itself."""
     q = queue.Queue()
     for j in jobs:
         q.put(j)
     results, lock = {}, threading.Lock()
-    comps = [Compositor(i).start() for i in range(width)]
+    comps = [Compositor(base + i).start() for i in range(width)]
 
     def worker(slot):
-        env = slot_env(comps[slot], slot, work_root)
+        env = slot_env(comps[slot], base + slot, work_root)
         while True:
             try:
                 name, argv = q.get_nowait()
             except queue.Empty:
                 return
-            log("[pool] slot %d: %s start %s" % (slot, name, time.strftime("%H:%M:%S")))
+            log("[pool] slot %d: %s start %s" % (base + slot, name, time.strftime("%H:%M:%S")))
             t0 = time.time()
             rc = subprocess.run(argv, env=env).returncode
-            log("[pool] slot %d: %s end rc %s after %.0f s" % (slot, name, rc, time.time() - t0))
+            log("[pool] slot %d: %s end rc %s after %.0f s" % (base + slot, name, rc, time.time() - t0))
             with lock:
                 results[name] = rc
 

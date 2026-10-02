@@ -14,6 +14,7 @@ Options (command line, a per-game key of corpus.toml wins): deep_seeds (1,2,3), 
 seconds without a new script line, 300), deep_save_gap (0 = save before every PyCode node).
 """
 import json
+import os
 import pathlib
 import re
 import shutil
@@ -86,11 +87,16 @@ def _done_reason(progress):
     return next((ln.split(None, 1)[1] for ln in reversed(progress) if ln.startswith("deep-done ")), None)
 
 
+def _script_name(f):
+    """`game/chapter1.rpy` (Ren'Py 8 traceback) and `chapter1.rpyc` (Ren'Py 7 node file) name the same script."""
+    return re.sub(r"\.(rpyc?|rpymc?)$", "", os.path.basename(f)) if f else f
+
+
 def _error_key(e):
     t = e.get("patch_target") or {}
     n = e.get("node") or {}
     fr = next((f for f in reversed(e.get("frames") or []) if f.get("game")), {})
-    return (e["exception"]["type"], t.get("file") or fr.get("file") or n.get("file"), t.get("frame_line") or fr.get("line") or n.get("line"))
+    return (e["exception"]["type"], _script_name(t.get("file") or fr.get("file") or n.get("file")), t.get("frame_line") or fr.get("line") or n.get("line"))
 
 
 def classify_error(ctx, e, stock):

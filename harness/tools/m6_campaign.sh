@@ -9,7 +9,10 @@ PLAYER_BIN=${PLAYER_BIN:?set PLAYER_BIN to the absolute path of the player binar
 OUT=${OUT:-$HERE/out/m6}
 DATA=${DATA:-$HERE/out/m6-data}
 export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
-SHELL_NIX=(nix shell nixpkgs#python312 nixpkgs#grim nixpkgs#ffmpeg nixpkgs#sway nixpkgs#xwayland -c)
+# Limits: the whole campaign runs in one user scope (a runaway process tree cannot take the host down, see the D-Bus incident of Oct 1).
+# Games get the real user session bus (gatelib/plat.py game_env sets DBUS_SESSION_BUS_ADDRESS), so libdbus never spawns dbus-launch.
+SCOPE=(systemd-run --user --scope -q -p MemoryMax=${MEMORY_MAX:-70G} -p TasksMax=${TASKS_MAX:-8192} --)
+SHELL_NIX=("${SCOPE[@]}" nix shell nixpkgs#python312 nixpkgs#grim nixpkgs#ffmpeg nixpkgs#sway nixpkgs#xwayland -c)
 case "${1:-}" in
 deep)
   "${SHELL_NIX[@]}" python3 "$HERE/deep_all.py" --player-bin "$PLAYER_BIN" --out "$OUT" --workers "${2:-6}" --stage-scale 3
