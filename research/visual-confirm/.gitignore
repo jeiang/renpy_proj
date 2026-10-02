@@ -1,1 +1,4 @@
 evidence/
+# Per-game plans and the per-game run list are local (docs/LOCAL-FILES.md).
+plans/*.plan
+runall.sh
