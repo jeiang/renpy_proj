@@ -1100,6 +1100,7 @@ init 999 python:
             D.loop_chain = 1
         D.loop_sig = sig
         rec["n"] = D.loop_n
+        rec["screens"] = sorted(_hz_shown())
         rec["elapsed_s"] = round(now - D.t0, 1)
         rec["say"] = D.say
         rec["chain"] = D.loop_chain
