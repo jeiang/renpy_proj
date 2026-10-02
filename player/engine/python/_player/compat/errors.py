@@ -222,11 +222,26 @@ def make_handler(previous):
             log("handler failed: %r" % (e,))
 
         if previous is not None:
-            return previous(te)
+            return _call_previous(previous, te)
 
         return False
 
     return handler
+
+
+def _call_previous(previous, te):
+    """Ren'Py 8.4+ passes one TracebackException and calls a game handler of the old three-string form (`def h(short, full,
+    path)`) as `handler(*te)` (renpy/execution.py). The chain does the same for the game's own handler."""
+    import inspect
+
+    try:
+        inspect.signature(previous).bind(te)
+    except TypeError:
+        return previous(*te)
+    except ValueError:  # no introspectable signature
+        pass
+
+    return previous(te)
 
 
 def install():
