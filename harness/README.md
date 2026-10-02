@@ -151,3 +151,18 @@ The `deep` tier plays each seed (default 1,2,3, 30 min each; `deep_seeds`, `deep
 The loop test game (`testgames/loop`) ends a deep run as `stuck` after 4 detections of the same say loop, and breaks the screen loop by pressing the other button (`coverage.json` `loop_events`). The Mac runs (Bumpkin014 and BraveheartAcademy, 10 min, 2 seeds) gave the same picture (334 and 3 labels; 55 and 72 labels).
 
 **Call screens in deep runs.** A `call screen` interaction (interact type `screen`) that shows Jump, Call or ChoiceReturn buttons is answered by pressing the least pressed one at the current label, not by ending it with True (True returns from the `call screen`: a game's menu hub fell back to the main menu, and the navigator of AHouseInTheRift raised LabelNotFound). Screens with no such button are ended as before. The harness script keeps every module under a private alias (`_hz_time`, `_hz_os`, ...): a game variable named `time` hid the module and failed every DOF seed.
+
+**Early-ending fixes, proof (artemis, player, deep, 10 min \u00d7 seeds 1,2 unless noted; seconds of play and labels reached, before is the campaign with the first loop guard).**
+
+| Game | Before | After | Cause fixed |
+|---|---|---|---|
+| CabinByTheLake | 3 s, 2 labels, `story-end` | 600 s, 429 labels | `call screen` hub ended with True (returned to the menu): buttons are pressed |
+| AHouseInTheRift | 44-93 s, died with LabelNotFound 'True' | 165-252 s, ends `story-end` after 9 plays of the same intro | navigator `call screen` answered by `Return("label")`: Return(value) buttons are pressed |
+| DTRemake | `stuck` at 42 s, 4 labels | 348 s, 27 labels (stall `loop`) | menu loop: a detected loop presses the screen buttons even over a menu; stuck needs 120 s |
+| LuckyParadox | `stuck` at 40 s | 342-375 s (stall `loop`) | same |
+| Alex | `stuck` at 5 s | 235-415 s, 48 labels (`story-end` after the game's own ending, IndexError at script.rpy:347 in one seed) | NullAction never pressed, label-only idle cycle is not a loop |
+| HaremHotel | `stuck` at 8 s | 174 s and 550 s (a talk menu loops; `stuck` after 120 s with no new line) | screen-variable and toggle buttons are fallback only; the entry action is excluded |
+| DOF | every seed `AttributeError: 'int' object has no attribute 'time'` | 600 s both seeds | module aliases |
+| WhiteRussian | s2 6 s | 600 s both seeds | call-screen presses |
+
+Open: AstralLust still ends in `ui.interact called with non-empty widget/layer stack` (room_hotel_forge / after a battle start) in 2 of 2 seeds of the last full run; I did not find the cause.
