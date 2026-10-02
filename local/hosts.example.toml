@@ -1,0 +1,13 @@
+# Machine-specific network values. Copy this file to local/hosts.toml (gitignored) and fill in your own.
+# Scripts read the values through tools/hosts.py. Nothing in the tracked tree holds real addresses or logins.
+# Keys that are not set make the script that needs them stop with a clear message.
+
+[artemis]
+# The Linux GPU gate host. `ssh_target` is what you pass to ssh: user@host or a Host alias from ~/.ssh/config.
+ssh_target = "user@linux-gate-host.example"
+# Address a browser on another machine uses to reach the streamed game (LAN, VPN or overlay-network address).
+stream_host = "192.0.2.10"
+
+[windows_vm]
+# The Windows test machine (key auth).
+ssh_target = "Administrator@203.0.113.10"

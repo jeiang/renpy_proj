@@ -71,9 +71,9 @@ mod tests {
 
     fn ifs() -> Vec<(Ipv4Addr, bool)> {
         vec![
-            (Ipv4Addr::new(100, 64, 0, 7), false),
+            (Ipv4Addr::new(198, 51, 100, 7), false),
             (Ipv4Addr::new(127, 0, 0, 1), true),
-            (Ipv4Addr::new(192, 168, 1, 20), false),
+            (Ipv4Addr::new(192, 0, 2, 20), false),
         ]
     }
 
