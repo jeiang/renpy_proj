@@ -1,4 +1,4 @@
-# Route for Synth7Patch: 7 say lines, shots at lines 4 (after the patched node) and 7.
+# Route for Synth7Patch: 7 of 20 say lines, shots at lines 4 (after the patched node) and 7.
 # Deterministic route: menu, New Game, then fixed say counts. Every shot waits for a hold (no clicking) plus a settle time.
 # Ops: cmd TEXT | wait TOKEN | settle SECS | shot NAME [volatile] | note TEXT | quit
 # `wait TOKEN` looks at progress lines after the last `cmd`; its timeout is the stage table (gatelib/stages.py). `shot ... volatile` means the frame holds a video or an animation:

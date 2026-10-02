@@ -108,16 +108,18 @@ def fix_ordering(exc):
         if not hooks.is_game_file(co.co_filename):
             break
 
-        key = (co.co_filename, co.co_firstlineno, co.co_name)
-        _attempts[key] += 1
-
-        if _attempts[key] > 1:
-            return []  # fixed once and it failed again: not an ordering problem we can fix
-
         found = _find_code_node(co.co_filename, co.co_firstlineno if co.co_name != "<module>" else lineno)
 
         if found is None:
             continue
+
+        # Every module-level block has co_firstlineno 1, so a block is keyed by the line where its PyCode node starts.
+        start = found[1].linenumber if co.co_name == "<module>" else co.co_firstlineno
+        key = (co.co_filename, start, co.co_name)
+        _attempts[key] += 1
+
+        if _attempts[key] > 1:
+            return []  # fixed once and it failed again: not an ordering problem we can fix
 
         node, code = found
         new_module = hooks.compile_variant(code, ordering=True)
