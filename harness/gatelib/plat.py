@@ -5,7 +5,10 @@ Linux: `hyprctl clients -j`, `hyprctl dispatch focuswindow`, `grim -g` of one wi
 windows of the processes the gate launched. Neither sends keyboard or mouse input: `focuswindow` moves focus and
 raises the window, it does not inject events.
 
-Window ids are strings: a CGWindowID on macOS, a Hyprland address (`0x...`) on Linux.
+`Xvfb` (Linux, selected with `HARNESS_DISPLAY=xvfb`) is the CI layer: one Xvfb per launch, no window manager, `xdotool search
+--pid` and `xwininfo` to find the game window, `xwd -id` to capture it. It also reads no input and sends none.
+
+Window ids are strings: a CGWindowID on macOS, a Hyprland address (`0x...`) or an X window id (`0x...`) on Linux.
 """
 import json
 import os
@@ -15,6 +18,7 @@ import shutil
 import struct
 import subprocess
 import sys
+import tempfile
 import time
 
 HARNESS = pathlib.Path(__file__).resolve().parents[1]
@@ -69,6 +73,13 @@ class Mac:
 
     def wrap(self, argv):
         return list(argv)
+
+    def session_start(self, env):
+        """Per-launch display session (Xvfb). Nothing to do on macOS."""
+        return None
+
+    def session_stop(self):
+        return None
 
     def ensure_wintool(self):
         if WINTOOL.exists() and WINTOOL.stat().st_mtime >= WINTOOL_SRC.stat().st_mtime:
@@ -229,6 +240,13 @@ class Hypr:
             env["DISPLAY"] = self.x_display
         return env
 
+    def session_start(self, env):
+        """Per-launch display session (Xvfb). Hyprland is the session itself."""
+        return None
+
+    def session_stop(self):
+        return None
+
     def wrap(self, argv):
         gm = shutil.which("gamemoderun")
         if not gm:
@@ -356,6 +374,194 @@ class Hypr:
         return True
 
 
+def read_xwd(data):
+    """-> (width, height, rgb bytes) of an `xwd` dump: a ZPixmap with 32 bits per pixel and 8-bit RGB masks (Xvfb depth 24)."""
+    (hsize, ver, fmt, depth, w, h, xoff, border, unit, bitorder, pad, bpp, bpl, vclass, rmask, gmask, bmask, bprgb,
+     cmap_entries, ncolors) = struct.unpack(">20I", data[:80])
+    if ver != 7 or fmt != 2 or bpp != 32 or (rmask, gmask, bmask) != (0xFF0000, 0xFF00, 0xFF):
+        raise ValueError("unsupported xwd dump (version %d, format %d, %d bpp, masks %x/%x/%x)" % (ver, fmt, bpp, rmask, gmask, bmask))
+    pix = data[hsize + ncolors * 12:]
+    if bpl != w * 4 or len(pix) < bpl * h:
+        raise ValueError("short xwd dump: %d bytes for %dx%d" % (len(pix), w, h))
+    pix = pix[:bpl * h]
+    rgb = bytearray(w * h * 3)
+    if border:   # byte_order: 1 = most significant byte first (X, R, G, B)
+        rgb[0::3], rgb[1::3], rgb[2::3] = pix[1::4], pix[2::4], pix[3::4]
+    else:        # least significant byte first (B, G, R, X)
+        rgb[0::3], rgb[1::3], rgb[2::3] = pix[2::4], pix[1::4], pix[0::4]
+    return w, h, bytes(rgb)
+
+
+class Xvfb(Hypr):
+    """CI host: Linux with no GPU and no compositor. Each launch gets its own Xvfb (`-displayfd` picks a free display), the game
+    runs on it under `env -i` plus a whitelist, and Mesa's software drivers draw: lavapipe (Vulkan, the player) and llvmpipe (GL,
+    stock Ren'Py). There is no window manager, so a window is never covered, never moved and has no title bar.
+    Read-only tools only: `xdotool search --pid` and `xwininfo -id` find the window, `xwd -id` captures that one window.
+
+    Environment (all optional, read from the gate's own environment):
+      HARNESS_XVFB_SCREEN  Xvfb screen, default 1920x1080x24
+      HARNESS_VK_ICD       path of the lavapipe ICD JSON (lvp_icd*.json); sets VK_ICD_FILENAMES and VK_DRIVER_FILES
+      HARNESS_GAME_ENV     extra variables for the game, `NAME=value` separated by newlines (NIX_LD_LIBRARY_PATH on NixOS, ...)
+    """
+    name = "linux-xvfb"
+
+    def __init__(self):   # no hyprctl, no Wayland
+        self.runtime = None
+        self.display = None
+        self.xvfb = None
+        self.x_display = None
+        self.grim = None
+        self._tmp = None
+
+    def wrap(self, argv):
+        # No gamemoderun: a CI runner has none, and gamemode talks to the user D-Bus session that this mode must not see.
+        return list(argv)
+
+    def session_start(self, env):
+        """Start Xvfb for this launch and point `env` at it, with a private XDG_RUNTIME_DIR."""
+        xvfb = shutil.which("Xvfb")
+        if not xvfb:
+            raise FileNotFoundError("Xvfb not found on PATH (nix shell nixpkgs#xorg.xorgserver nixpkgs#xdotool nixpkgs#xwininfo nixpkgs#xwd)")
+        self._tmp = tempfile.mkdtemp(prefix="harness-xvfb-")
+        os.chmod(self._tmp, 0o700)
+        r, w = os.pipe()
+        self.xvfb = subprocess.Popen([xvfb, "-displayfd", str(w), "-screen", "0", os.environ.get("HARNESS_XVFB_SCREEN", "1920x1080x24"),
+                                      "-nolisten", "tcp", "-noreset"], pass_fds=(w,), stdout=subprocess.DEVNULL,
+                                     stderr=open(os.path.join(self._tmp, "xvfb.log"), "w"), env={"PATH": os.environ.get("PATH", "")})
+        os.close(w)
+        line = b""
+        os.set_blocking(r, False)
+        deadline = time.time() + 30
+        while not line.endswith(b"\n") and time.time() < deadline and self.xvfb.poll() is None:
+            time.sleep(0.05)
+            try:
+                line += os.read(r, 64)
+            except BlockingIOError:
+                pass
+        os.close(r)
+        if not line.endswith(b"\n"):
+            self.session_stop()
+            raise RuntimeError("Xvfb did not report a display within 30 s")
+        self.display = ":" + line.decode().strip()
+        env["DISPLAY"] = self.display
+        env["XDG_RUNTIME_DIR"] = self._tmp
+
+    def session_stop(self):
+        if self.xvfb is not None:
+            self.xvfb.terminate()
+            try:
+                self.xvfb.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                self.xvfb.kill()
+                self.xvfb.wait()
+        self.xvfb = None
+        self.display = None
+        if self._tmp:
+            shutil.rmtree(self._tmp, ignore_errors=True)
+        self._tmp = None
+
+    SOFT_PKGS = ("mesa", "vulkan-loader", "libglvnd", "libdrm.out", "systemd")   # software GL and Vulkan, in place of /run/opengl-driver/lib; libdrm and libudev for the player
+
+    _soft = None
+
+    def soft_libs(self):
+        """-> (lib dirs, lavapipe ICD JSON) of the nixpkgs Mesa. NixOS only (nix-ld): Ubuntu has these in /usr/lib and /usr/share/vulkan."""
+        if Xvfb._soft is None:
+            r = subprocess.run(["nix", "build", "--no-link", "--print-out-paths"] + ["nixpkgs#" + p for p in LINUX_RUNTIME_PKGS + self.SOFT_PKGS],
+                               capture_output=True, text=True)
+            if r.returncode != 0:
+                raise RuntimeError("nix build of the runtime libraries failed: " + r.stderr.strip()[-300:])
+            outs = [p for p in r.stdout.split() if os.path.isdir(p + "/lib")]
+            icd = next((p + "/share/vulkan/icd.d/lvp_icd.x86_64.json" for p in outs if os.path.exists(p + "/share/vulkan/icd.d/lvp_icd.x86_64.json")), None)
+            Xvfb._soft = ([p + "/lib" for p in outs], icd)
+        return Xvfb._soft
+
+    def game_env(self, environ):
+        """`env -i` plus: HOME, USER, LANG, a clean PATH, the lavapipe ICD, software GL, a dummy audio driver, and the extra
+        variables of HARNESS_GAME_ENV. DISPLAY and XDG_RUNTIME_DIR come from `session_start`. Nothing of a desktop session."""
+        env = {k: environ[k] for k in ("HOME", "USER", "LOGNAME", "LANG", "LC_ALL", "TZ") if k in environ}
+        env.setdefault("LANG", "C.UTF-8")
+        env["PATH"] = LINUX_CLEAN_PATH
+        env.update(LIBGL_ALWAYS_SOFTWARE="1", GALLIUM_DRIVER="llvmpipe", WGPU_BACKEND="vulkan", SDL_AUDIODRIVER="dummy",
+                   XDG_SESSION_TYPE="x11",
+                   DBUS_SESSION_BUS_ADDRESS="disabled:")   # no session bus: without it, libdbus autolaunches dbus-launch (a fork storm seen on artemis)
+        icd = environ.get("HARNESS_VK_ICD")
+        if "NIX_LD" in environ:   # NixOS: dynamic ELF files (stock SDK, the player's host libraries) get Mesa's software drivers only
+            libs, nix_icd = self.soft_libs()
+            env["NIX_LD"] = environ["NIX_LD"]
+            env["NIX_LD_LIBRARY_PATH"] = ":".join([environ.get("NIX_LD_LIBRARY_PATH", "/run/current-system/sw/share/nix-ld/lib")] + libs)
+            icd = icd or nix_icd
+        if icd:
+            env["VK_ICD_FILENAMES"] = env["VK_DRIVER_FILES"] = icd
+        for ln in environ.get("HARNESS_GAME_ENV", "").splitlines():
+            k, sep, v = ln.partition("=")
+            if sep and k.strip():
+                env[k.strip()] = v
+        return env
+
+    # ---- windows (read-only X11 queries)
+    def _x(self, *argv):
+        env = {"DISPLAY": self.display or "", "PATH": os.environ.get("PATH", "")}
+        return subprocess.run(list(argv), capture_output=True, text=True, env=env, timeout=30)
+
+    def _geom(self, wid):
+        """-> (width, height, viewable) of an X window from `xwininfo -id`, or None when it is gone."""
+        r = self._x("xwininfo", "-id", wid)
+        if r.returncode != 0:
+            return None
+        w = re.search(r"Width: (\d+)", r.stdout)
+        h = re.search(r"Height: (\d+)", r.stdout)
+        viewable = "Map State: IsViewable" in r.stdout
+        return (int(w.group(1)), int(h.group(1)), viewable) if w and h else None
+
+    def pick_window(self, pids):
+        """-> id of the largest viewable window of the pids (`xdotool search --pid`), else the largest other one, else None."""
+        best = {}
+        for pid in pids:
+            r = self._x("xdotool", "search", "--pid", str(pid))
+            for ln in r.stdout.split():
+                wid = hex(int(ln))
+                g = self._geom(wid)
+                if g and g[0] * g[1] > 1:
+                    rank = 2 if g[2] else 1
+                    if g[0] * g[1] > best.get(rank, (0, None))[0]:
+                        best[rank] = (g[0] * g[1], wid)
+        for rank in (2, 1):
+            if rank in best:
+                return best[rank][1]
+        return None
+
+    def window_state(self, wid):
+        g = self._geom(wid)
+        if g is None:
+            return {"onscreen": 0, "visible": 0.0, "covered_by": "", "gone": True}
+        return {"onscreen": int(g[2]), "front": 0, "visible": 1.0 if g[2] else 0.0, "covered_by": ""}
+
+    def raise_window(self, wid):
+        return None
+
+    def prepare(self, wid):
+        return []
+
+    def capture(self, wid, dest):
+        """`xwd -id` of the window only (never the root window), converted to a PNG at `dest`."""
+        from . import pngdiff
+        dest.unlink(missing_ok=True)
+        xwd = shutil.which("xwd")
+        if not xwd:
+            raise FileNotFoundError("xwd not found on PATH (nix shell nixpkgs#xwd)")
+        g = self._geom(wid)
+        if g is None or not g[2]:
+            return False
+        env = {"DISPLAY": self.display or "", "PATH": os.environ.get("PATH", "")}
+        r = subprocess.run([xwd, "-silent", "-id", wid], capture_output=True, env=env, timeout=60)
+        if r.returncode != 0 or not r.stdout:
+            raise RuntimeError("xwd failed (rc %d): %s" % (r.returncode, r.stderr.decode(errors="replace").strip()[:200]))
+        pw, ph, rgb = read_xwd(r.stdout)
+        pngdiff.write_png(dest, pw, ph, rgb)
+        return True
+
+
 _PLAT = None
 
 
@@ -365,7 +571,7 @@ def get():
         if sys.platform == "darwin":
             _PLAT = Mac()
         elif sys.platform.startswith("linux"):
-            _PLAT = Hypr()
+            _PLAT = Xvfb() if os.environ.get("HARNESS_DISPLAY") == "xvfb" else Hypr()
         else:
             raise RuntimeError("the gate runs on macOS and Linux (Hyprland); no platform layer for %s" % sys.platform)
     return _PLAT

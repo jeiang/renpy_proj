@@ -178,7 +178,7 @@ log "package"
 PKG=$OUT/$NAME
 rm -rf "$PKG" "$OUT/$NAME.tar.gz"; mkdir -p "$PKG/lib"
 cp "$PLAYER/target/release/player" "$PKG/player"; chmod u+w "$PKG/player"
-SYSTEM='^(linux-vdso|ld-linux.*|libc|libm|libdl|libpthread|librt|libutil|libresolv|libmvec|libnsl|libanl|libnss_[a-z]*|libthread_db|libBrokenLocale|libgcc_s|libdrm.*|libasound|libudev|libvulkan|libwayland-.*|libxkbcommon.*|libX.*|libxcb.*|libpipewire.*|libdrm.*|libGL.*|libEGL.*)\.so'
+SYSTEM='^(linux-vdso|ld-linux.*|libc|libm|libdl|libpthread|librt|libutil|libresolv|libmvec|libnsl|libanl|libnss_[a-z]*|libthread_db|libBrokenLocale|libgcc_s|libstdc\+\+|libdrm.*|libasound|libudev|libvulkan|libwayland-.*|libxkbcommon.*|libX.*|libxcb.*|libpipewire.*|libdrm.*|libGL.*|libEGL.*)\.so'
 needed() { objdump -p "$1" | awk '/NEEDED/{print $2}'; }   # direct dependencies only
 bundle() { # copy the non-host libraries that $1 needs directly, then recurse into the copies
   local soname path
