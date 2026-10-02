@@ -365,8 +365,13 @@ def stock_baseline(out_root, key, game_arg, game_args):
 
 def run_gate(game_arg, player_bin, seed, out, baseline, extra):
     """The full M3 gate on the patched player. -> (passed, summary dict)."""
+    # The gate gets the patch library only. The error's saves (and their signature keys) in the data folder would make the
+    # stock-save resume check load a save that the player does not trust.
+    gseed = pathlib.Path(str(seed) + "-gate")
+    shutil.rmtree(gseed, ignore_errors=True)
+    shutil.copytree(pathlib.Path(seed) / "patches", gseed / "patches")
     cmd = [sys.executable, str(L.HARNESS / "gate.py"), "run", "--engine", "player", "--player-bin", str(player_bin), "--game", game_arg,
-           "--tier", "full", "--with-proposed", "--seed-data", str(seed), "--out", str(out)]
+           "--tier", "full", "--with-proposed", "--seed-data", str(gseed), "--out", str(out)]
     if baseline:
         cmd += ["--baseline", str(baseline)]
     r = subprocess.run(cmd + extra, capture_output=True, text=True)

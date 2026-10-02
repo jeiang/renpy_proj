@@ -8,60 +8,127 @@ Lines are distinct script lines that hold at least one executed node, of all scr
 
 | game | Ren'Py | seeds: stop reason | lines hit | labels hit | run time | errors by class | check |
 |---|---|---|---|---|---|---|---|
-| AHouseInTheRift | 7.6.1 | s1:story-end, s2:story-end, s3:story-end | 432 / 694148 (0%) | 23 / 5455 | 217 s | none | pass |
-| AWorldBetweenUs | 7.4.8 | s1:error, s2:error, s3:error | 3346 / 45262 (7%) | 67 / 298 | 338 s | player-bug 1 | pass |
-| AlexsVantasticAdventure | 7.4.8 | s1:stuck, s2:story-end, s3:stuck | 101 / 3338 (3%) | 6 / 73 | 13 s | none | pass |
-| AstralLust | 7.8.2 | s1:stuck, s2:stuck, s3:error | 3415 / 48605 (7%) | 146 / 1470 | 603 s | player-bug 1 | pass |
-| BlackRose | 7.7.3 | s1:story-end, s2:story-end, s3:story-end | 2036 / 40431 (5%) | 13 / 158 | 1014 s | none | pass |
-| BloomWar | 7.4.11 | s1:story-end, s2:story-end, s3:story-end | 610 / 1503 (41%) | 5 / 5 | 412 s | none | pass |
-| BraveheartAcademy | 7.4.8 | s1:stuck, s2:budget, s3:FAILED | 15298 / 55753 (27%) | 106 / 398 | 3075 s | none | fail |
-| Bumpkin014 | 7.5.3 | s1:budget, s2:budget, s3:budget | 29252 / 38096 (77%) | 687 / 1150 | 5400 s | none | pass |
-| CabinByTheLake | 7.4.8 | s1:story-end, s2:story-end, s3:story-end | 22 / 3327 (1%) | 2 / 436 | 11 s | none | pass |
-| DFraction | 7.4.11 | s1:story-end, s2:story-end, s3:story-end | 546 / 1282 (43%) | 9 / 9 | 388 s | none | pass |
-| DTRemake | 7.4.11 | s1:stuck, s2:stuck, s3:stuck | 492 / 24160 (2%) | 4 / 379 | 129 s | none | pass |
-| Dreamscape | 7.4.11 | s1:budget, s2:loop, s3:loop | 8750 / 9603 (91%) | 40 / 41 | 4728 s | none | pass |
-| HaremHotel | 7.4.11 | s1:stuck, s2:stuck, s3:stuck | 310 / 463871 (0%) | 14 / 1647 | 24 s | none | pass |
-| InterimDomain | 7.4.5 | s1:budget, s2:budget, s3:budget | 32766 / 129709 (25%) | 189 / 722 | 5400 s | none | pass |
-| LuckyParadox | 7.4.11 | s1:stuck, s2:stuck, s3:stuck | 1297 / 386125 (0%) | 46 / 1197 | 126 s | none | pass |
-| MaidandMaidens | 7.5.3 | s1:budget, s2:story-end, s3:story-end | 27514 / 50821 (54%) | 107 / 292 | 4382 s | none | pass |
+| AHouseInTheRift | 7.6.1 | s1:story-end, s2:story-end, s3:story-end | 481 / 694148 (0%) | 23 / 5455 | 558 s | none | pass |
+| AWorldBetweenUs | 7.4.8 | s1:error, s2:error, s3:error | 19511 / 45262 (43%) | 277 / 298 | 2633 s | game-bug 2 | pass |
+| AlexsVantasticAdventure | 7.4.8 | s1:error, s2:story-end, s3:error | 1580 / 3338 (47%) | 56 / 73 | 1070 s | game-bug 1 | pass |
+| AstralLust | 7.8.2 | s1:stuck, s2:error, s3:error | 2549 / 48605 (5%) | 130 / 1470 | 789 s | player-bug 1 | pass |
+| BlackRose | 7.7.3 | s1:story-end, s2:budget, s3:budget | 15642 / 40431 (39%) | 139 / 158 | 5346 s | none | pass |
+| BloomWar | 7.4.11 | s1:story-end, s2:story-end, s3:story-end | 612 / 1503 (41%) | 5 / 5 | 1122 s | none | pass |
+| BraveheartAcademy | 7.4.8 | s1:FAILED, s2:FAILED, s3:budget | 15222 / 55753 (27%) | 106 / 398 | 3648 s | none | fail |
+| Bumpkin014 | 7.5.3 | s1:budget, s2:budget, s3:budget | 31842 / 38096 (84%) | 818 / 1150 | 5400 s | none | pass |
+| CabinByTheLake | 7.4.8 | s1:loop, s2:loop, s3:loop | 2197 / 3327 (66%) | 431 / 436 | 2580 s | none | pass |
+| DFraction | 7.4.11 | s1:story-end, s2:story-end, s3:story-end | 546 / 1282 (43%) | 9 / 9 | 723 s | none | pass |
+| DTRemake | 7.4.11 | s1:loop, s2:loop, s3:loop | 8528 / 24160 (35%) | 39 / 379 | 1619 s | none | pass |
+| Dreamscape | 7.4.11 | s1:loop, s2:loop, s3:loop | 8609 / 9603 (90%) | 38 / 41 | 4617 s | none | pass |
+| HaremHotel | 7.4.11 | s1:stuck, s2:stuck, s3:stuck | 1218 / 463871 (0%) | 50 / 1647 | 557 s | none | pass |
+| InterimDomain | 7.4.5 | s1:budget, s2:budget, s3:budget | 32788 / 129709 (25%) | 190 / 722 | 5400 s | none | pass |
+| LuckyParadox | 7.4.11 | s1:loop, s2:loop, s3:loop | 1300 / 386125 (0%) | 49 / 1197 | 1034 s | none | pass |
+| MaidandMaidens | 7.5.3 | s1:budget, s2:budget, s3:budget | 30312 / 50821 (60%) | 125 / 292 | 5400 s | none | pass |
 | Synth7 | 7.4.11 | not run | | | | | |
+| Synth7AI | 7.4.11 | s1:error, s2:error, s3:error | 5 / 46 (11%) | 1 / 1 | 1 s | python2 1 | pass |
 | Synth7Patch | 7.4.11 | not run | | | | | |
-| WhiteRussian | 7.4.11 | s1:story-end, s2:story-end, s3:budget | 32448 / 43320 (75%) | 447 / 763 | 3525 s | none | pass |
-| Bumpkin015 | 8.1.3 | s1:stuck, s2:stuck, s3:stuck | 1609 / 2493 (65%) | 14 / 17 | 456 s | none | pass |
-| DOF | 8.3.2 | s1:FAILED, s2:FAILED, s3:FAILED | 0 / 66621 (0%) | 0 / 379 | 411 s | none | fail |
-| Ripples | 8.2.1 | s1:budget, s2:FAILED, s3:budget | 42605 / 215348 (20%) | 310 / 772 | 3600 s | none | fail |
-| SecretIsland | 8.0.1 | not run | | | | | |
+| WhiteRussian | 7.4.11 | s1:budget, s2:budget, s3:budget | 35271 / 43320 (81%) | 507 / 763 | 5400 s | none | pass |
+| Bumpkin015 | 8.1.3 | s1:stuck, s2:stuck, s3:stuck | 1609 / 2493 (65%) | 14 / 17 | 809 s | none | pass |
+| DOF | 8.3.2 | s1:budget, s2:budget, s3:stuck | 22323 / 66621 (34%) | 221 / 379 | 4875 s | none | pass |
+| Ripples | 8.2.1 | s1:budget, s2:FAILED, s3:budget | 43027 / 215348 (20%) | 311 / 772 | 3600 s | none | fail |
+| SecretIsland | 8.0.1 | s1:error, s2:error, s3:budget | 29994 / 119024 (25%) | 279 / 1067 | 3842 s | game-bug 1 | pass |
 | SynthAniso | 8.5.3 | not run | | | | | |
 | SynthMedia | 8.5.3 | not run | | | | | |
 | SynthStory | 8.5.3 | not run | | | | | |
 | SynthText | 8.5.3 | not run | | | | | |
 | SynthView | 8.5.3 | not run | | | | | |
-| TheStormWithinUs | 8.5.3 | s1:story-end, s2:loop, s3:story-end | 3170 / 4008 (79%) | 24 / 25 | 1662 s | none | pass |
-| WaifuAcademy | 8.2.3 | s1:stuck, s2:story-end, s3:stuck | 1174 / 73515 (2%) | 31 / 1569 | 195 s | none | pass |
+| TheStormWithinUs | 8.5.3 | s1:loop, s2:loop, s3:loop | 3170 / 4008 (79%) | 24 / 25 | 2790 s | none | pass |
+| WaifuAcademy | 8.2.3 | s1:stuck, s2:stuck, s3:stuck | 1357 / 73515 (2%) | 34 / 1569 | 812 s | none | pass |
 
 ## Errors found
 
 | id | game | class | exception | where | patchable | outcome |
 |---|---|---|---|---|---|---|
-| AWorldBetweenUs-01 | AWorldBetweenUs | player-bug | Exception: Sayer 're' is not a function or string. | game/chapter1.rpy:3389 | no | - |
+| AWorldBetweenUs-01 | AWorldBetweenUs | game-bug | NameError: name 'choice_ch2_kim_romance' is not defined | game/chapter2.rpy:12005 | no | - |
+| AWorldBetweenUs-02 | AWorldBetweenUs | game-bug | NameError: name 'choice_ch2_alana_stay' is not defined | game/ch2part2.rpy:1109 | no | - |
+| AlexsVantasticAdventure-01 | AlexsVantasticAdventure | game-bug | IndexError: string index out of range | game/script.rpy:170 | no | - |
 | AstralLust-01 | AstralLust | player-bug | Exception: ui.interact called with non-empty widget/layer stack. Did you forget a ui.close( | game/events/explore/generic_combat.rpy:250 | no | - |
+| Synth7AI-01 | Synth7AI | python2 | AttributeError: module 'string' has no attribute 'join' | game/script.rpy:19 | yes | proposed |
+| SecretIsland-01 | SecretIsland | game-bug | Exception: Sayer 'alt' is not a function or string. | game/scripts/ch4/ch4_3.rpy:2197 | no | - |
 
 ## Player bug list
 
 Errors that are not Python 2 patterns and not the game's own (stock does not show them), or that happen in a Ren'Py 8 game.
 
-- **AWorldBetweenUs-01** (AWorldBetweenUs): `Exception: Sayer 're' is not a function or string.` at game/chapter1.rpy:3389. Class reason: Ren'Py 7 game, but compat classify knows no Python 2 pattern for: Sayer 're' is not a function or string.. Seeds [1, 2, 3]. Folder `out/m6/AWorldBetweenUs/errors/AWorldBetweenUs-01`.
 - **AstralLust-01** (AstralLust): `Exception: ui.interact called with non-empty widget/layer stack. Did you forget a ui.close() somewhere?
 Stack was <Layer: 'transient'>
-<Many: <renpy.display.layout.Fixed object at 0x7b1f8e846c60>>` at game/events/explore/generic_combat.rpy:250. Class reason: Ren'Py 7 game, but compat classify knows no Python 2 pattern for: ui.interact called with non-empty widget/layer stack. Did you forget a ui.close() somewhere?
-Stack was <Layer: 'transient'>
-<Many: <renpy.display.layout.Fixed o. Seeds [3]. Folder `out/m6/AstralLust/errors/AstralLust-01`.
+<Many: <renpy.display.layout.Fixed object at 0x793f8d920fe0>>` at game/events/explore/generic_combat.rpy:250. Class reason: confirmed by an A/B run without the deep driver: new game, `jump generic_combat_city`, advance the says. The stock engine (7.8.2) enters battle_starter and battle_holder with no error; the player raises this exception at the say of game/events/explore/generic_combat.rpy:250, right after `scene a explore with fade` in exp_generic_combat. Loading the error save in the player also raises it again. The automatic stock replay was not comparable (it never reached exp_generic_combat).. Seeds [2, 3]. Folder `harness/out/m6-all/AstralLust/errors/AstralLust-01`.
 
 ## Patch outcomes
 
 | id | outcome | detail |
 |---|---|---|
-| (none yet) | | |
+| Synth7AI-01 | proposed | In Python 3, `string.join` was removed; it is now a method of string instances (`str.join`). The code uses the old Python 2 style `string.join(words, sep)`, which should be replaced with `sep.join(wor |
+
+## Final campaign (artemis, branch build/m6-final)
+
+- **Run.** All 23 real games, 3 seeds, 30 min per seed, 6 workers (`deep_all.py --workers 6 --stage-scale 3`, systemd user scope, MemoryMax 70G). Two batches, all with the loopguard2 driver: 14 games (Alex, HaremHotel, DTRemake, LuckyParadox, Cabin, AHouse, AWorldBetweenUs, AstralLust, Braveheart, DOF, Ripples, Bumpkin015, WaifuAcademy, SecretIsland) from main e40a947, and 9 games with `--redo` (Bumpkin014, Dreamscape, InterimDomain, MaidandMaidens, BlackRose, BloomWar, DFraction, WhiteRussian, TheStormWithinUs) from main with the lock-priority fix. Results: `m6-artemis/harness/out/m6` on artemis. `Synth7AI` is the new test game of the proof; its deep run is `harness/out/py7ai-deep`.
+- **Python 2 errors in the 23 real games: none.** The deep runs found 5 errors (below). None is a Python 2 pattern the compat module misses, so the model phase had no real input. The end-to-end proof uses `Synth7AI`.
+
+## Error classification (stock replay and review)
+
+| id | automatic class | final class | evidence |
+|---|---|---|---|
+| AWorldBetweenUs-01, -02 | game-bug | game-bug | The stock replay raises the same `NameError` (`choice_ch2_kim_romance`, `choice_ch2_alana_stay`) at the same node. |
+| AlexsVantasticAdventure-01 | player-bug | **game-bug** | `IndexError: string index out of range` in the screen `maingame` (script.rpy:347): `str((1000000+distance))[6]` needs a 7-character string. The error save loaded in the player gives `distance=-1`, so the string is `999999` (6 characters). Python 2 builds the same string. The automatic stock replay took another path (story-end at say 2174) and could not confirm it. |
+| SecretIsland-01 | player-bug (Ren'Py 8 rule) | **game-bug** | `iris_nightcall.rpy:8` and `:104` run `$ alt = day > 154 and iPreg`. This replaces the engine function `alt()` in the store; `alt "..."` at ch4_3.rpy:2197 then fails with `Sayer 'alt' is not a function or string`. The stock 8.0.1 `renpy/common/00accessibility.rpy` defines `alt` as a function, so stock fails the same way. The stock replay aborted (SIGABRT, core dump) at say 1477 of 6527 and could not confirm it. |
+| AstralLust-01 | player-bug | **player-bug** | See below. |
+
+### AstralLust `ui.interact called with non-empty widget/layer stack`
+
+Verdict: **player bug**. The deep driver does not cause it.
+
+- The automatic stock replay is not usable here: it never reached `exp_generic_combat` (it diverged), so "stock passes" proves nothing.
+- A/B run, same plan on both engines, no deep driver (`cmd auto on`, `cmd start`, wait for the prologue, `cmd jump generic_combat_city`, `cmd advance 10`):
+  - stock 7.8.2 (SDK engine): `label exp_generic_combat`, say 2, say 3, `label battle_starter`, then `battle_holder` in a loop (the combat screen, waiting for input). No error.
+  - player: `label exp_generic_combat`, say 2, say 3, then `Exception: ui.interact called with non-empty widget/layer stack`, `Stack was <Layer: 'transient'>` and `<Many: <renpy.display.layout.Fixed ...>>`. Traceback: `game/events/explore/generic_combat.rpy:250` (the say "It's time to battle.", the second say after `scene a explore with fade`) -> `renpy/exports/sayexports.py:129 say` -> `character.py:1565 __call__` -> `character.py:1220 do_display` -> `character.py:902 display_say` -> `ui.py:297 interact` (`len(stack) != 1`).
+- Loading the error save (`deep-err1`) in the player with no driver also raises it again at the first say of that node.
+- What is known about the cause: `ui.stack` holds a second entry (a `Many`/Fixed container, `ui.py:399` or `:564`) at the moment a say starts its interaction. The game has no `ui.*` Python calls (the only `ui.` hits in its scripts are `gui.` names), so a `Many` was opened by a screen being updated (`screen.py:708 update` -> `ui.py:564 __call__`, seen with a `Many.__init__` trace) and not closed. The Ren'Py 7.8.2 stock engine does not leave it open. I did not find the exact screen. Files: error folder `AstralLust/errors/AstralLust-01` (error.json, traceback.txt, saves), A/B logs `harness/out/exp/ab-player` and `ab-stock` on artemis.
+- The earlier note "after a driver press" is wrong as a cause: the driver press `ToggleScreenVariable:name=is_expanded` (`poll-error ... screen variable does not exist`) also occurs in runs that do not fail.
+
+## Process failures with no Python traceback
+
+- BraveheartAcademy seeds 1 and 2: the player process ended without a traceback after 904 s and 970 s (say 5270 and 5862). The check does not record the exit code. The first campaign had the same kind of end at say 5575 (seed 3), so it looks like a crash after about 15 minutes. Seed 3 ran the full budget. Not investigated further.
+- Ripples seed 2: the process ended 19 s into the run, right after `cmd start` and say 2, before the `after_start` command `exec playerName = 'Jack'...` was acknowledged. A rerun of seed 2 alone (2 min budget) gives the same result, so it is deterministic. Stdout and log hold no error.
+- SecretIsland stock replay: the stock process aborted (SIGABRT, `coredumpctl` entry at 10:39:55).
+
+## Model phase
+
+- Patch outcomes table below: `Synth7AI-01` shows `proposed` because that is the result of `player upgrade`; it was accepted afterwards (sidecar state `accepted`, step 4).
+
+- Endpoint: the artemis llama.cpp server `llm-server` (`http://127.0.0.1:8080/v1`, no key), model `Qwen3.6-35B-A3B-MTP-UD-Q4_K_XL.gguf`. The deep runs and the model phase ran at different times (gamemoderun stops `llm-server` while a game runs; `gatelib/upgrade.py` waits for it).
+- Real games: no Python 2 error, so no patch was proposed or accepted.
+- Proof game `Synth7AI` (`harness/testgames/py7ai/`, Ren'Py 7.4.11, generated content, corpus.toml stanza `Synth7AI`): the python block of `game/script.rpy` line 19 calls `string.join(words, "-")` after two dialogue lines. The compat module has no rule for it.
+  1. `gate.py run --tier deep --deep-seeds 1,2,3`: all 3 seeds end in `error` at say 2. One error folder `Synth7AI-01`, class `python2` ("a Python 2-only module attribute"), patchable, pre-error save `deep-0`.
+  2. `player upgrade Synth7AI --errors <deep>/errors --data <data>`: prompt 1129 estimated tokens (cap 12000), hash `7b24713119c3658a`. The pre-error save reproduces `AttributeError: module 'string' has no attribute 'join'` on the unpatched game. **Attempt 1** gave the patch below (103 completion tokens); verification passed at once. State `proposed`.
+
+     ```toml
+     [[patch]]
+     file = "game/script.rpy"
+     line = 19
+     original_hash = "sha1:82fa775aea9b"
+     source = '''
+     words = ["alpha", "beta", "gamma"]
+     shown = "-".join(words)
+     '''
+     ```
+  3. Verification log (sidecar `Synth7AI-01.json`, `attempt-1/verify.json`): the save loads on the patched game and the failing node runs clean (`verify-ok`, patch `Synth7AI-01.toml #1` applied to node `('game/script.rpy', ..., 206)`, no unmatched or errors); full M3 gate `pass` (lint, probe, route against the stock baseline with all 3 shots, saveresume = stock save resumes 3 lines after load; video skipped, none configured).
+  4. `player patches <game> accept Synth7AI-01 --data <data>`: `Synth7AI-01: accepted`; `list` then shows the patch as active (`game/script.rpy:19 sha1:82fa775aea9b ... ok: 1 patches in 1 files`); the sidecar state is `accepted`.
+  5. Final gate with the accepted patch only (no `--with-proposed`): `gate.py run --tier full --seed-data <patches only> --baseline <stock>`: lint, probe, route, saveresume `pass` (route diff against stock: mean 0.00001), `patches.json` shows `applied` for `Synth7AI-01.toml #1`. Deep run with the accepted patch: 3 of 3 seeds reach `story-end`, no error.
+- First two upgrade tries failed for harness reasons, not model reasons (the model proposed the same correct patch every time): (a) the route plan path `testgames/py7ai/py7ai.plan` was resolved only from the harness folder (`checks.py`); (b) `run_gate` passed the error's saves and signature keys to the gate, so the stock-save resume was untrusted and `Layout.yesno_prompt` was missing. Both fixed on this branch. The Ren'Py 7 compat `layout` object has no `yesno_prompt`, which a Ren'Py 7 game reaches when it loads a save with an unknown signature: a player bug (open).
+
+## Open items
+
+- Player bug: AstralLust `ui.interact` stack (above).
+- Player bug (minor): `Layout` object of the Ren'Py 7 compat layer lacks `yesno_prompt` (unknown-signature save prompt).
+- Silent process ends: Braveheart seeds 1 and 2, Ripples seed 2 (record the exit code and the stderr of the player in the deep check).
+- Stock replay: when the stock run diverges (it never reaches the failing label), `conclusive` is true if only the say count is reached. It should require the failing label. This made AstralLust look conclusive. Not changed.
+- Driver and coverage endings that are not game ends: `stuck` on HaremHotel, Bumpkin015, WaifuAcademy (see the table).
 
 ## Parallel runs on artemis
 
@@ -118,12 +185,17 @@ Games AWorldBetweenUs (60 fps WebM) and AHouseInTheRift (30 fps), 3 replicas eac
 
 See "State at hand-over" for the original Mac campaign. The Mac campaign was stopped at game 10 (nine games had a `result.json`; DFraction was partial and is rerun). Its results are kept as `harness/out/m6-mac` (gitignored) for comparison only; all reported results come from the artemis run.
 
-### State at the end of this session (Oct 2)
+## Bumpkin015 `01-menu` on artemis (outlined text)
 
-- **Where the results are:** artemis `~/Projects/renpy_proj-remote/m6-artemis/harness/out/m6` (22 of 23 games had a result when the table above was generated; SecretIsland was still running; Synth* games are not part of the campaign and show "not run"). Started with `harness/tools/m6_campaign.sh deep 6` (6 workers, `--stage-scale 3`, systemd user scope with MemoryMax 70G and TasksMax 8192). The 9 Mac results are kept in `harness/out/m6-mac` (gitignored) and are not used.
-- **The campaign ran with the first loop-guard driver (main 2eea8a6).** Many short endings are driver effects, not game ends: `stuck` after 5 to 45 s (AlexsVantasticAdventure, HaremHotel, DTRemake, LuckyParadox, Bumpkin015, WaifuAcademy, AstralLust s1/s2) and very early `story-end` (CabinByTheLake 3 s, AHouseInTheRift). LoopGuard's fix is `build/loopguard2` 8e0de2a (merged into `build/m6-artemis`, 744de74). **Rerun needed** after it: `deep_all.py --games <those> --redo` (not done: the artemis clone still has the old driver so the campaign stayed consistent).
-- **Driver failures to hand to LoopGuard:** DOF fails all 3 seeds at the first save (`AttributeError: 'int' object has no attribute 'time'` in `_hz_before`, harness/zzz_harness.rpy line 552: the game defines a store variable named `time` that hides the `time` module the driver uses); BraveheartAcademy s3 ends at say 5575 and Ripples s2 at `cmd-ack exec playerName...` with a game traceback (see their `summary.md`).
-- **Errors found (2, no Python 2 pattern):** AWorldBetweenUs-01 `Sayer 're' is not a function or string` (chapter1.rpy:3389; the stock engine raises the same error at the same node, but the stock replay did not match it by file name: `chapter1.rpy` vs `chapter1.rpyc`. Fixed in `gatelib/deep.py` (`_script_name`), so a rerun classifies it `game-bug`) and AstralLust-01 `ui.interact called with non-empty widget/layer stack` (generic_combat.rpy:250, class player-bug until the stock replay of the rerun says otherwise).
-- **`player upgrade` has not run on a real error: the corpus gave no Python 2 error.** Step 3 (full-gate leg on one real patched game) is open for that reason; `harness/tools/m6_campaign.sh upgrade` is ready (artemis endpoint `http://127.0.0.1:8080/v1`; `gatelib/upgrade.py` now waits up to 900 s for the endpoint to come back after each `gamemoderun`, which stops and restarts llm-server). The synthetic Python 2 test game (`Synth7Patch`, main) is the fallback for the full-gate proof.
-- **Baselines:** Braveheart's Linux stock baseline was regenerated with the current driver (`out/bh-stock` on artemis); the player passes lint, probe and route against it. Bumpkin015 `01-menu` is a real player difference, not an animation (stock self diff 0.0; player 0.73% pixels, text outlines, diff image `out/bh-stock/Bumpkin015/menu-diff.png`).
-- **m1 tier with the loop guard (23 games, 6 workers):** no loop error anywhere, lint and saveresume 23/23, probe 22/23 (Braveheart, driver change), route 21/23 against the Hyprland baselines after the workers got a 12 px outer gap (windows 1896x1056).
+The failure was a stock-baseline mismatch, not a text-crate fault. The Linux stock baseline ran the game's bundled Ren'Py 8.1.3; the player carries Ren'Py 8.5.3 (the Mac baseline already uses the 8.5.3 SDK: `engine = "sdk-853"`). On artemis, 1896x1056, same shot:
+
+| pair | changed pixels (> 24/255) | mean |
+|---|---|---|
+| stock 8.1.3 (bundled) against player | 0.78% | 0.0027 |
+| stock 8.1.3 against stock 8.5.3 (Linux SDK) | 0.78% | 0.0027 |
+| stock 8.5.3 against player | 0.0009% (15 + 4 px) | 0.00004 |
+
+- Ren'Py 8.1.3 draws every outlined label (menu, title) exactly 1 px to the right of 8.5.3. The version text (no outline) and the spinner do not differ (spinner: 0 changed pixels, 8 of 255 max; the stock self diff is 0.0, so it is not animation).
+- Shifting the 8.5.3 shot by 1 px removes the difference: against 8.1.3 the menu labels keep 17 changed pixels (max 33/255), the title 254. So stroker join, stroke width, outline color blend, hinting, font fallback and glyph shapes are the same in both versions. The remaining 1 px is Ren'Py's own text layout (8.5.3 `ftfont.pyx`/`text.py` keep per-glyph `add_left`/`add_top` and draw outlines through a mesh), which the player runs unchanged from 8.5.3. FreeType's stroker against ours: no measurable difference.
+- Fix: `linux_engine = "sdk-853-linux"` for Bumpkin015 in `corpus.toml`, so the Linux stock baseline is the player's Ren'Py version, as on the Mac. No text crate change.
+

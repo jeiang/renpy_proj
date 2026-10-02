@@ -42,7 +42,12 @@ def main():
             continue
         reasons = ", ".join("s%d:%s" % (r["seed"], r["reason"] or "FAILED") for r in d["runs"])
         c = d["coverage"]
-        bc = d.get("by_class") or {}
+        for e in d["errors"]:   # a reviewed error.json (class, class_reason) wins over the automatic class
+            full = j(runs / k / "errors" / e["id"] / "error.json") or {}
+            e.update({x: full[x] for x in ("class", "class_reason") if x in full})
+        bc = {}
+        for e in d["errors"]:
+            bc[e["class"]] = bc.get(e["class"], 0) + 1
         rows.append("| %s | %s | %s | %d / %d (%.0f%%) | %d / %d | %.0f s | %s | %s |" % (
             k, games[k]["renpy"], reasons, c["lines_hit"], c["lines_total"], 100.0 * c["lines_hit"] / max(1, c["lines_total"]),
             c["labels_hit"], c["labels_total"], c["seconds"], ", ".join("%s %d" % kv for kv in bc.items()) or "none", d["status"]))
