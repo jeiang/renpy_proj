@@ -12,6 +12,10 @@ use pyo3::prelude::*;
 /// * `Yuv420p`, `Yuv422p`, `Yuv444p`: three planes (Y, U, V), 8 bit.
 /// * `Yuv420p10`, `Yuv422p10`, `Yuv444p10`: three planes, 16 bit little-endian
 ///   samples whose 10 bit value sits in the low bits.
+/// * `Gbrp`, `Gbrp10`, `Gbrp12`: planar RGB, three planes in the order G, B, R (the
+///   FFmpeg `gbrp` order), full size, 8 bit or 16 bit little-endian samples whose 10 or
+///   12 bit value sits in the low bits. These are not YCbCr: `ColorInfo` does not apply.
+///   An alpha plane, if the source has one, is dropped.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum PlaneLayout {
     Nv12,
@@ -22,6 +26,9 @@ pub enum PlaneLayout {
     Yuv420p10,
     Yuv422p10,
     Yuv444p10,
+    Gbrp,
+    Gbrp10,
+    Gbrp12,
 }
 
 /// The YCbCr to RGB matrix of a frame.

@@ -1,4 +1,4 @@
-// YUV -> RGB. Planes: ty = luma, tu = U (planar) or interleaved UV (semi-planar), tv = V (planar only).
+// YUV -> RGB. `semi` is the mode: 0 planar YUV, 1 semi-planar YUV, 2 planar RGB (ty = G, tu = B, tv = R). Planes: ty = luma, tu = U (planar) or interleaved UV (semi-planar), tv = V (planar only).
 struct P {
     y_off: f32, y_scale: f32, c_off: f32, c_scale: f32,
     kr: f32, kb: f32, sample_scale: f32, semi: f32,
@@ -26,6 +26,12 @@ fn vs(@builtin(vertex_index) i: u32) -> VOut {
 
 @fragment
 fn fs(in: VOut) -> @location(0) vec4<f32> {
+    if (p.semi > 1.5) {
+        let g = textureSampleLevel(ty, smp, in.uv, 0.).r;
+        let b = textureSampleLevel(tu, smp, in.uv, 0.).r;
+        let r = textureSampleLevel(tv, smp, in.uv, 0.).r;
+        return vec4(clamp(vec3(r, g, b) * p.sample_scale, vec3(0.), vec3(1.)), 1.);
+    }
     let y = (textureSampleLevel(ty, smp, in.uv, 0.).r * p.sample_scale - p.y_off) * p.y_scale;
     var cbcr: vec2<f32>;
     if (p.semi > 0.5) {
