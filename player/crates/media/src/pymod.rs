@@ -397,11 +397,18 @@ fn read_video(py: Python<'_>, channel: i32) -> PyResult<Option<Py<PyVideoFrame>>
             .map(|t| t.media.shared())
     };
     let Some(sh) = sh else { return Ok(None) };
+    let sh_err = sh.clone();
     let r = py.detach(move || sh.read_video());
     match r {
         Ok(Some(f)) => Ok(Some(Py::new(py, PyVideoFrame(f))?)),
         Ok(None) => Ok(None),
-        Err(e) => Err(err(e)),
+        Err(e) => {
+            // A movie the player cannot show must not end the game: log it and show no frame.
+            let name = sh_err.name();
+            log::error!("video on channel {channel}: {name}: {e}");
+            report_media_failure(py, name, &e);
+            Ok(None)
+        }
     }
 }
 
@@ -653,4 +660,20 @@ pub mod renpysound {
     #[allow(non_upper_case_globals)]
     #[pymodule_export]
     const is_webaudio: bool = false;
+}
+
+/// Writes a `media` event to the runtime report (`_player.compat.event`), so the gate sees a movie that was lost.
+fn report_media_failure(py: Python<'_>, file: &str, detail: &str) {
+    let r = (|| -> PyResult<()> {
+        let kwargs = pyo3::types::PyDict::new(py);
+        kwargs.set_item("file", file)?;
+        kwargs.set_item("detail", detail)?;
+        py.import("_player.compat")?
+            .getattr("event")?
+            .call(("media",), Some(&kwargs))?;
+        Ok(())
+    })();
+    if let Err(e) = r {
+        log::warn!("could not write the media event: {e}");
+    }
 }

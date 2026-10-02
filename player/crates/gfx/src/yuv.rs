@@ -17,10 +17,13 @@ struct Layout {
     msb_aligned: bool,
     csx: u32,
     csy: u32,
+    /// Planar RGB (G, B, R planes): no matrix, always full range.
+    rgb: bool,
 }
 
 fn layout_of(l: PlaneLayout) -> Layout {
     let mk = |semi, wide, bits, msb_aligned, csx, csy| Layout {
+        rgb: false,
         semi,
         wide,
         bits,
@@ -37,6 +40,9 @@ fn layout_of(l: PlaneLayout) -> Layout {
         PlaneLayout::Yuv420p10 => mk(false, true, 10, false, 1, 1),
         PlaneLayout::Yuv422p10 => mk(false, true, 10, false, 1, 0),
         PlaneLayout::Yuv444p10 => mk(false, true, 10, false, 0, 0),
+        PlaneLayout::Gbrp => Layout { rgb: true, ..mk(false, false, 8, false, 0, 0) },
+        PlaneLayout::Gbrp10 => Layout { rgb: true, ..mk(false, true, 10, false, 0, 0) },
+        PlaneLayout::Gbrp12 => Layout { rgb: true, ..mk(false, true, 12, false, 0, 0) },
     }
 }
 
@@ -281,7 +287,8 @@ impl Yuv {
         }
         let maxv = ((1u32 << l.bits) - 1) as f32;
         let sh_bits = l.bits - 8;
-        let full = f.color.full_range;
+        // Planar RGB is full range, as FFmpeg's own conversion treats it.
+        let full = f.color.full_range || l.rgb;
         let (y_off, y_scale, c_scale) = if full {
             (0.0, 1.0, 1.0)
         } else {
@@ -312,7 +319,13 @@ impl Yuv {
             kr,
             kb,
             sample_scale,
-            if l.semi { 1.0 } else { 0.0 },
+            if l.semi {
+                1.0
+            } else if l.rgb {
+                2.0
+            } else {
+                0.0
+            },
             -1.0,
             1.0,
             1.0,

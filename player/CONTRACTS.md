@@ -73,9 +73,9 @@ Each entry is a **dotted** module name (for example `c"renpy.pygame.surface"`) a
 ## `media` (Python: `renpy.audio.renpysound`; video frames)
 
 - The full function list in research/boundary §4.1. `file` arguments are Python file objects (from `renpy.loader.load`); read them through Python `read`/`seek`, or through `.name` plus the `base`/`length` of `RWopsIO` (the stand-in `RWopsIO` exposes `name`, `base` and `length`). FFmpeg decodes (LGPL build), cpal plays, and the mixer runs `renpy.audio.filter` through the function pointer exported by the additive `renpy/audio/filter_ptr.pyx` (owned by `media`, built by `engine` from `player/engine/extra/`). Python reads the pointer with `renpy.audio.filter_ptr.get_apply_audio_filter_ptr()`.
-- Video decode follows `prototype/video-proto` (VideoToolbox hwaccel, software fallback, NV12/P010/yuv420p/p10/444 planes, with no swscale).
+- Video decode follows `prototype/video-proto` (VideoToolbox hwaccel, software fallback, NV12/P010/yuv420p/p10/444 planes and planar RGB gbrp/gbrp10/gbrp12 (VP9 RGB), with no swscale; a frame in any other format logs an error and the movie shows no frames, it does not raise).
 - Rust API for `gfx`:
-  - `pub enum PlaneLayout { Nv12, P010, Yuv420p, Yuv422p, Yuv444p, Yuv420p10, Yuv422p10, Yuv444p10 }`
+  - `pub enum PlaneLayout { Nv12, P010, Yuv420p, Yuv422p, Yuv444p, Yuv420p10, Yuv422p10, Yuv444p10, Gbrp, Gbrp10, Gbrp12 }`
   - `pub struct ColorInfo { pub full_range: bool, pub matrix: Matrix /* Bt601 | Bt709 | Bt2020 */ }`
   - `pub struct VideoFrame { pub width: u32, pub height: u32, pub layout: PlaneLayout, pub color: ColorInfo, pub planes: Vec<Plane>, pub pts: f64 }` with `pub struct Plane { pub data: Vec<u8>, pub stride: usize, pub width: u32, pub height: u32 }`.
   - `#[pyclass] pub struct PyVideoFrame(pub std::sync::Arc<VideoFrame>)`: returned by `renpysound.read_video(channel)` (or `None`).
@@ -162,7 +162,7 @@ Added for "M3: Ren'Py 7 games via the Python 2 compatibility module" (issue #36)
 
 `player/engine/python/_player/compat/` (package). Active only when `renpy7` is true. It ports prototype items 2-5, 7-9: the AST Python 2 semantics pass hooked in front of `renpy.python.wrap_node` for game code only; `exec` in functions; the error-driven mixed-type ordering fix with rollback and retry; Ren'Py 7 engine differences (`images/` search prefix, decompiler stubs, `.rpyc` pickle-helper failures skipped and logged); the loose `.py` import hook; the rules version folded into every compile cache key. Script-parser leniencies are the syntax slice's (below). A fixed runtime error is written to the runtime report, not `traceback.txt`, and shown once in game as a notice. An unfixed error follows stock behavior (`traceback.txt` in the log dir). The ordering fix keys a fixed site by file, name and the first line of the failing node's code block (module-level code objects all have `co_firstlineno` 1), so several failing module-level blocks in one file each get one fix.
 
-Runtime report: `<data>/reports/<game key>/runtime.jsonl`, one JSON object per event: `{"time", "kind": "rewrite"|"fix"|"syntax"|"patch"|"skip", "file", "line", "detail"}`. `player report` prints a summary of it after the pre-flight report.
+Runtime report: `<data>/reports/<game key>/runtime.jsonl`, one JSON object per event: `{"time", "kind": "rewrite"|"fix"|"syntax"|"patch"|"skip"|"media", "file", "line", "detail"}`. `player report` prints a summary of it after the pre-flight report. A `media` event (file, detail) marks a movie the player could not show (an unsupported pixel format, a decode failure); the gate fails a launch whose report has one.
 
 ## Syntax fixer (`py2fix`)
 
