@@ -643,9 +643,9 @@ init 999 python:
     _HZ_SKIP_ACTIONS = ("Quit", "MainMenu", "ShowMenu", "Preference", "Language", "Help", "Screenshot", "Rollback", "RollbackToIdentifier",
                         "FileSave", "FileLoad", "FileDelete", "FileAction", "FilePage", "FilePageNext", "FilePagePrevious", "Return",
                         "QuickSave", "QuickLoad", "ToggleScreen", "Skip", "Replay", "EndReplay", "Confirm", "SetMute", "ToggleMute", "MouseMove",
-                        "OpenURL", "Start", "Show", "Hide", "HideInterface", "Partial", "InvertSelected", "Scroll", "XScrollValue", "YScrollValue")
+                        "OpenURL", "Start", "Show", "Hide", "HideInterface", "Partial", "SetScreenVariable", "ToggleScreenVariable", "SetLocalVariable", "ToggleLocalVariable", "InvertSelected", "Scroll", "XScrollValue", "YScrollValue")
 
-    _HZ_RELAXED_OK = ("Show", "Hide", "ToggleScreen", "HideInterface")   # allowed when no other button exists
+    _HZ_RELAXED_OK = ("Show", "Hide", "ToggleScreen", "HideInterface", "SetScreenVariable", "ToggleScreenVariable", "SetLocalVariable", "ToggleLocalVariable")   # allowed when no other button exists
 
     def _hz_action_ok(act, relaxed=False):
         if isinstance(act, (list, tuple)):
@@ -991,16 +991,20 @@ init 999 python:
 
     def _hz_loop_found(L, kind, period, reps, blk_says):
         t = L.toks
-        window = t[-(period if kind == "tok" else 60):]
+        if kind == "tok":
+            window = t[-period:]
+        else:   # the span of the repeated block: back to the (period * reps)th say line
+            need, i = period * reps, len(t)
+            while i > 0 and need > 0:
+                i -= 1
+                if t[i][0] == "S":
+                    need -= 1
+            window = t[i:]
         labels, acts = [], []
         for x in window:
             if x[0] == "L" and x[1] not in labels:
                 labels.append(x[1])
-        for x in t[-60:]:
-            if x[0] in ("A", "C"):
-                acts.append(_hz_tok_key(x))
-        if kind == "tok":
-            acts = [_hz_tok_key(x) for x in window if x[0] in ("A", "C")]
+        acts = [_hz_tok_key(x) for x in window if x[0] in ("A", "C")]
         L.pending = {"kind": kind, "period": period, "reps": reps, "hashes": list(blk_says[:6]) or ["-"],
                      "labels": labels[:8], "acts": acts[-8:], "last_act": acts[-1] if acts else None, "ntok": L.ntok}
 
