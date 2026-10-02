@@ -42,6 +42,22 @@ init 999 python:
         with _hz_io.open(_hz_os.path.join(_hz_dir, "progress.txt"), "a", encoding="utf-8") as f:
             f.write(s + u"\n")
 
+    def _hz_hook_quit():
+        # Every way out through renpy.quit writes `quit-called ARGS | CALLERS` first: a silent end has a recorded cause.
+        import traceback as _hz_tb
+        orig = renpy.exports.quit
+
+        def quit(*a, **kw):
+            try:
+                fr = ["%s:%s" % (_hz_os.path.basename(f[0]), f[1]) for f in _hz_tb.extract_stack()[-8:-1]]
+                _hz_write("quit-called %s | %s" % (kw or a or "-", " < ".join(reversed(fr))))
+            except Exception:
+                pass
+            return orig(*a, **kw)
+        renpy.exports.quit = quit
+        renpy.quit = quit
+    _hz_hook_quit()
+
     def _hz_say(event, interact=True, **kw):
         if event == "begin":
             _hz_st["say"] += 1
