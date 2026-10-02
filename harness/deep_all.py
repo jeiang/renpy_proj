@@ -3,7 +3,7 @@
 
   nix develop .#player -c python3 harness/deep_all.py --player-bin <player> --out harness/out/m6 [--games A,B] [--deep-minutes 30]
 
-Ren'Py 7 games first, then Ren'Py 8. `--workers N` (Linux host) runs N games at once, each in its own slot (gatelib/workers.py). A game whose <out>/<game>/result.json exists is skipped, so a stopped campaign resumes.
+Ren'Py 7 games first, then Ren'Py 8. The Synth* test games of corpus.toml are skipped unless named in --games. `--workers N` (Linux host) runs N games at once, each in its own slot (gatelib/workers.py). A game whose <out>/<game>/result.json exists is skipped, so a stopped campaign resumes.
 """
 import argparse
 import pathlib
@@ -23,7 +23,7 @@ ap.add_argument("--workers", type=int, default=1, help="games at once (Linux hos
 ap.add_argument("--work", help="work root of the workers (default harness/work)")
 a, rest = ap.parse_known_args()
 games = L.load_corpus()["games"]
-keys = a.games.split(",") if a.games else sorted(games, key=lambda k: (not str(games[k]["renpy"]).startswith("7."), k))
+keys = a.games.split(",") if a.games else sorted((k for k in games if not k.startswith("Synth")), key=lambda k: (not str(games[k]["renpy"]).startswith("7."), k))
 out = pathlib.Path(a.out)
 if a.workers > 1:
     from gatelib import workers as W  # noqa: E402
