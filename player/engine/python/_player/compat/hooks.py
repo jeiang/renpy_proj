@@ -217,9 +217,10 @@ def install(settings, detection):
         renpy.config.search_prefixes = list(renpy.config.search_prefixes) + ["images/"]
 
     # After init (the game's own config has run): the error handler chain and the in-game notice.
-    from _player.compat import errors, notice
+    from _player.compat import errors, notice, yesno
 
     renpy.game.post_init.append(errors.install)
+    renpy.game.post_init.append(yesno.install)
     renpy.game.post_init.append(notice.install)
 
     setattr(renpy.python, MARKER, True)
