@@ -139,3 +139,13 @@ The `deep` tier plays each seed (default 1,2,3, 30 min each; `deep_seeds`, `deep
 - **Drivers:** `drivers/<name>.py`, selected by the `driver` key of a game in corpus.toml (`HZ_DRIVER` for the game process). The source must run on Python 2 and 3. It may define `NAME`, `HUBS` (screen names or fnmatch patterns of free-roam screens), `hub(h)` (return one of `h.cands`, or None for the least pressed button) and `choice(h, captions)` (return an index or None). `h.cands` holds the clickable actions of the shown screens (`.key`, `.kind`, `.label`, `.args`); `h.expr("python expression", default)` and `h.v("name", default)` read the game's variables; `h.visits(c)`, `h.least(cands)`, `h.rng`, `h.note(text)`. The driver runs in every mode (it answers when one of its hubs shows, before the harness ends the interaction). Every press writes `drv-act <driver> <key>` to `progress.txt`.
 - **Written drivers:** `bumpkin` (Bumpkin Boy's Bizarre Adventures: never presses an exit that is closed at late night, goes to bed), `braveheart` (Map, CityScreen, TalkScreen after the intro), `astrallust` (the `room_hotel_*` screens; bed at night). All are coverage-guided: the least pressed button first.
 - **Test game:** `testgames/loop/` loops on purpose (`Say loop` is the first menu item, `Screen loop` the second; `screen.plan` jumps to the second). `python3 harness/gate.py run --engine stock --game harness/testgames/loop --tier m1 --only probe --out <dir>` must fail with `cmd-error loop`.
+
+**Proof (artemis, player, deep, 10 min per seed, seeds 1 and 2; labels reached of the game's labels).** Before is the harness of main at e1a9bd9 (random hub clicks only after a 20 s stall, random input names after 3 answers); after is this branch.
+
+| Game | Before s1 / s2 | After s1 / s2 | How the runs ended (after) |
+|---|---|---|---|
+| Bumpkin014 | 95 (stall `loop` after 425 s) / 4 (`story-end` after 4 s: the age gate answered "No") | 329 / 323 | budget, budget; 13 and 2 loops detected and broken (late-night exits, shop and locker loops) |
+| BraveheartAcademy | 20 (stall `loop` after 359 s) / 20 (`story-end` after 64 s) | 64 / 63 | budget, budget; 0 loops |
+| AstralLust | 47 (budget) / 29 (error after 278 s) | 63 / 116 | error, error: `unsupported video pixel format gbrp` (player, being fixed elsewhere) and `ui.interact called with non-empty widget/layer stack` in room_hotel_forge after a driver press (open) |
+
+The loop test game (`testgames/loop`) ends a deep run as `stuck` after 4 detections of the same say loop, and breaks the screen loop by pressing the other button (`coverage.json` `loop_events`). The Mac runs (Bumpkin014 and BraveheartAcademy, 10 min, 2 seeds) gave the same picture (334 and 3 labels; 55 and 72 labels).
