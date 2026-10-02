@@ -17,7 +17,11 @@ LOCK_DIR = "/tmp/renpy_proj.run.lock"
 FLOCK_PATH = "/tmp/renpy_proj.run.flock"
 POLL_S = 0.1   # a slower poll starves behind siblings that retake the lock at once
 
+GATE_PATH = "/tmp/renpy_proj.run.gate"   # writer preference: an exclusive taker holds it while it waits for the shared holders
+SLOT_PATH = "/tmp/renpy_proj.run.slot.%d"   # one per worker slot (parallel mode)
+
 _fd = None
+_slot_fd = None
 
 
 def _log(msg):
@@ -76,22 +80,62 @@ def _remove_dead_dir():
     shutil.rmtree(LOCK_DIR, ignore_errors=True)
 
 
+def _flock(fd, how, t0, timeout, what):
+    while True:
+        try:
+            fcntl.flock(fd, how | fcntl.LOCK_NB)
+            return
+        except OSError:
+            if time.time() - t0 > timeout:
+                raise TimeoutError("machine lock %s held for more than %d s" % (what, timeout))
+            time.sleep(POLL_S)
+
+
+def take_shared(slot, timeout):
+    """Parallel mode: a shared hold of FLOCK_PATH plus an exclusive hold of the worker slot's own file. Many slots run
+    at once; an exclusive `take` (timing checks, ad-hoc runlock) waits until every shared holder is gone and, through
+    GATE_PATH, keeps new shared holders out while it waits. Waits for a live legacy lock dir too. Not reentrant."""
+    global _fd, _slot_fd
+    if _fd is not None:
+        raise RuntimeError("machine lock already held by this process")
+    t0 = time.time()
+    fd = os.open(FLOCK_PATH, os.O_RDWR | os.O_CREAT, 0o666)
+    sfd = gfd = None
+    try:
+        sfd = os.open(SLOT_PATH % slot, os.O_RDWR | os.O_CREAT, 0o666)
+        _flock(sfd, fcntl.LOCK_EX, t0, timeout, SLOT_PATH % slot)   # two workers on one slot would share a save dir
+        gfd = os.open(GATE_PATH, os.O_RDWR | os.O_CREAT, 0o666)
+        _flock(gfd, fcntl.LOCK_SH, t0, timeout, GATE_PATH)
+        _flock(fd, fcntl.LOCK_SH, t0, timeout, FLOCK_PATH)
+        while os.path.isdir(LOCK_DIR):   # a legacy mkdir taker holds the machine
+            _remove_dead_dir()
+            if time.time() - t0 > timeout:
+                raise TimeoutError("machine lock %s held for more than %d s" % (LOCK_DIR, timeout))
+            time.sleep(POLL_S)
+    except BaseException:
+        os.close(fd)
+        if sfd is not None:
+            os.close(sfd)
+        raise
+    finally:
+        if gfd is not None:
+            os.close(gfd)
+    _fd, _slot_fd = fd, sfd
+
+
 def take(timeout, cmd=None):
-    """Take both parts, polling until `timeout` s. Raises TimeoutError. Not reentrant."""
+    """Take both parts exclusively, polling until `timeout` s. Raises TimeoutError. Not reentrant."""
     global _fd
     if _fd is not None:
         raise RuntimeError("machine lock already held by this process")
     t0 = time.time()
     fd = os.open(FLOCK_PATH, os.O_RDWR | os.O_CREAT, 0o666)
+    gfd = os.open(GATE_PATH, os.O_RDWR | os.O_CREAT, 0o666)
     try:
-        while True:
-            try:
-                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                break
-            except OSError:
-                if time.time() - t0 > timeout:
-                    raise TimeoutError("machine lock %s held for more than %d s" % (FLOCK_PATH, timeout))
-                time.sleep(POLL_S)
+        _flock(gfd, fcntl.LOCK_EX, t0, timeout, GATE_PATH)   # new shared takers queue behind us
+        _flock(fd, fcntl.LOCK_EX, t0, timeout, FLOCK_PATH)
+        os.close(gfd)
+        gfd = None
         while True:
             try:
                 os.mkdir(LOCK_DIR)
@@ -104,14 +148,22 @@ def take(timeout, cmd=None):
         _write_owner(os.getpid(), "cmd=" + (cmd if cmd is not None else " ".join(sys.argv))[:200])
     except BaseException:
         os.close(fd)   # closing the fd frees the flock
+        if gfd is not None:
+            os.close(gfd)
         raise
     _fd = fd
 
 
 def release():
     """Remove our dir (only when its owner is this process), then free the flock."""
-    global _fd
+    global _fd, _slot_fd
     if _fd is None:
+        return
+    if _slot_fd is not None:   # shared hold: no dir, nothing to remove
+        os.close(_slot_fd)
+        _slot_fd = None
+        os.close(_fd)
+        _fd = None
         return
     owner = read_owner()
     if owner and owner["pid"] == os.getpid():
@@ -126,4 +178,5 @@ def release():
 
 def leave_blocked(note):
     """Keep the lock for good: owner pid=0 never counts as dead. Remove the dir by hand once the cause is gone."""
+    os.makedirs(LOCK_DIR, exist_ok=True)   # a parallel-mode holder has no dir yet
     _write_owner(0, "note=" + note)

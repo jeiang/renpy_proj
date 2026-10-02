@@ -40,7 +40,7 @@ def _num(ctx, key, default):
 def deep_plan(seed, budget_s, stall_s, save_gap, stop_say=0):
     extra = " %d" % stop_say if stop_say else ""
     return L.parse_plan(
-        "cmd click on\nwait menu True\ncmd deep %d %d %d %s%s\ncmd start\nafter_start\nwait deep-done %d\nend\n"
+        "cmd auto on\ncmd click on\nwait menu True\ncmd auto off\ncmd deep %d %d %d %s%s\ncmd start\nafter_start\nwait deep-done %d\nend\n"
         % (seed, budget_s, stall_s, save_gap, extra, budget_s + 240))
 
 
@@ -210,7 +210,7 @@ def check_deep(ctx):
                     "budget_s": budget, "stall_s": stall, "found_at": time.strftime("%Y-%m-%dT%H:%M:%S%z")})
         (d / "error.json").write_text(json.dumps(rec, indent=1))
         (d / "traceback.txt").write_text(rec.get("traceback", ""))
-        errors.append({k2: rec[k2] for k2 in ("id", "class", "class_reason", "patchable", "unpatchable_reason", "seeds", "exception", "node", "pre_save", "error_save")})
+        errors.append({k2: rec.get(k2) for k2 in ("id", "class", "class_reason", "patchable", "unpatchable_reason", "seeds", "exception", "node", "pre_save", "error_save")})
     cov_game = {"lines_hit": len(all_lines), "lines_total": total_lines, "labels_hit": len(all_labels), "labels_total": total_labels,
                 "seconds": round(sum((r["coverage"] or {}).get("elapsed_s", 0) for r in runs), 1)}
     return {"check": "deep", "status": "fail" if problems else "pass", "problems": problems, "runs": runs,

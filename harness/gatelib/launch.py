@@ -90,9 +90,20 @@ def sweep(pattern):
     return False
 
 
-def take_lock(timeout):
-    """flock plus the lock dir with its `owner` file: see machinelock.py."""
-    ML.take(timeout)
+def worker_slot():
+    """HARNESS_SLOT=<n> puts the process in parallel mode (a worker with its own compositor, work dir and slot); None: serial."""
+    v = os.environ.get("HARNESS_SLOT")
+    return int(v) if v not in (None, "") else None
+
+
+def take_lock(timeout, exclusive=False):
+    """Serial mode, or `exclusive` (timing-sensitive launches: video, performance): the whole machine, flock plus the lock dir
+    with its `owner` file. Parallel mode: a shared hold plus the worker's slot. See machinelock.py."""
+    slot = worker_slot()
+    if slot is None or exclusive:
+        ML.take(timeout)
+    else:
+        ML.take_shared(slot, timeout)
 
 
 def release_lock():
@@ -519,7 +530,7 @@ def find_tracebacks(base, data_dir):
 
 
 def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed_saves=None, keep_saves=False,
-           inject=True, extra_files=None):
+           inject=True, extra_files=None, exclusive=False):
     """Run one game process. `engine` is 'auto' (ctx.engine_name), 'stock' or 'player'. -> result dict.
 
     plan: a list of (op, arg) steps, or None to wait for the process to exit (lint).
@@ -595,11 +606,12 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
     env.update(ctx.opts.get("extra_env") or {})
     env["HZ_INPUT_LIMIT"] = str(g.get("input_limit", 3))
     env["HZ_SCREEN_ACTIONS"] = ";".join("%s=%s" % kv for kv in g.get("screen_actions", {}).items())
+    env["HZ_DRIVER"] = str(HARNESS / "drivers" / (g["driver"] + ".py")) if g.get("driver") else ""   # per-game free-roam driver (harness/drivers)
     if not inject:
         env.pop("HARNESS_DIR")
     res = {"name": name, "engine": engine, "stripped_game_cache": strip, "argv": [a.replace(str(top), "<run>") for a in argv], "plan_log": []}
     st_table = ST.table(g, ctx.opts.get("stage_scale", 1.0))
-    take_lock(ctx.opts.get("lock_timeout", 7200))
+    take_lock(ctx.opts.get("lock_timeout", 7200), exclusive)
     before = None
     deadline = 0
     run = None

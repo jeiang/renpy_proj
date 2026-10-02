@@ -559,6 +559,55 @@ class Xvfb(Hypr):
             raise RuntimeError("xwd failed (rc %d): %s" % (r.returncode, r.stderr.decode(errors="replace").strip()[:200]))
         pw, ph, rgb = read_xwd(r.stdout)
         pngdiff.write_png(dest, pw, ph, rgb)
+class Sway(Hypr):
+    """A headless sway (wlroots) per worker: `swaymsg -t get_tree` stands in for `hyprctl clients -j`, so window lookup, the covered
+    check and grim capture are the Hypr code on a converted client list. Selected by HARNESS_COMPOSITOR=sway with SWAYSOCK and
+    WAYLAND_DISPLAY of the worker (tools/workers.py sets them). Windows are opaque already: `prepare` has nothing to do."""
+    name = "linux-sway-headless"
+
+    def __init__(self):
+        super().__init__()
+        self.swaymsg = shutil.which("swaymsg") or "swaymsg"
+        self.sock = os.environ["SWAYSOCK"]
+
+    def _env(self):
+        env = super()._env()
+        env["SWAYSOCK"] = self.sock
+        return env
+
+    def _msg(self, *args):
+        return subprocess.run([self.swaymsg, "-s", self.sock] + list(args), capture_output=True, text=True, timeout=20)
+
+    def _json(self, what):
+        if what == "monitors":
+            r = self._msg("-t", "get_workspaces", "-r")
+            ws = json.loads(r.stdout)
+            return [{"id": 0, "activeWorkspace": {"id": w["num"]}} for w in ws if w.get("visible")]
+        r = self._msg("-t", "get_tree", "-r")
+        out, order = [], []
+
+        def walk(n, ws):
+            if n.get("type") == "workspace":
+                ws = n.get("num", 1)
+            if n.get("pid") and n.get("type") in ("con", "floating_con"):
+                rc = n["rect"]
+                out.append({"address": str(n["id"]), "pid": n["pid"], "at": [rc["x"], rc["y"]], "size": [rc["width"], rc["height"]],
+                            "mapped": True, "hidden": not n.get("visible", True), "workspace": {"id": ws or 1}, "monitor": 0,
+                            "fullscreen": 1 if n.get("fullscreen_mode") else 0, "floating": n.get("type") == "floating_con",
+                            "focusHistoryID": 0 if n.get("focused") else 1, "class": n.get("app_id") or n.get("name") or ""})
+            for c in n.get("nodes", []) + n.get("floating_nodes", []):
+                walk(c, ws)
+        walk(json.loads(r.stdout), None)
+        return out
+
+    def raise_window(self, wid):
+        self._msg("[con_id=%s]" % wid, "focus")
+        time.sleep(0.5)
+
+    def set_opaque(self, wid, on=True):
+        return "ok"
+
+    def is_opaque(self, wid):
         return True
 
 
@@ -571,7 +620,7 @@ def get():
         if sys.platform == "darwin":
             _PLAT = Mac()
         elif sys.platform.startswith("linux"):
-            _PLAT = Xvfb() if os.environ.get("HARNESS_DISPLAY") == "xvfb" else Hypr()
+            _PLAT = Sway() if os.environ.get("HARNESS_COMPOSITOR") == "sway" else (Xvfb() if os.environ.get("HARNESS_DISPLAY") == "xvfb" else Hypr())
         else:
             raise RuntimeError("the gate runs on macOS and Linux (Hyprland); no platform layer for %s" % sys.platform)
     return _PLAT

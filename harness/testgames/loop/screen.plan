@@ -1,0 +1,9 @@
+# Starts the game and jumps to the screen loop. With the harness driver the screen is ended at once, so the label repeats.
+cmd auto on
+wait menu True
+cmd start
+wait label start
+cmd jump screen_loop
+cmd advance 5
+wait advance-done
+quit
