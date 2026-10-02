@@ -211,6 +211,8 @@ def check_route(ctx):
         pf = L.HARNESS / plan_ref   # a path relative to harness/ (the test games), whatever the working directory
     if not pf.is_file():
         pf = L.HARNESS / "plans" / (plan_ref + ".plan")
+    if not pf.is_file():
+        pf = L.local_path("local/plans/" + plan_ref + ".plan") or pf   # plans of the real games (gitignored)
     steps = L.parse_plan(pf.read_text())
     runs = []
     problems = []

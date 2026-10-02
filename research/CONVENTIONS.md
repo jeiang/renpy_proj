@@ -14,7 +14,7 @@ Rules for any agent (or subagent) resolving a ticket on the wayfinder map, [Map:
 
 - Commit your own notes, scripts, and small measured outputs.
 - Never commit third-party text (READMEs, docs, source). Link it, and add a `fetch.sh` that re-downloads it into a gitignored directory (`upstream/`, `src/`, `sdk/`).
-- Never commit clones, SDKs, media, `__pycache__`, or game assets. The root `.gitignore` covers `__pycache__/`, `*.pyc`, `research/*/upstream/`, and `/corpus/`. Add a per-directory `.gitignore` for anything else over 1 MB.
+- Never commit clones, SDKs, media, `__pycache__`, or game assets. The root `.gitignore` covers `__pycache__/`, `*.pyc`, `research/*/upstream/`, `/corpus/`, `/harness/corpus.local.toml` and `/harness/local/` (per-game config, plans and drivers of the real games; list new local files in `docs/LOCAL-FILES.md`). Add a per-directory `.gitignore` for anything else over 1 MB.
 - Before the coordinator merges, check `git show --stat` on each commit for vendored or binary files.
 
 ## GitHub tickets

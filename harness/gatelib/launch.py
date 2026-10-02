@@ -50,11 +50,29 @@ def resolve(path):
     return HARNESS.parent / p if p.parts[:1] == ("harness",) else main_repo() / p
 
 
+def local_path(rel):
+    """A gitignored harness file (`corpus.local.toml`, `local/plans/...`, `local/drivers/...`): the copy in this checkout, else
+    the one in the main checkout (worktrees do not carry ignored files). None when neither exists."""
+    for root in (HARNESS, main_repo() / "harness"):
+        p = root / rel
+        if p.exists():
+            return p
+    return None
+
+
 def load_corpus():
-    """corpus.toml. On Linux a `linux_<key>` entry of a game replaces `<key>` (source, engine, exe, ...), so one file
-    holds the macOS and the Linux corpus."""
+    """corpus.toml (stock engines, player, synthetic games) with `corpus.local.toml` merged on top when it exists (the real
+    games; its `games` and `engines` entries are added, an entry of the same name replaces the committed one). On Linux a
+    `linux_<key>` entry of a game replaces `<key>` (source, engine, exe, ...), so one file holds the macOS and the Linux corpus."""
     with open(HARNESS / "corpus.toml", "rb") as f:
         c = tomllib.load(f)
+    lp = local_path("corpus.local.toml")
+    if lp:
+        with open(lp, "rb") as f:
+            local = tomllib.load(f)
+        for table in ("engines", "games"):
+            c.setdefault(table, {}).update(local.get(table, {}))
+        c.update({k: v for k, v in local.items() if k not in ("engines", "games")})   # e.g. a local `[player]`
     if sys.platform.startswith("linux"):
         for g in c["games"].values():
             for k in [k for k in g if k.startswith("linux_")]:
@@ -635,7 +653,7 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
     env.update(ctx.opts.get("extra_env") or {})
     env["HZ_INPUT_LIMIT"] = str(g.get("input_limit", 3))
     env["HZ_SCREEN_ACTIONS"] = ";".join("%s=%s" % kv for kv in g.get("screen_actions", {}).items())
-    env["HZ_DRIVER"] = str(HARNESS / "drivers" / (g["driver"] + ".py")) if g.get("driver") else ""   # per-game free-roam driver (harness/drivers)
+    env["HZ_DRIVER"] = str(local_path("local/drivers/%s.py" % g["driver"]) or "") if g.get("driver") else ""   # per-game free-roam driver (harness/local/drivers, gitignored)
     if not inject:
         env.pop("HARNESS_DIR")
     res = {"name": name, "engine": engine, "stripped_game_cache": strip, "argv": [a.replace(str(top), "<run>") for a in argv], "plan_log": []}

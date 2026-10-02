@@ -35,7 +35,9 @@ Gitignored files live in the **main checkout**. Worktrees under `.worktrees/` fi
 |---|---|---|---|---|
 | `corpus/` | about 20 game copies | "Released" copies of commercial Ren'Py games (no loose `.rpy`; `.rpyc` and archives only): the test corpus of the real-game gate. | **Manual.** Put the original games in `~/Games/`. Then `research/test-corpus/make_released.py SRC DEST` (APFS clone). Variants for Ren'Py 7 impact: `research/renpy7-impact/make_variants.sh`. No script can fetch the games. | `harness/gate.py` with a real game |
 | `~/Games/` (outside the repo) | 116 GB | The original games. Read only. | Manual copy from the owner. | `make_released.py`; the `origin` keys of the game config |
-| `harness/corpus.local.toml` (when the corpus split lands) | small | Per-game config of real games: names, paths, movie files, drivers, plans. The committed `harness/corpus.toml` or example holds the synthetic games only. | Written by hand from the committed example. See `harness/README.md`. | Real-game gate |
+| `harness/corpus.local.toml` | small | Per-game config of the real games: names, paths, movie files, drivers, plans. The committed `harness/corpus.toml` holds the synthetic games only; `load_corpus` merges this file on top. A missing file means synthetic games only. | Written by hand; format sample: `harness/corpus.local.example.toml`. See `harness/README.md`. | Real-game gate |
+| `harness/local/plans/` | 5 files | Route plans of the real games: `m1-si.plan`, `movie-story.plan`, `route-30.plan`, `route-short.plan`, `route-volatile-menu.plan` (they name game movies, game folders or game titles). Moved out of git. | Keep your copy; no script makes them. | Real-game gate (`plan` key, `--plan`) |
+| `harness/local/drivers/` | 3 files | Free-roam drivers of the real games: `astrallust.py`, `braveheart.py`, `bumpkin.py` (they name screens and variables of the games). Moved out of git. | Keep your copy; no script makes them. | Real-game gate (`driver` key) |
 | `local/hosts.toml` | tiny | Real SSH logins and addresses of the Linux gate host and the Windows VM. Template: `local/hosts.example.toml`. | Copy the template, fill in. Read by `tools/hosts.py` and by the scripts that name a remote host. | Remote gate runs (artemis, Windows) |
 | `~/Projects/renpy_proj-remote/` on the Linux host (outside the repo) | corpus subset | Linux copies of some corpus games, and the bare repo that the coordinator pushes to. | Manual copy (rsync) from the Mac copies. | Linux gate runs |
 | `harness/out/` | up to several GB | Gate results: screenshots, logs, dialogue text, `result.json`. Holds game text and screenshots, never commit. | `harness/gate.py ... --out harness/out/<name>` | Baselines for `--baseline` |
@@ -68,6 +70,6 @@ Gitignored files live in the **main checkout**. Worktrees under `.worktrees/` fi
 
 ## Notes
 
-- Game titles and per-game file names stay in the gitignored per-game config (`harness/corpus.local.toml`) and in the games' own folders.
+- Per-game config of the real games (names, file names, movie paths, plans, drivers) stays in the gitignored `harness/corpus.local.toml` and `harness/local/`. Game titles may appear in prose documents. In a worktree, the harness finds these files in the main checkout (`local_path` in `harness/gatelib/launch.py`).
 - The real-game gate is a maintainer tool. The public CI path is the synthetic games.
 - `research/shared-engine-launcher/evidence/` is still tracked in git until the history rewrite removes it. Keep your copy on disk.

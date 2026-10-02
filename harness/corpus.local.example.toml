@@ -1,0 +1,15 @@
+# Format sample for harness/corpus.local.toml (gitignored). Copy it, rename the table, and point `source` at your game.
+# Keys are explained in corpus.toml. A relative `source` resolves against the main checkout; "~" is the home folder.
+# A plan named in `plan` is looked up in harness/plans/, then harness/local/plans/ (gitignored); a `driver` is
+# harness/local/drivers/<name>.py. The table below is an example, not a game of the corpus: the name is unused.
+[games.ExampleGame]
+source = "corpus/ExampleGame-released"
+origin = "~/Games/ExampleGame"          # read-only original (optional)
+linux_source = "~/Projects/renpy_proj-remote/corpus/ExampleGame-released"
+renpy = "8.5.3"
+base = "."
+engine = "sdk-853"
+linux_engine = "sdk-853-linux"
+plan = "route"
+video = "movies/intro.webm"
+video_fps = 30

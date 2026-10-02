@@ -21,3 +21,7 @@ research/shared-engine-launcher/evidence/
 
 # Empty scratch folder of the harness
 /harness/viewtmp/
+
+# Per-game config, driver code and plans of the real games (docs/LOCAL-FILES.md)
+/harness/corpus.local.toml
+/harness/local/
