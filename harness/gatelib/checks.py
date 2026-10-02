@@ -391,7 +391,55 @@ def check_video(ctx):
     return out
 
 
+# ---------------------------------------------------------------- unknown-key save: the trust question
+def check_trust(ctx):
+    """A save written under another signing key must raise the trust question (Ren'Py 8 `savetoken.check_load`), also
+    in a Ren'Py 7 game that never calls `layout.defaults()`. Launch 1 (player) writes a save. Launch 2 loads it with a
+    new key (no tokens) and the harness answers the screen with No: the load must not happen. Launch 3 answers Yes: the
+    load happens. Nothing answers by itself: the harness screen action is the only way the question ends."""
+    screen = ctx.game.get("trust_screen", "_py2c_yesno")
+    problems = []
+    launches = []
+    plan = L.parse_plan("cmd auto on\ncmd click on\nwait menu True\ncmd start\ncmd advance 3\nwait advance-done\n"
+                        "settle 2\ncmd save harness\nwait saved\nsettle 1\nquit\n")
+    a = L.launch(ctx, "trust-create", engine="player", plan=plan, timeout=600, keep_saves=True)
+    launches.append(_launch_summary(a))
+    problems += ["create: " + p for p in _hygiene(a)]
+    if "saved harness" not in a["progress"]:
+        return {"check": "trust", "status": "fail", "problems": problems + ["player could not create a save: %s" % a["aborted"]], "launches": launches}
+    made = sorted((ctx.out / "trust-create" / "saves-player").rglob("*.save"))
+    seed = ctx.out / "trust-seed"
+    shutil.rmtree(seed, ignore_errors=True)
+    seed.mkdir(parents=True)
+    for p in made:   # the .save files only: the signing key stays behind, so launch 2 has a new key
+        shutil.copy2(p, seed / p.name)
+    if not made:
+        return {"check": "trust", "status": "fail", "problems": problems + ["no player save found"], "launches": launches}
+    results = {}
+    for name, answer in (("trust-no", "Return(False)"), ("trust-yes", "Return(True)")):
+        ctx.game["screen_actions"] = {screen: answer}
+        plan = L.parse_plan("cmd auto on\ncmd click on\nwait menu True\ncmd click off\nsettle 1\n"
+                            "cmd exec renpy.load('harness')\nsettle 2\nquit\n")
+        r = L.launch(ctx, name, engine="player", plan=plan, timeout=600, seed_saves=seed)
+        launches.append(_launch_summary(r))
+        prog = r["progress"]
+        asked = [ln for ln in prog if ln.startswith("auto: screen %s " % screen)]
+        loaded = "loaded" in prog
+        errs = [ln for ln in prog if ln.startswith("cmd-error")]
+        results[name] = {"asked": len(asked), "loaded": loaded, "errors": errs[:2]}
+        problems += ["%s: %s" % (name, p) for p in _hygiene(r)]
+        if errs:
+            problems.append("%s: %s" % (name, errs[0][:300]))
+        if not asked:
+            problems.append("%s: the trust question never appeared on screen %s" % (name, screen))
+        if name == "trust-no" and loaded:
+            problems.append("trust-no: the save loaded although the answer was No")
+        if name == "trust-yes" and not loaded:
+            problems.append("trust-yes: the save did not load after Yes")
+    return {"check": "trust", "status": "fail" if problems else "pass", "problems": problems, "results": results, "launches": launches}
+
+
 from . import deep as _deep  # noqa: E402
 
-CHECKS = {"deep": _deep.check_deep, "lint": check_lint, "probe": check_probe, "route": check_route, "saveresume": check_saveresume, "video": check_video}
-TIERS = {"deep": ["deep"], "synth": ["lint", "probe", "route", "saveresume"], "m1": ["lint", "probe", "route"], "full": ["lint", "probe", "route", "saveresume", "video"]}
+CHECKS = {"deep": _deep.check_deep, "lint": check_lint, "probe": check_probe, "route": check_route, "saveresume": check_saveresume, "trust": check_trust, "video": check_video}
+TIERS = {"deep": ["deep"], "trust": ["trust"], "synth": ["lint", "probe", "route", "saveresume"], "m1": ["lint", "probe", "route"], "full": ["lint", "probe", "route", "saveresume", "video"]}
