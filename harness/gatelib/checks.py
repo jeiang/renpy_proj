@@ -208,6 +208,8 @@ def check_route(ctx):
     plan_ref = ctx.opts.get("plan") or ctx.game.get("plan", "route")
     pf = pathlib.Path(plan_ref)
     if not pf.exists():
+        pf = L.HARNESS / plan_ref   # a path relative to harness/ (the test games), whatever the working directory
+    if not pf.is_file():
         pf = L.HARNESS / "plans" / (plan_ref + ".plan")
     steps = L.parse_plan(pf.read_text())
     runs = []
