@@ -518,6 +518,20 @@ class Run:
                 raise ValueError("unknown plan op: " + op)
 
 
+def media_events(reports):
+    """`media` events of the runtime reports: movies the player could not show. -> list of "file: detail"."""
+    out = []
+    for p in sorted(pathlib.Path(reports).glob("*/runtime.jsonl")):
+        for ln in p.read_text(errors="replace").splitlines():
+            try:
+                ev = json.loads(ln)
+            except ValueError:
+                continue
+            if ev.get("kind") == "media":
+                out.append("%s: %s" % (ev.get("file"), ev.get("detail")))
+    return out
+
+
 def find_tracebacks(base, data_dir):
     found = []
     for root in (base, data_dir):
@@ -606,6 +620,7 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
     env.update(ctx.opts.get("extra_env") or {})
     env["HZ_INPUT_LIMIT"] = str(g.get("input_limit", 3))
     env["HZ_SCREEN_ACTIONS"] = ";".join("%s=%s" % kv for kv in g.get("screen_actions", {}).items())
+    env["HZ_DRIVER"] = str(HARNESS / "drivers" / (g["driver"] + ".py")) if g.get("driver") else ""   # per-game free-roam driver (harness/drivers)
     if not inject:
         env.pop("HARNESS_DIR")
     res = {"name": name, "engine": engine, "stripped_game_cache": strip, "argv": [a.replace(str(top), "<run>") for a in argv], "plan_log": []}
@@ -688,6 +703,7 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
         if engine == "player" and (data / "saves").exists():
             shutil.copytree(data / "saves", out / "saves-player", dirs_exist_ok=True)
     if engine == "player" and (data / "reports").exists():   # pre-flight and runtime reports of the player
+        res["media_events"] = media_events(data / "reports")
         shutil.copytree(data / "reports", out / "reports", dirs_exist_ok=True)
     safe_rmtree(root)
     return res

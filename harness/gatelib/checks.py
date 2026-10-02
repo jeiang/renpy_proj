@@ -32,6 +32,8 @@ def _hygiene(r):
         p.append("%s changed during the run" % L.plat.get().save_root_label)
     if r["traceback_files"]:
         p.append("traceback.txt/errors.txt written: " + ", ".join(r["traceback_files"]))
+    for m in r.get("media_events", ())[:5]:
+        p.append("movie not shown (media event): " + m)
     if r["engine"] == "player" and r["stdout_traceback"]:
         p.append("Python traceback on the player's stdout")
     return p

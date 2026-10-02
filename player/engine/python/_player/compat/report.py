@@ -15,7 +15,7 @@ _lock = threading.Lock()
 _started = False
 _fingerprint = None
 
-KINDS = ("rewrite", "fix", "syntax", "patch", "skip")
+KINDS = ("rewrite", "fix", "syntax", "patch", "skip", "media")
 
 
 def reports_dir():

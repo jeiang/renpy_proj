@@ -52,11 +52,13 @@ init 999 python:
         orig = cls.__dict__["do_show"]
 
         def do_show(self, who, what, *a, **kw):
-            if _hz_st.get("text") != _hz_st["say"] and not sys.modules["_hz_deep"].on:
+            if _hz_st.get("text") != _hz_st["say"]:
                 _hz_st["text"] = _hz_st["say"]
                 raw = what if isinstance(what, bytes) else what.encode("utf-8", "replace")
                 h = hashlib.sha1(raw).hexdigest()[:8] if what else "-"
-                _hz_write("text %d %s" % (_hz_st["say"], h))
+                if not sys.modules["_hz_deep"].on:
+                    _hz_write("text %d %s" % (_hz_st["say"], h))
+                _hz_loop_say(h)
             return orig(self, who, what, *a, **kw)
 
         cls.do_show = do_show
@@ -73,6 +75,7 @@ init 999 python:
 
     def _hz_label(name, abnormal):
         _hz_write("label %s" % name)
+        _hz_loop_tok(("L", name))
         if _hz_old_label_cb:
             _hz_old_label_cb(name, abnormal)
 
@@ -105,6 +108,8 @@ init 999 python:
     def _hz_do(line):
         w = line.split(None, 1)
         c, a = w[0], (w[1] if len(w) > 1 else "")
+        if c == "start" or c == "load":
+            _hz_loop_reset()
         if c == "start":
             _hz_D.started = True
             _hz_D.start_t = time.time()
@@ -174,6 +179,8 @@ init 999 python:
                         import traceback
                         _hz_write("cmd-error %s %r" % (line.split()[0], e))
                         _hz_write("cmd-error-trace " + " | ".join(l.strip() for l in traceback.format_exc().splitlines()[-8:]))
+        if _hz_loop_normal():
+            return
         if _hz_D.on:
             return   # the deep driver (_hz_deep_tick) answers choices and inputs
         mm = bool(renpy.get_screen("main_menu"))
@@ -198,12 +205,14 @@ init 999 python:
         try:
             if st["auto"] or st["adv"] is not None:
                 for _scr, _act in _HZ_SCREEN_ACTIONS:
-                    if renpy.get_screen(_scr) and st["n"] % 4 == 0:
+                    if renpy.get_screen(_scr):   # every poll: a later poll would end the screen with True first
                         _hz_write("auto: screen %s %s" % (_scr, _act))
                         rv = renpy.run(eval(_act, renpy.store.__dict__))
                         if rv is not None:
                             renpy.end_interaction(rv)
                         return
+                if _hz_drv_step(False):
+                    return
                 if renpy.get_screen("input") and st["n"] % 4 == 0:
                     # A game that rejects the answer asks again; count answers so a rejection loop fails the
                     # stage instead of counting the game's "invalid name" lines as executed dialogue.
@@ -217,8 +226,11 @@ init 999 python:
                     renpy.end_interaction(_HZ_INPUT)
                 ch = renpy.get_screen("choice")
                 if ch and st["n"] % 4 == 0:
-                    it = ch.scope["items"][0]
-                    _hz_write("auto: choice %s" % (it[0] if isinstance(it, tuple) else it.caption))
+                    items = ch.scope["items"]
+                    it = items[_hz_drv_choice(items, None)]
+                    cap = it[0] if isinstance(it, tuple) else it.caption
+                    _hz_write("auto: choice %s" % cap)
+                    _hz_loop_tok(("C", _hz_s(cap)))
                     rv = renpy.run(it.action)
                     if rv is not None:
                         renpy.end_interaction(rv)
@@ -455,9 +467,8 @@ init 999 python:
         D.restart_t = 0.0
         D.last_flush = 0.0
         D.inputs = 0
-        D.inp_run = 0
-        D.inp_mark = None
         D.decisions = 0
+        _hz_loop_deep_init()
         D.code_index = None
         os.path.isdir(os.path.join(_hz_dir, "deep")) or os.makedirs(os.path.join(_hz_dir, "deep"))
         tot_lines = collections.OrderedDict()
@@ -520,6 +531,7 @@ init 999 python:
                "labels_total": len(D.tot_labels), "saves": D.saves, "save_s": round(D.save_s, 2),
                "save_error": D.save_err, "decisions": D.decisions, "hub_clicks": D.hub_clicks, "inputs": D.inputs, "errors": D.errors,
                "renpy": renpy.version_only, "final": final}
+        cov.update(_hz_loop_cov())
         _hz_json_write(os.path.join(d, "coverage.json"), cov)
         if final:
             _hz_json_write(os.path.join(d, "lines.json"), {"lines": ["%s:%d" % k for k in D.lines], "labels": hit_labels})
@@ -628,7 +640,7 @@ init 999 python:
     _HZ_SKIP_ACTIONS = ("Quit", "MainMenu", "ShowMenu", "Preference", "Language", "Help", "Screenshot", "Rollback", "RollbackToIdentifier",
                         "FileSave", "FileLoad", "FileDelete", "FileAction", "FilePage", "FilePageNext", "FilePagePrevious", "Return",
                         "QuickSave", "QuickLoad", "ToggleScreen", "Skip", "Replay", "EndReplay", "Confirm", "SetMute", "ToggleMute", "MouseMove",
-                        "OpenURL", "Start", "InvertSelected", "Scroll", "XScrollValue", "YScrollValue")
+                        "OpenURL", "Start", "Show", "Hide", "HideInterface", "Partial", "InvertSelected", "Scroll", "XScrollValue", "YScrollValue")
 
     def _hz_action_ok(act):
         if isinstance(act, (list, tuple)):
@@ -637,6 +649,8 @@ init 999 python:
             return False
         if type(act).__name__ in _HZ_SKIP_ACTIONS:
             return False
+        if type(act).__name__ == "SetField" and getattr(act, "object", None) is getattr(renpy.store, "_preferences", 0):
+            return False   # quick menu toggles (auto-forward, skip): not the game's choice
         try:
             return bool(renpy.is_sensitive(act))
         except Exception:
@@ -646,18 +660,11 @@ init 999 python:
         """A screen the driver has no screen_actions for, and no new script line for a while: press one of its buttons
         (a random pick from the run's generator), as a click would. Buttons that leave the game or change settings are skipped."""
         D = _hz_D
-        cands = []
-        for f in list(renpy.display.focus.focus_list):
-            act = getattr(f.widget, "clicked", None)
-            if act is not None and _hz_action_ok(act):
-                cands.append(act)
+        cands = _hz_avoid_filter(_hz_cands())
         if not cands:
             return False
-        act = cands[int(D.rng.random() * len(cands))]
-        D.hub_clicks += 1
-        rv = renpy.run(act)
-        if rv is not None:
-            renpy.end_interaction(rv)
+        c = cands[int(D.rng.random() * len(cands))]
+        _hz_run_cand(c, "hub")
         return True
 
     def _hz_deep_tick():
@@ -688,6 +695,8 @@ init 999 python:
                 if now - D.last_flush > 10:
                     D.last_flush = now
                     _hz_flush()
+                if _hz_loop_deep(now):
+                    return
             if renpy.get_screen("main_menu"):
                 D.menu_ticks += 1
                 if D.started and D.menu_ticks > 15 and D.verify is None:
@@ -702,6 +711,7 @@ init 999 python:
                     D.restart_t = now
                     D.pending = [x for x in json.loads(os.environ.get("HZ_AFTER_START") or "[]")]
                     _hz_write("deep-play %d" % (D.plays + 1))
+                    _hz_loop_reset()
                     renpy.run(Start())
                 return
             D.menu_ticks = 0
@@ -711,7 +721,7 @@ init 999 python:
                 _hz_do(D.pending.pop(0))
                 return
             for _scr, _act in _HZ_SCREEN_ACTIONS:
-                if renpy.get_screen(_scr) and D.n % 4 == 0:
+                if renpy.get_screen(_scr):   # every tick: a later tick would end the screen with True first
                     rv = renpy.run(eval(_act, renpy.store.__dict__))
                     if rv is not None:
                         renpy.end_interaction(rv)
@@ -719,26 +729,33 @@ init 999 python:
             if renpy.get_screen("input"):
                 if D.n % 4 == 0:
                     D.inputs += 1
-                    if D.last_new != D.inp_mark:   # a new line ran since the last answer: not a rejection loop
-                        D.inp_mark = D.last_new
-                        D.inp_run = 0
-                    D.inp_run += 1
-                    if os.environ.get("HZ_INPUT_EXPLICIT") == "1" and D.inp_run <= _HZ_INPUT_LIMIT:
-                        ans = _HZ_INPUT
+                    if os.environ.get("HZ_INPUT_EXPLICIT") == "1":
+                        ans = _HZ_INPUT   # the game's own answer in every mode: a rejection loop is the loop guard's to end
                     else:
                         ans = _HZ_NAMES[int(D.rng.random() * len(_HZ_NAMES))] + (str(D.inputs) if D.inputs > 3 else "")
+                    _hz_loop_tok(("A", "input:" + _hz_s(ans)))
                     renpy.end_interaction(ans)
                 return
             ch = renpy.get_screen("choice")
             if ch:
                 if D.n % 4 == 0:
                     items = ch.scope["items"]
-                    it = items[int(D.rng.random() * len(items))]
+                    k = _hz_drv_choice(items, int(D.rng.random() * len(items)))
+                    it = items[k]
+                    _hz_loop_tok(("C", _hz_s(it[0] if isinstance(it, tuple) else it.caption)))
                     D.decisions += 1
                     rv = renpy.run(it.action)
                     if rv is not None:
                         renpy.end_interaction(rv)
                 return
+            if D.verify is None and _hz_drv_step(True):
+                return
+            if D.verify is None and D.hub_force > 0:
+                # A loop was just detected and no driver or menu choice is up: press another button of the screen now.
+                if _hz_hub_click():
+                    D.hub_force = 0
+                    return
+                D.hub_force -= 1
             if D.verify is None and now - D.last_new > D.hub_after and D.n % 25 == 0 and _hz_hub_click():
                 return
             if not _hz_busy():
@@ -909,3 +926,444 @@ init 999 python:
 screen _hz_deep_screen():
     zorder 10001
     timer 0.05 repeat True action Function(_hz_deep_tick)
+
+
+# ======================================================================================================================
+# Loop guard and per-game drivers.
+#   Loop guard: every executed say (text hash), label, driver action and menu choice is a token of a rolling window.
+#     say loop:   a block of at least 10 say lines repeats at least 3 times in a row.
+#     token loop: a block of 1 to 40 tokens that holds a label, action or choice repeats at least 4 times in a row
+#                 (the same screen and action pair more than 3 times; a loop with no say line, or with one line per round).
+#   Normal gate run: `cmd-error loop PERIOD HASH kind=... reps=... hashes=... labels=... acts=...` (the gate fails the stage).
+#   Deep run: `deep-loop N KIND PERIOD HASH`, a coverage event (coverage.json "loop_events"), then the action that led into
+#     the loop (and, on a repeat, every action and choice of the loop) is excluded for the next 30 decisions. A loop that
+#     comes back 3 times in a row ends the run: `deep-done stuck`. A loop is never an error record.
+#   Driver (HZ_DRIVER=<path of harness/drivers/<game>.py>, corpus.toml key `driver`): Python 2 and 3 source with optional
+#     NAME, HUBS (screen names or fnmatch patterns of the game's free-roam screens), DISMISS (modal popup screens to hide), hub(h) -> candidate, None (least pressed) or False (press nothing) and
+#     choice(h, captions) -> index or None, AVOID_CAPTIONS (menu captions never taken while another exists). h is a _HzHub: h.cands (clickable actions of the screen, with .key, .kind,
+#     .label, .args), h.expr("python expression", default), h.v("variable", default), h.visits(c), h.least(cands),
+#     h.rng, h.note(text). Without a driver answer the driver clicks the least visited candidate.
+# ======================================================================================================================
+init 999 python:
+    import random
+    import fnmatch
+
+    _HZ_LOOP_SAY_MIN = 10
+    _HZ_LOOP_SAY_REPS = 3
+    _HZ_LOOP_TOK_REPS = 4
+    _HZ_LOOP_TOK_MAXP = 40
+    _HZ_AVOID_TTL = 30
+    _HZ_LOOP_CHAIN_MAX = 3
+
+    class _HzLoopState(object):
+        def __init__(self):
+            self.says = []
+            self.toks = []
+            self.ntok = 0
+            self.pending = None
+            self.failed = False
+
+    def _hz_lg():
+        L = getattr(_hz_D, "lg", None)
+        if L is None:
+            L = _hz_D.lg = _HzLoopState()
+        return L
+
+    def _hz_loop_reset():
+        L = _hz_lg()
+        del L.says[:]
+        del L.toks[:]
+        L.pending = None
+
+    def _hz_tok_key(t):
+        return ("C:" + t[1]) if t[0] == "C" else t[1]
+
+    def _hz_loop_found(L, kind, period, reps, blk_says):
+        t = L.toks
+        window = t[-(period if kind == "tok" else 60):]
+        labels, acts = [], []
+        for x in window:
+            if x[0] == "L" and x[1] not in labels:
+                labels.append(x[1])
+        for x in t[-60:]:
+            if x[0] in ("A", "C"):
+                acts.append(_hz_tok_key(x))
+        if kind == "tok":
+            acts = [_hz_tok_key(x) for x in window if x[0] in ("A", "C")]
+        L.pending = {"kind": kind, "period": period, "reps": reps, "hashes": list(blk_says[:6]) or ["-"],
+                     "labels": labels[:8], "acts": acts[-8:], "last_act": acts[-1] if acts else None, "ntok": L.ntok}
+
+    def _hz_loop_scan_says(L):
+        s = L.says
+        n = len(s)
+        reps = _HZ_LOOP_SAY_REPS
+        for p in range(_HZ_LOOP_SAY_MIN, n // reps + 1):
+            blk = s[n - p:]
+            if all(s[n - p * k:n - p * (k - 1)] == blk for k in range(2, reps + 1)):
+                d = p   # the shortest period of the block
+                for q in range(1, p):
+                    if p % q == 0 and blk == blk[:q] * (p // q):
+                        d = q
+                        break
+                _hz_loop_found(L, "say", d, reps, blk[:d])
+                return
+
+    def _hz_loop_scan_toks(L):
+        t = L.toks
+        n = len(t)
+        reps = _HZ_LOOP_TOK_REPS
+        for p in range(1, min(_HZ_LOOP_TOK_MAXP, n // reps) + 1):
+            blk = t[n - p:]
+            if all(t[n - p * k:n - p * (k - 1)] == blk for k in range(2, reps + 1)):
+                if [x for x in blk if x[0] != "S"]:
+                    _hz_loop_found(L, "tok", p, reps, [x[1] for x in blk if x[0] == "S"])
+                    return
+
+    def _hz_loop_tok(t):
+        try:
+            L = _hz_lg()
+            if t[0] == "L":
+                t = ("L", _hz_s(t[1]))
+                if t[1].startswith("_") or t[1].startswith("hz_"):
+                    return
+            L.toks.append(t)
+            L.ntok += 1
+            lim = _HZ_LOOP_TOK_MAXP * _HZ_LOOP_TOK_REPS + 64
+            if len(L.toks) > lim * 2:
+                del L.toks[:len(L.toks) - lim]
+            if L.pending is None and not L.failed:
+                _hz_loop_scan_toks(L)
+        except Exception:
+            pass
+
+    def _hz_loop_say(h):
+        try:
+            L = _hz_lg()
+            L.says.append(h)
+            if len(L.says) > 600:
+                del L.says[:len(L.says) - 400]
+            _hz_loop_tok(("S", h))
+            if L.pending is None and not L.failed:
+                _hz_loop_scan_says(L)
+        except Exception:
+            pass
+
+    def _hz_loop_text(rec):
+        return "kind=%s reps=%d hashes=%s labels=%s acts=%s" % (
+            rec["kind"], rec["reps"], ",".join(rec["hashes"]), ",".join(rec["labels"]) or "-", ",".join(rec["acts"]) or "-")
+
+    def _hz_loop_normal():
+        """Normal gate run: a loop fails the stage at once."""
+        if _hz_D.on:
+            return False
+        L = _hz_lg()
+        if L.pending is None or L.failed:
+            return False
+        rec = L.pending
+        L.pending = None
+        L.failed = True
+        _hz_write("cmd-error loop %d %s %s" % (rec["period"], rec["hashes"][0], _hz_loop_text(rec)))
+        _hz_st["auto"] = False
+        _hz_st["adv"] = None
+        _hz_st["click"] = False
+        return True
+
+    def _hz_loop_deep_init():
+        D = _hz_D
+        D.loops = []
+        D.loop_n = 0
+        D.loop_chain = 0
+        D.loop_sig = set()
+        D.break_ntok = -10 ** 9
+        D.avoid = {}
+        D.visits = {}
+        D.drv_acts = 0
+        D.drv_wait = 0
+        D.hub_force = 0
+        _hz_loop_reset()
+
+    def _hz_loop_deep(now):
+        """Deep run: record the loop as a coverage event, then break it; a loop that returns 3 times ends the run."""
+        D = _hz_D
+        L = _hz_lg()
+        if L.pending is None:
+            return False
+        rec = L.pending
+        L.pending = None
+        if D.verify is not None:
+            return False
+        D.loop_n += 1
+        sig = set(rec["labels"]) | set(rec["hashes"]) - set(["-"])
+        if L.ntok - D.break_ntok < 400 and (sig & D.loop_sig):   # the same loop again, not another one
+            D.loop_chain += 1
+        else:
+            D.loop_chain = 1
+        D.loop_sig = sig
+        rec["n"] = D.loop_n
+        rec["screens"] = sorted(_hz_shown())
+        rec["elapsed_s"] = round(now - D.t0, 1)
+        rec["say"] = D.say
+        rec["chain"] = D.loop_chain
+        keys = rec["acts"] if D.loop_chain > 1 else ([rec["last_act"]] if rec["last_act"] else [])
+        rec["avoid"] = list(keys)
+        rec["outcome"] = "stuck" if D.loop_chain > _HZ_LOOP_CHAIN_MAX else "broken"
+        D.loops.append(rec)
+        _hz_write("deep-loop %d %s %d %s" % (D.loop_n, rec["kind"], rec["period"], rec["hashes"][0]))
+        if D.loop_chain > _HZ_LOOP_CHAIN_MAX:
+            _hz_finish("stuck")
+            return True
+        for k in keys:
+            D.avoid[k] = _HZ_AVOID_TTL
+        _hz_loop_reset()
+        D.break_ntok = L.ntok
+        D.hub_force = 25   # ticks (1 s) to find a button to press
+        return False
+
+    def _hz_loop_cov():
+        D = _hz_D
+        out = {"loops": getattr(D, "loop_n", 0), "loop_events": getattr(D, "loops", [])[-40:]}
+        v = getattr(D, "visits", {})
+        drv = getattr(D, "drv", None)
+        out["drv"] = {"name": drv.name if drv is not None else None, "acts": getattr(D, "drv_acts", 0), "keys": len(v),
+                      "top": dict(sorted(v.items(), key=lambda kv: (-kv[1], kv[0]))[:60])}
+        return out
+
+    def _hz_avoid_tick():
+        av = getattr(_hz_D, "avoid", None)
+        if av:
+            for k in list(av):
+                av[k] -= 1
+                if av[k] <= 0:
+                    del av[k]
+
+    def _hz_avoid_filter(cands):
+        av = getattr(_hz_D, "avoid", None)
+        if not av:
+            return cands
+        ok = [c for c in cands if c.key not in av]
+        return ok or cands
+
+    # ---- candidates, hub context, driver
+    def _hz_act_key1(a):
+        n = type(a).__name__
+        lab = getattr(a, "label", None)
+        if lab is not None:
+            args = getattr(a, "args", None) or ()
+            kw = getattr(a, "kwargs", None) or {}
+            s = n + ":" + _hz_s(lab)
+            if args:
+                s += ":" + ",".join(_hz_s(x)[:40] for x in args)
+            if kw:
+                s += ":" + ",".join("%s=%s" % (_hz_s(k), _hz_s(kw[k])[:40]) for k in sorted(kw))
+            return s
+        fn = getattr(a, "callable", None) or getattr(a, "function", None)
+        if fn is not None:
+            return n + ":" + _hz_s(getattr(fn, "__name__", "?"))
+        bits = []
+        for k in sorted(getattr(a, "__dict__", {})):
+            v = a.__dict__[k]
+            if isinstance(v, (bool, int, float, bytes, type(u""))) and not k.startswith("_"):
+                bits.append("%s=%s" % (k, _hz_s(v)[:30]))
+        return n + (":" + ",".join(bits[:4]) if bits else "")
+
+    def _hz_act_key(act):
+        if isinstance(act, (list, tuple)):
+            return "+".join(_hz_act_key1(a) for a in act)
+        return _hz_act_key1(act)
+
+    class _HzCand(object):
+        def __init__(self, act):
+            self.act = act
+            parts = list(act) if isinstance(act, (list, tuple)) else [act]
+            first = next((x for x in parts if getattr(x, "label", None) is not None), parts[0] if parts else act)   # the Jump or Call of a list
+            self.kind = type(first).__name__
+            lab = getattr(first, "label", None)
+            self.label = _hz_s(lab) if lab is not None else None
+            self.args = tuple(getattr(first, "args", None) or ())
+            self.key = _hz_act_key(act)
+
+        def __repr__(self):
+            return "<cand %s>" % self.key
+
+    def _hz_cands():
+        out, seen = [], set()
+        for f in list(renpy.display.focus.focus_list):
+            act = getattr(f.widget, "clicked", None)
+            if act is not None and _hz_action_ok(act):
+                c = _HzCand(act)
+                if c.key not in seen:
+                    seen.add(c.key)
+                    out.append(c)
+        return out
+
+    def _hz_shown():
+        out = set()
+        try:
+            sl = renpy.game.context().scene_lists
+            for layer in list(sl.layers):
+                for e in list(sl.layers[layer]):
+                    nm = getattr(getattr(e, "displayable", None), "screen_name", None)
+                    if nm:
+                        out.add(_hz_s(nm[0]))
+        except Exception:
+            pass
+        return out
+
+    def _hz_last_label():
+        for t in reversed(_hz_lg().toks):
+            if t[0] == "L":
+                return t[1]
+        return ""
+
+    class _HzHub(object):
+        def __init__(self, deep, cands, shown):
+            D = _hz_D
+            self.deep = deep
+            self.all = cands
+            self.cands = _hz_avoid_filter(cands) if deep else cands
+            self.shown = shown
+            self.ctx = _hz_last_label()   # the label that showed the screen: a button counts per place in the script
+            self.rng = D.rng if deep else D.nrng
+
+        def expr(self, src, default=None):
+            try:
+                return eval(src, renpy.store.__dict__)
+            except Exception:
+                return default
+
+        def v(self, name, default=None):
+            return getattr(renpy.store, name, default)
+
+        def visits(self, c):
+            """Presses of this button at the current place (the last label executed); a button pressed elsewhere does not count."""
+            return _hz_D.visits.get(self.ctx + "|" + (c if isinstance(c, str) else c.key), 0)
+
+        def least(self, cands):
+            if not cands:
+                return None
+            m = min(self.visits(c) for c in cands)
+            best = [c for c in cands if self.visits(c) == m]
+            return best[int(self.rng.random() * len(best))]
+
+        def note(self, text):
+            _hz_write("drv-note %s" % text)
+
+    class _HzDriver(object):
+        def __init__(self, path):
+            ns = {"__name__": "hz_driver"}
+            with io.open(path, "r", encoding="utf-8") as f:
+                src = f.read()
+            exec(compile(src, path, "exec"), ns)
+            self.ns = ns
+            self.name = ns.get("NAME") or os.path.splitext(os.path.basename(path))[0]
+            self.hubs = list(ns.get("HUBS", ()))
+            self.dismiss = list(ns.get("DISMISS", ()))
+
+        def is_hub(self, shown):
+            for pat in self.hubs:
+                for s in shown:
+                    if fnmatch.fnmatchcase(s, pat):
+                        return True
+            return False
+
+        def hub(self, h):
+            f = self.ns.get("hub")
+            return f(h) if f else None
+
+        def choice(self, h, caps):
+            f = self.ns.get("choice")
+            return f(h, caps) if f else None
+
+    _hz_D.nrng = random.Random(0)
+    _hz_D.drv = None
+    _hz_D.visits = {}
+    _hz_D.avoid = {}
+    _hz_D.drv_acts = 0
+    _hz_D.drv_wait = 0
+    if _hz_dir and os.environ.get("HZ_DRIVER"):
+        try:
+            _hz_D.drv = _HzDriver(os.environ["HZ_DRIVER"])
+            _hz_write("drv-loaded %s" % _hz_D.drv.name)
+        except Exception as e:
+            _hz_write("drv-error load %r" % (e,))
+
+    def _hz_run_cand(c, tag, ctx=""):
+        D = _hz_D
+        D.visits[ctx + "|" + c.key] = D.visits.get(ctx + "|" + c.key, 0) + 1
+        D.drv_acts += 1
+        if D.on:
+            D.hub_clicks += 1
+        _hz_loop_tok(("A", c.key))
+        _hz_avoid_tick()
+        _hz_write("drv-act %s %s" % (tag, c.key))
+        rv = renpy.run(c.act)
+        if rv is not None:
+            renpy.end_interaction(rv)
+
+    def _hz_drv_step(deep):
+        """A driver hub is showing: press the driver's pick (or the least visited button). True when the tick is used."""
+        D = _hz_D
+        drv = D.drv
+        if drv is None:
+            return False
+        shown = _hz_shown()
+        for nm in sorted(shown):
+            if any(fnmatch.fnmatchcase(nm, pat) for pat in drv.dismiss):
+                _hz_write("drv-dismiss %s" % nm)   # a modal help popup hides the hub's buttons
+                renpy.hide_screen(nm)
+                renpy.restart_interaction()
+                return True
+        if not drv.is_hub(shown):
+            D.drv_wait = 0
+            return False
+        cands = _hz_cands()
+        if not cands:
+            D.drv_wait += 1   # hold the interaction open while the screen settles
+            return D.drv_wait < 10
+        D.drv_wait = 0
+        h = _HzHub(deep, cands, shown)
+        try:
+            c = drv.hub(h)
+            if c is False:
+                return False   # nothing the driver wants to press: the harness ends the interaction as usual
+            if c is None:
+                c = h.least(h.cands)
+        except _hz_ctl:
+            raise
+        except Exception as e:
+            _hz_write("drv-error %r" % (e,))
+            D.drv = None
+            return False
+        _hz_run_cand(c, drv.name, h.ctx)
+        return True
+
+    def _hz_drv_choice(items, k):
+        """Index of the menu item to take: the driver's, else k (deep: the seeded draw; normal: the first), then not an excluded one."""
+        D = _hz_D
+        caps = [_hz_s(it[0] if isinstance(it, tuple) else it.caption) for it in items]
+        if D.drv is not None:
+            try:
+                r = D.drv.choice(_HzHub(D.on, [], _hz_shown()), caps)
+                if r is not None and 0 <= r < len(caps):
+                    k = r
+            except _hz_ctl:
+                raise
+            except Exception as e:
+                _hz_write("drv-error %r" % (e,))
+                D.drv = None
+        if k is None:
+            k = 0
+        if D.drv is not None:
+            bad = tuple(D.drv.ns.get("AVOID_CAPTIONS", ()))
+            if bad and caps[k].startswith(bad):
+                alt = [i for i in range(len(caps)) if not caps[i].startswith(bad)]
+                if alt:
+                    k = alt[int((D.rng if D.on else D.nrng).random() * len(alt))]
+        if D.on:
+            if D.avoid and ("C:" + caps[k]) in D.avoid:
+                alt = [i for i in range(len(caps)) if ("C:" + caps[i]) not in D.avoid]
+                if alt:
+                    k = alt[int(D.rng.random() * len(alt))]
+            D.visits["C:" + caps[k]] = D.visits.get("C:" + caps[k], 0) + 1
+            _hz_avoid_tick()
+        return k

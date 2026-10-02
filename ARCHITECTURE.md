@@ -60,7 +60,7 @@ flowchart TB
 
 ### Video ([video-proto](https://github.com/jeiang/renpy_proj/tree/prototype/video-proto), [ticket](https://github.com/jeiang/renpy_proj/issues/23))
 - An LGPL FFmpeg 7+ build (never `--enable-gpl` or `--enable-nonfree`), shipped as shared libraries. Hardware decode where available (VideoToolbox, D3D11VA, VAAPI/NVDEC), dav1d for AV1, software otherwise.
-- YUV planes (NV12, P010, yuv420p/444p) upload to wgpu, and a WGSL shader converts them. This removes stock Ren'Py's swscale, RGBA, zeroing and copy costs.
+- YUV planes (NV12, P010, yuv420p/444p, planar RGB gbrp as an identity path) upload to wgpu, and a WGSL shader converts them. This removes stock Ren'Py's swscale, RGBA, zeroing and copy costs.
 - Hooked in through a tracked `video.py` patch that accepts a GPU texture.
 - **Prototype result (M3 Pro):** AstralLust 4K60 10-bit VP9 plays at 60 fps on 0.2 cores (stock: 8 fps, 3.35 cores). Every corpus clip, including H.264, which stock 8.5.3 can't decode, holds 60 fps.
 

@@ -131,6 +131,11 @@ pub struct Shared {
 }
 
 impl Shared {
+    /// The name the media was opened with (the file it plays).
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
     /// True when a video frame is due (or there is no video stream).
     pub fn video_ready(&self) -> bool {
         let mut st = self.st.lock();
@@ -1349,6 +1354,12 @@ fn layout_of(fmt: c_int) -> Option<LayoutInfo> {
         l(PlaneLayout::Yuv422p10, false, true, 1, 0, false)
     } else if is(P::AV_PIX_FMT_YUV444P10LE) {
         l(PlaneLayout::Yuv444p10, false, true, 0, 0, false)
+    } else if is(P::AV_PIX_FMT_GBRP) || is(P::AV_PIX_FMT_GBRAP) {
+        l(PlaneLayout::Gbrp, false, false, 0, 0, true)
+    } else if is(P::AV_PIX_FMT_GBRP10LE) || is(P::AV_PIX_FMT_GBRAP10LE) {
+        l(PlaneLayout::Gbrp10, false, true, 0, 0, true)
+    } else if is(P::AV_PIX_FMT_GBRP12LE) || is(P::AV_PIX_FMT_GBRAP12LE) {
+        l(PlaneLayout::Gbrp12, false, true, 0, 0, true)
     } else {
         None
     }
@@ -1368,7 +1379,7 @@ unsafe fn build_frame(f: *const ffi::AVFrame, pts: f64) -> Result<VideoFrame, St
                     .to_string_lossy()
                     .into_owned()
             };
-            format!("unsupported video pixel format {name}; the player has no swscale")
+            format!("unsupported video pixel format {name}; the movie is not shown")
         })?;
         let (w, h) = ((*f).width as u32, (*f).height as u32);
         let cw = (w + (1 << li.csx) - 1) >> li.csx;
