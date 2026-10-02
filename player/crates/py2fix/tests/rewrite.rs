@@ -14,12 +14,23 @@ fn rules(src: &str) -> Vec<&'static str> {
 fn print_statement_forms() {
     assert_eq!(out("print 'a', x\n"), "print('a', x)\n");
     assert_eq!(out("print\n"), "print()\n");
-    assert_eq!(out("print 'a',\n"), "print('a', end=\" \")\n");
+    assert_eq!(out("print 'a',\n"), "_py2c_print('a', soft=True)\n");
     assert_eq!(out("print >>f, 'a', b\n"), "print('a', b, file=f)\n");
     assert_eq!(out("print >>f\n"), "print(file=f)\n");
     assert_eq!(out("if x: print y\n"), "if x: print(y)\n");
     assert_eq!(out("print (a), b  # c\n"), "print((a), b)  # c\n");
     assert_eq!(out("print (\"x %s\") % y\n"), "print((\"x %s\") % y)\n");
+}
+
+#[test]
+fn print_with_trailing_comma_keeps_softspace() {
+    // Python 2 writes the pending space only before the next item, so a bare print adds the newline alone.
+    // The whole file then goes through the `_py2c_print` helper.
+    assert_eq!(
+        out("print >>f, 'b',\nprint >>f\nprint x\n"),
+        "_py2c_print('b', soft=True, file=f)\n_py2c_print(file=f)\n_py2c_print(x)\n"
+    );
+    assert_eq!(out("for i in l: print i,\nprint\n"), "for i in l: _py2c_print(i, soft=True)\n_py2c_print()\n");
 }
 
 #[test]

@@ -115,8 +115,22 @@ def _headers(cfg):
     return h
 
 
+def wait_reachable(cfg, secs):
+    """Poll `check_reachable` every 10 s for up to `secs`. -> None when it answers, else the last reason. On artemis `gamemoderun`
+    stops llm-server while a game runs and starts it again after: a model call that follows a verification run must wait."""
+    t0 = time.time()
+    why = check_reachable(cfg)
+    while why and time.time() - t0 < secs:
+        time.sleep(10)
+        why = check_reachable(cfg)
+    return why
+
+
 def chat(cfg, messages):
     """One chat completion. -> (text, usage dict). Raises RuntimeError with the server's message."""
+    why = wait_reachable(cfg, int(cfg.get("wait_s", 900)))
+    if why:
+        raise RuntimeError("model endpoint not reachable after %d s: %s" % (int(cfg.get("wait_s", 900)), why))
     body = json.dumps({"model": cfg["model"], "messages": messages, "temperature": 0.2, "max_tokens": cfg["max_tokens"],
                        "stream": False}).encode()
     req = urllib.request.Request(endpoint_url(cfg["base_url"]), data=body, headers=_headers(cfg), method="POST")
