@@ -41,13 +41,13 @@ Games AWorldBetweenUs (60 fps WebM) and AHouseInTheRift (30 fps), 3 replicas eac
 - Beside the other game runs the numbers do not move: the standard thresholds (`--video-min-ratio 0.85`, A/V 150 ms) pass, and so does the strict zero-drop test.
 - With every core busy the standard thresholds still pass, but the 30 fps clip shows late frames (2 and 6, none when idle), the 60 fps p95 grows by 8% and the maximum interval exceeds 1.5 x nominal (50 ms at 30 fps), so `--video-zero-drop` would fail. The strict, quiet-machine measurement therefore needs the machine to itself.
 - Decision: **video and performance stay serial.** The `video` check takes the whole machine (exclusive hold), which waits for every slot. The load test above is the only use of `--video-shared`. Correctness checks may share the machine.
-- The exclusive-mode run of the same set (`videoload.py` without `--shared`) showed the queueing: the video jobs were started at 19:40 with the four deep runs and no video launch began (no `checks/video.json`) while the deep runs were active. After the deep runs ended, the video jobs queued behind other agents' exclusive runs and I stopped the run, so it has no timing numbers. In that run the deep load of HaremHotel failed its `boot` stage (60 s) while other agents compiled on the host (BlackRose failed its `menu` stage as in every run, the splash problem): use `--stage-scale 3` for the campaign.
+- Exclusive mode (the harness default), one replica per clip, beside three 4-minute deep runs started together with the video jobs: AHouseInTheRift (30 fps) video finished after 476 s and shows the idle numbers (presented 62.0 fps, decoded 30.07, p95 47.6 ms, max 49.2 ms, late 0, A/V 30 ms). AWorldBetweenUs (60 fps) finished after 989 s with p95 16.7 ms, max 32.8 ms, late 31 (idle: 32 to 35), A/V 137 ms and an audio clock drift of 127 ms, which fails the 100 ms drift limit; the load average at its start was 1.3. The drift of this clip is noisy on an idle host too (35, 50 and 85 ms in the idle runs), so one 127 ms value does not show an effect of the lock mode, but it shows that the 100 ms limit has little margin for this clip. The video jobs wait at the lock until no slot has a launch running (a deep run has gaps between its launches), so they run alone; the first run of this test, killed by the reboot, had no result.
 
 ### Divergences and limits
 
 - None in dialogue, labels, coverage or saveresume. The only pixel differences are the known volatile shot of BlackRose.
 - Other agents on artemis take the whole-machine lock for their own runs and compile with cargo outside any lock. The measurements above ran with that background; the load average at the first launch of each run is in `checks/*.json` (`loadavg`).
-- The host rebooted once during the session (uptime 26 min at 20:21 local); the test runs were not affected.
+- The host ran out of memory and rebooted at about 19:55 local (another agent's D-Bus loop, unrelated to the workers). The width runs and the idle and shared video runs finished before it; the saturated video run ran after it.
 
 ## Campaign on artemis
 
