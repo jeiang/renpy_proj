@@ -25,8 +25,7 @@ ap.add_argument("--baseline-root")
 ap.add_argument("--work")
 ap.add_argument("--replicas", type=int, default=1, help="run each game R times as <game>.r0 .. (measurement runs)")
 a, rest = ap.parse_known_args()
-if rest[:1] == ["--"]:
-    rest = rest[1:]
+rest = [x for x in rest if x != "--"]
 out = pathlib.Path(a.out).resolve()
 jobs = []
 for r in range(a.replicas):
