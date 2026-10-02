@@ -670,7 +670,14 @@ init 999 python:
         cands = _hz_avoid_filter(_hz_cands())
         if not cands:
             return False
+        flow = [c for c in cands if c.kind in ("Jump", "Call", "ChoiceReturn", "ChoiceJump", "Return")]
+        if flow:
+            cands = flow   # buttons that move the script on before buttons that only change a screen
+        if D.loop_chain > 0:
+            m = min(D.ep.get(c.key, 0) for c in cands)   # while a loop is being broken: the buttons not yet tried in this episode
+            cands = [c for c in cands if D.ep.get(c.key, 0) == m]
         c = cands[int(D.rng.random() * len(cands))]
+        D.ep[c.key] = D.ep.get(c.key, 0) + 1
         _hz_run_cand(c, "hub")
         return True
 
@@ -1103,6 +1110,7 @@ init 999 python:
         D.loop_chain = 0
         D.loop_sig = set()
         D.loop_chain_t0 = 0.0
+        D.ep = {}
         D.break_ntok = -10 ** 9
         D.avoid = {}
         D.visits = {}
@@ -1129,6 +1137,7 @@ init 999 python:
             D.loop_chain = 1
         if D.loop_chain == 1:
             D.loop_chain_t0 = now
+            D.ep = {}
         D.loop_sig = sig
         rec["n"] = D.loop_n
         rec["screens"] = sorted(_hz_shown())
@@ -1398,6 +1407,12 @@ init 999 python:
                 alt = [i for i in range(len(caps)) if ("C:" + caps[i]) not in D.avoid]
                 if alt:
                     k = alt[int(D.rng.random() * len(alt))]
+            if D.loop_chain > 0:
+                pool = [i for i in range(len(caps)) if ("C:" + caps[i]) not in D.avoid] or list(range(len(caps)))
+                m = min(D.ep.get("C:" + caps[i], 0) for i in pool)
+                pool = [i for i in pool if D.ep.get("C:" + caps[i], 0) == m]   # an option not yet tried in this loop episode
+                k = pool[int(D.rng.random() * len(pool))]
+                D.ep["C:" + caps[k]] = D.ep.get("C:" + caps[k], 0) + 1
             D.visits["C:" + caps[k]] = D.visits.get("C:" + caps[k], 0) + 1
             _hz_avoid_tick()
         return k
