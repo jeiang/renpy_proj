@@ -5,7 +5,7 @@
 
 Writes into <dest>/game: the committed sources (game/*.rpy), `images/formats/` (PNG, JPEG, WebP lossy and lossless,
 AVIF, GIF static and animated; 320x180 cards and 64x64 cards with alpha), `reference/` (the lossless source PNG of each
-image, for the in-game pixel check) and `movies/` (VP9+Opus, H.264, Theora, AV1; 960x540, 24 fps, 4 s).
+image, for the in-game pixel check) and `movies/` (VP9+Opus 20 s, H.264, Theora, AV1 4 s; 960x540, 24 fps).
 """
 import importlib.util
 import pathlib
@@ -20,6 +20,8 @@ CARD = (320, 180)
 ALPHA = (64, 64)
 MOVIE = (960, 540)
 MOVIE_SECS = 4
+# The clip with audio is longer than the video check's window (3 s warm-up + 15 s): the A/V measurement then needs no loop unwrap.
+AUDIO_MOVIE_SECS = 20
 MOVIE_FPS = 24
 # One palette per file and no dithering: the card is smooth, so the error stays small and does not look like noise.
 GIF_VF = "split[a][b];[a]palettegen=max_colors=255:reserve_transparent=1[p];[b][p]paletteuse=dither=none:alpha_threshold=128"
@@ -103,7 +105,7 @@ def build(dest):
     mcard = dest / "_movie_card.png"
     gen.test_card(*MOVIE, "MOVIE", 0).png(mcard, alpha=False)
     kw = dict(secs=MOVIE_SECS, fps=MOVIE_FPS, size=MOVIE)
-    media.movie(mcard, mv / "vp9_opus.webm", "vp9", audio="opus", **kw)
+    media.movie(mcard, mv / "vp9_opus.webm", "vp9", audio="opus", **dict(kw, secs=AUDIO_MOVIE_SECS))
     media.movie(mcard, mv / "h264.mp4", "h264", **kw)
     media.movie(mcard, mv / "theora.ogv", "theora", **kw)
     media.movie(mcard, mv / "av1.webm", "av1", **kw)

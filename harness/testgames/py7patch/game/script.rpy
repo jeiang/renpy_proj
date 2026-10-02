@@ -1,5 +1,7 @@
 # Port patch test. The python block below works in Python 2 only: a str has no decode method in Python 3, and no rewrite
 # rule of the compat module can know that. The patch in patches/ replaces the block.
+# The script has 20 lines on purpose: the gate saves a few lines in (auto-click keeps running while the save settles)
+# and loads that save, so more than the resume lines must remain after the save point.
 define config.name = "Synth7Patch"
 define config.save_directory = "synth7-patch-test"
 define config.screen_width = 800
@@ -21,4 +23,16 @@ label start:
     e "Line six."
     e "Line seven."
     e "Line eight."
+    e "Line nine."
+    e "Line ten."
+    e "Line eleven."
+    e "Line twelve."
+    e "Line thirteen."
+    e "Line fourteen."
+    e "Line fifteen."
+    e "Line sixteen."
+    e "Line seventeen."
+    e "Line eighteen."
+    e "Line nineteen."
+    e "Line twenty."
     return
