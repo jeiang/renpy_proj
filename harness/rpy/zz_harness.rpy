@@ -640,7 +640,7 @@ init 999 python:
     _HZ_SKIP_ACTIONS = ("Quit", "MainMenu", "ShowMenu", "Preference", "Language", "Help", "Screenshot", "Rollback", "RollbackToIdentifier",
                         "FileSave", "FileLoad", "FileDelete", "FileAction", "FilePage", "FilePageNext", "FilePagePrevious", "Return",
                         "QuickSave", "QuickLoad", "ToggleScreen", "Skip", "Replay", "EndReplay", "Confirm", "SetMute", "ToggleMute", "MouseMove",
-                        "OpenURL", "Start", "Show", "Hide", "InvertSelected", "Scroll", "XScrollValue", "YScrollValue")
+                        "OpenURL", "Start", "Show", "Hide", "HideInterface", "Partial", "InvertSelected", "Scroll", "XScrollValue", "YScrollValue")
 
     def _hz_action_ok(act):
         if isinstance(act, (list, tuple)):
@@ -1073,6 +1073,7 @@ init 999 python:
         D.loops = []
         D.loop_n = 0
         D.loop_chain = 0
+        D.loop_sig = set()
         D.break_ntok = -10 ** 9
         D.avoid = {}
         D.visits = {}
@@ -1092,10 +1093,12 @@ init 999 python:
         if D.verify is not None:
             return False
         D.loop_n += 1
-        if L.ntok - D.break_ntok < 400:
+        sig = set(rec["labels"]) | set(rec["hashes"]) - set(["-"])
+        if L.ntok - D.break_ntok < 400 and (sig & D.loop_sig):   # the same loop again, not another one
             D.loop_chain += 1
         else:
             D.loop_chain = 1
+        D.loop_sig = sig
         rec["n"] = D.loop_n
         rec["elapsed_s"] = round(now - D.t0, 1)
         rec["say"] = D.say
@@ -1212,6 +1215,7 @@ init 999 python:
             self.all = cands
             self.cands = _hz_avoid_filter(cands) if deep else cands
             self.shown = shown
+            self.ctx = ",".join(sorted(x for x in shown if D.drv is not None and D.drv.is_hub([x])))
             self.rng = D.rng if deep else D.nrng
 
         def expr(self, src, default=None):
@@ -1224,7 +1228,8 @@ init 999 python:
             return getattr(renpy.store, name, default)
 
         def visits(self, c):
-            return _hz_D.visits.get(c if isinstance(c, str) else c.key, 0)
+            """Presses of this button on the current hub screen (a button pressed on another screen does not count)."""
+            return _hz_D.visits.get(self.ctx + "|" + (c if isinstance(c, str) else c.key), 0)
 
         def least(self, cands):
             if not cands:
@@ -1274,9 +1279,9 @@ init 999 python:
         except Exception as e:
             _hz_write("drv-error load %r" % (e,))
 
-    def _hz_run_cand(c, tag):
+    def _hz_run_cand(c, tag, ctx=""):
         D = _hz_D
-        D.visits[c.key] = D.visits.get(c.key, 0) + 1
+        D.visits[ctx + "|" + c.key] = D.visits.get(ctx + "|" + c.key, 0) + 1
         D.drv_acts += 1
         if D.on:
             D.hub_clicks += 1
@@ -1315,7 +1320,7 @@ init 999 python:
             _hz_write("drv-error %r" % (e,))
             D.drv = None
             return False
-        _hz_run_cand(c, drv.name)
+        _hz_run_cand(c, drv.name, h.ctx)
         return True
 
     def _hz_drv_choice(items, k):
