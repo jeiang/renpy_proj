@@ -642,7 +642,7 @@ init 999 python:
                         "QuickSave", "QuickLoad", "ToggleScreen", "Skip", "Replay", "EndReplay", "Confirm", "SetMute", "ToggleMute", "MouseMove",
                         "OpenURL", "Start", "Show", "Hide", "HideInterface", "Partial", "InvertSelected", "Scroll", "XScrollValue", "YScrollValue")
 
-    _HZ_RELAXED_OK = ("Show", "Hide", "ToggleScreen", "Partial", "HideInterface")   # allowed when no other button exists
+    _HZ_RELAXED_OK = ("Show", "Hide", "ToggleScreen", "HideInterface")   # allowed when no other button exists
 
     def _hz_action_ok(act, relaxed=False):
         if isinstance(act, (list, tuple)):
@@ -959,6 +959,7 @@ init 999 python:
     _HZ_LOOP_IDLE_REPS = 50   # a block of labels only repeats this often before it is a loop
     _HZ_AVOID_TTL = 30
     _HZ_LOOP_CHAIN_MAX = 3
+    _HZ_LOOP_STUCK_S = 15.0
 
     class _HzLoopState(object):
         def __init__(self):
@@ -1093,6 +1094,7 @@ init 999 python:
         D.loop_n = 0
         D.loop_chain = 0
         D.loop_sig = set()
+        D.loop_chain_t0 = 0.0
         D.break_ntok = -10 ** 9
         D.avoid = {}
         D.visits = {}
@@ -1117,6 +1119,8 @@ init 999 python:
             D.loop_chain += 1
         else:
             D.loop_chain = 1
+        if D.loop_chain == 1:
+            D.loop_chain_t0 = now
         D.loop_sig = sig
         rec["n"] = D.loop_n
         rec["screens"] = sorted(_hz_shown())
@@ -1125,10 +1129,11 @@ init 999 python:
         rec["chain"] = D.loop_chain
         keys = rec["acts"] if D.loop_chain > 1 else ([rec["last_act"]] if rec["last_act"] else [])
         rec["avoid"] = list(keys)
-        rec["outcome"] = "stuck" if D.loop_chain > _HZ_LOOP_CHAIN_MAX else "broken"
+        stuck = D.loop_chain > _HZ_LOOP_CHAIN_MAX and now - D.loop_chain_t0 >= _HZ_LOOP_STUCK_S   # a fast loop gets 15 s of attempts
+        rec["outcome"] = "stuck" if stuck else "broken"
         D.loops.append(rec)
         _hz_write("deep-loop %d %s %d %s" % (D.loop_n, rec["kind"], rec["period"], rec["hashes"][0]))
-        if D.loop_chain > _HZ_LOOP_CHAIN_MAX:
+        if stuck:
             _hz_finish("stuck")
             return True
         for k in keys:
