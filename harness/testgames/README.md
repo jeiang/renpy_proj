@@ -221,9 +221,10 @@ NixOS (artemis) variant, no desktop session in the game: the gate, run under
 Run the whole job under `systemd-run --user --scope -p MemoryMax=12G -p TasksMax=500`: a missing session bus once made
 libdbus start `dbus-launch` in a loop and the machine ran out of memory (the gate now disables the bus for the game).
 
-Run time (artemis, 8 cores used by llvmpipe, other jobs sharing the machine lock): the sum of the gate seconds for the seven games
-is about 12 minutes for stock and about 18 minutes for the player; wall time for the whole `run.py` was 29 minutes (1716 s)
-with idle gaps while other launches held the lock. Expect 30 to 40 minutes on a 4-core runner [INFERENCE].
+Run time, measured on artemis (8 cores, llvmpipe and lavapipe use all of them): the Ubuntu container run of four games
+(`SynthStory`, `SynthMedia`, `Synth7`, `Synth7Patch`, stock and player) took 582 s. All seven games on NixOS: the gate seconds
+add up to 715 s for stock and 1073 s for the player; wall time for `run.py` was 1716 s (other jobs shared the machine lock, the
+machine was loaded). Expect about 30 minutes for all seven games on a 4-core runner [INFERENCE].
 
 #### Frames: llvmpipe (stock) against lavapipe (player)
 
@@ -240,11 +241,15 @@ differs on a real GPU]. Proposal for the CI job, for the synthetic corpus only: 
 
 #### Proof
 
-Branch `build/synth-ci`. Stock and player passed for all seven games (14 runs, `run.py` exit 0) with the player from
-`build/synth-ci` (manylinux package) on artemis under Xvfb, lavapipe and llvmpipe, with Mesa from nixpkgs. The Ubuntu 24.04
-package list above was proved in a rootless podman container (image `ubuntu:24.04` plus those packages, the repository mounted,
-the host machine lock held around the container); see the results of that run in the commit message and the report. The
-run found one packaging defect: the first manylinux package bundled `libstdc++.so.6` (GLIBCXX 3.4.25) in `lib/`, which the
+Branch `build/synth-ci`, player from the same branch (manylinux package, built on artemis), no GPU and no Hyprland session:
+
+- NixOS, Xvfb, Mesa from nixpkgs: stock and player pass for all seven games (14 runs, `run.py` exit 0), synth tier.
+- Ubuntu 24.04 in rootless podman (the package list above, the repository mounted, the host machine lock held around the
+  container, Xvfb inside): `SynthStory`, `SynthMedia`, `Synth7` and `Synth7Patch` pass on stock and on the player
+  (`run.py` exit 0, 582 s). The other three games use the same code paths and were run on NixOS only.
+- Not run under Xvfb: the gate `video` check of `SynthMedia` (`--tier full --only video`).
+
+The run found one packaging defect: the first manylinux package bundled `libstdc++.so.6` (GLIBCXX 3.4.25) in `lib/`, which the
 player's RUNPATH put before the system one, so every Mesa driver failed with `GLIBCXX_3.4.29 not found`, wgpu found no
 adapter and the player fell back to the software drawer ("this player draws with the wgpu renderer only"). It is fixed in
 `container-build.sh` (libstdc++ is host-provided).
