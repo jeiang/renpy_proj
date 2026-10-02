@@ -936,7 +936,7 @@ screen _hz_deep_screen():
 #                 (the same screen and action pair more than 3 times; a loop with no say line, or with one line per round).
 #   Normal gate run: `cmd-error loop PERIOD HASH kind=... reps=... hashes=... labels=... acts=...` (the gate fails the stage).
 #   Deep run: `deep-loop N KIND PERIOD HASH`, a coverage event (coverage.json "loop_events"), then the action that led into
-#     the loop (and, on a repeat, every action and choice of the loop) is excluded for the next 12 decisions. A loop that
+#     the loop (and, on a repeat, every action and choice of the loop) is excluded for the next 30 decisions. A loop that
 #     comes back 3 times in a row ends the run: `deep-done stuck`. A loop is never an error record.
 #   Driver (HZ_DRIVER=<path of harness/drivers/<game>.py>, corpus.toml key `driver`): Python 2 and 3 source with optional
 #     NAME, HUBS (screen names or fnmatch patterns of the game's free-roam screens), DISMISS (modal popup screens to hide), hub(h) -> candidate, None (least pressed) or False (press nothing) and
@@ -952,7 +952,7 @@ init 999 python:
     _HZ_LOOP_SAY_REPS = 3
     _HZ_LOOP_TOK_REPS = 4
     _HZ_LOOP_TOK_MAXP = 40
-    _HZ_AVOID_TTL = 12
+    _HZ_AVOID_TTL = 30
     _HZ_LOOP_CHAIN_MAX = 3
 
     class _HzLoopState(object):
