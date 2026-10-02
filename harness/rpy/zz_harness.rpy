@@ -44,15 +44,28 @@ init 999 python:
 
     def _hz_hook_quit():
         # Every way out through renpy.quit writes `quit-called ARGS | CALLERS` first: a silent end has a recorded cause.
+        # In a deep run, a quit that the GAME asks for (a menu choice such as "I am under 18", an ending) ends the play,
+        # not the process: the harness writes `deep-game-quit` and restarts to the main menu, where the next play starts
+        # (same as an ending that returns to the menu). The harness's own quit (`quit` command, video) passes through.
         import traceback as _hz_tb
         orig = renpy.exports.quit
 
         def quit(*a, **kw):
+            own = False
             try:
-                fr = ["%s:%s" % (_hz_os.path.basename(f[0]), f[1]) for f in _hz_tb.extract_stack()[-8:-1]]
+                st = _hz_tb.extract_stack()
+                own = "harness" in _hz_os.path.basename(st[-2][0])
+                fr = ["%s:%s" % (_hz_os.path.basename(f[0]), f[1]) for f in st[-8:-1]]
                 _hz_write("quit-called %s | %s" % (kw or a or "-", " < ".join(reversed(fr))))
             except Exception:
                 pass
+            D = _hz_sys.modules["_hz_deep"]
+            if not own and D.on and not getattr(D, "done", False):
+                D.game_quits = getattr(D, "game_quits", 0) + 1
+                _hz_write("deep-game-quit %d" % D.game_quits)
+                if D.game_quits > 50:
+                    _hz_finish("game-quit")
+                return renpy.exports.full_restart()
             return orig(*a, **kw)
         renpy.exports.quit = quit
         renpy.quit = quit
@@ -547,7 +560,7 @@ init 999 python:
                "lines_hit": len(D.lines), "lines_total": D.tot_lines, "labels_hit": len(hit_labels),
                "labels_total": len(D.tot_labels), "saves": D.saves, "save_s": round(D.save_s, 2),
                "save_error": D.save_err, "decisions": D.decisions, "hub_clicks": D.hub_clicks, "inputs": D.inputs, "errors": D.errors,
-               "renpy": renpy.version_only, "final": final}
+               "renpy": renpy.version_only, "game_quits": getattr(D, "game_quits", 0), "final": final}
         cov.update(_hz_loop_cov())
         _hz_json_write(_hz_os.path.join(d, "coverage.json"), cov)
         if final:
