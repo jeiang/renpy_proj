@@ -94,6 +94,19 @@ Not in the gate: the rollback path of the ordering fix. With rollback allowed th
 the line before the failing node shows twice, so its dialogue hashes differ from stock. `rules_ordering.rpy` calls
 `renpy.block_rollback()` to test the in-place retry path.
 
+## Results
+
+Mac (Apple Silicon, `build/synth-fix`, `run.py`, stock then the player against the stock baseline): all seven games pass lint,
+probe, route and saveresume on stock and on the player. `Synth7` passes `check_compat` (four `fix` events from `rules_ordering.rpy`,
+the print cases equal to stock). `Synth7Patch` passes on stock and on the player (patch applied, `saveresume` included).
+The gate video check on `SynthMedia` (stock, `--tier full --only video`) passes with the game movie as the A/V source (offset
+max 31 ms, drift 27 ms). Real-game regression after the player change (tier `m1`, baselines from `harness/out`): SecretIsland,
+BlackRose and HaremHotel pass.
+
+artemis (Hyprland, real GPU): the run for all seven games is started with
+`python3 harness/testgames/run.py --player-bin .../player` in the `synth-fix` clone. It was still in progress when this
+section was written (SynthAniso stock and player and SynthStory stock passed); the final artemis result is not recorded here.
+
 ## Build
 
 ```sh
