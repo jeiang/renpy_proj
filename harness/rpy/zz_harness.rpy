@@ -647,6 +647,8 @@ init 999 python:
 
     _HZ_RELAXED_OK = ("Show", "Hide", "ToggleScreen", "HideInterface", "SetScreenVariable", "ToggleScreenVariable", "SetLocalVariable", "ToggleLocalVariable")   # allowed when no other button exists
 
+    _hz_allow_ret = [False]   # a `call screen` answered by Return("label") or Return(3): the value is the answer
+
     def _hz_action_ok(act, relaxed=False):
         if isinstance(act, (list, tuple)):
             return len(act) > 0 and all(_hz_action_ok(a, relaxed) for a in act)
@@ -654,6 +656,9 @@ init 999 python:
             return False   # a button that does nothing (a disabled "Drive" button): never pressed
         if act is None or isinstance(act, (bool, int)) or not hasattr(act, "__call__") and not hasattr(act, "get_sensitive"):
             return False
+        if _hz_allow_ret[0] and type(act).__name__ == "Return":
+            v = getattr(act, "value", None)
+            return (isinstance(v, (bytes, type(u""))) and bool(v)) or (isinstance(v, int) and not isinstance(v, bool))
         if type(act).__name__ in _HZ_SKIP_ACTIONS and not (relaxed and type(act).__name__ in _HZ_RELAXED_OK):
             return False
         if type(act).__name__ in ("SetField", "ToggleField") and getattr(act, "object", None) is getattr(renpy.store, "_preferences", 0):
@@ -771,7 +776,7 @@ init 999 python:
                 return
             if D.verify is None and _hz_drv_step(True):
                 return
-            if D.verify is None and D.n % 4 == 0 and _hz_call_screen_press():
+            if D.verify is None and _hz_call_screen_press():
                 return
             if D.verify is None and now - D.last_new > D.hub_after and D.n % 25 == 0 and not renpy.get_screen("say") and _hz_hub_click():
                 return
@@ -972,7 +977,7 @@ init 999 python:
     _HZ_LOOP_IDLE_REPS = 50   # a block of labels only repeats this often before it is a loop
     _HZ_AVOID_TTL = 30
     _HZ_LOOP_CHAIN_MAX = 3
-    _HZ_LOOP_STUCK_S = 60.0   # the same loop for this long, with no new label and no new script line
+    _HZ_LOOP_STUCK_S = 120.0  # the same loop for this long, with no new label and no new script line
 
     class _HzLoopState(object):
         def __init__(self):
@@ -1366,7 +1371,11 @@ init 999 python:
             itype = None
         if itype != "screen":
             return False
-        cands = [c for c in _hz_avoid_filter(_hz_cands(False, False)) if c.kind in _HZ_FLOW]
+        _hz_allow_ret[0] = True
+        try:
+            cands = [c for c in _hz_avoid_filter(_hz_cands(False, False)) if c.kind in _HZ_FLOW]
+        finally:
+            _hz_allow_ret[0] = False
         if not cands:
             return False
         D = _hz_D
