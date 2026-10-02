@@ -461,7 +461,8 @@ init 999 python:
         D.menu_ticks = 0
         D.plays = 0
         D.hub_clicks = 0
-        D.hub_after = min(20.0, D.stall / 4.0)
+        D.hub_after = min(3.0, D.stall / 4.0)   # seconds without a new script line before a screen's button is pressed
+        D.empty_plays = 0
         D.lines_at_play_start = 0
         D.pending = []
         D.restart_t = 0.0
@@ -621,6 +622,8 @@ init 999 python:
     def _hz_label_deep(name, abnormal):
         D = _hz_D
         if D.on:
+            if _hz_s(name) not in D.labels and not _hz_s(name).startswith("_"):
+                D.loop_chain = 0   # a break that reaches a label never seen before worked: the loop is over
             D.labels[_hz_s(name)] = 1
             D.trail.append(_hz_s(name))
         if _hz_old_label_cb2:
@@ -707,7 +710,8 @@ init 999 python:
                     # The story ended (or a bad ending came back to the menu). Play again with the next draws while the
                     # last play still reached script lines no earlier play had; stop when one adds nothing.
                     D.plays += 1
-                    if len(D.lines) == D.lines_at_play_start or D.plays >= 30:
+                    D.empty_plays = D.empty_plays + 1 if len(D.lines) == D.lines_at_play_start else 0   # a play of other draws may add lines: stop after 3 that add none
+                    if D.empty_plays >= 3 or D.plays >= 30:
                         _hz_finish("story-end")
                         return
                     D.lines_at_play_start = len(D.lines)
@@ -760,7 +764,7 @@ init 999 python:
                     D.hub_force = 0
                     return
                 D.hub_force -= 1
-            if D.verify is None and now - D.last_new > D.hub_after and D.n % 25 == 0 and _hz_hub_click():
+            if D.verify is None and now - D.last_new > D.hub_after and D.n % 25 == 0 and not renpy.get_screen("say") and _hz_hub_click():
                 return
             if not _hz_busy():
                 renpy.end_interaction(True)
@@ -959,7 +963,7 @@ init 999 python:
     _HZ_LOOP_IDLE_REPS = 50   # a block of labels only repeats this often before it is a loop
     _HZ_AVOID_TTL = 30
     _HZ_LOOP_CHAIN_MAX = 3
-    _HZ_LOOP_STUCK_S = 15.0
+    _HZ_LOOP_STUCK_S = 30.0
 
     class _HzLoopState(object):
         def __init__(self):
