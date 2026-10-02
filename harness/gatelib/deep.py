@@ -111,6 +111,8 @@ def classify_error(ctx, e, stock):
         cls, why = "python2", e["classify"]
     else:
         cls, why = "player-bug", "Ren'Py 7 game, but compat classify knows no Python 2 pattern for: %s" % e["exception"]["message"][:160]
+    if stock and stock.get("result") == "inconclusive" and not stock.get("same_error"):
+        why += " (unconfirmed: the stock replay never reached the failing node)"
     t = e.get("patch_target")
     patchable, why_not = True, None
     if not t:
@@ -120,13 +122,35 @@ def classify_error(ctx, e, stock):
     return cls, why, patchable, why_not
 
 
+def _reached_node(e, lines_json):
+    """True when the stock run executed the failing node (same script and line) and the last label the player was in."""
+    n = e.get("node") or {}
+    if not lines_json or not n.get("file") or not n.get("line"):
+        return False
+    want = (_script_name(n["file"]), int(n["line"]))
+    hit = False
+    for s in lines_json.get("lines") or []:
+        f, _, ln = s.rpartition(":")
+        if (_script_name(f), int(ln or 0)) == want:
+            hit = True
+            break
+    trail = e.get("labels_trail") or []
+    return hit and (not trail or trail[-1] in set(lines_json.get("labels") or []))
+
+
 def stock_replay(ctx, seed, e, budget_s, stall_s):
-    """Run the stock engine with the same seed until it passes the failing say count. -> summary dict."""
+    """Run the stock engine with the same seed until it passes the failing say count. -> summary dict.
+
+    `result` is `same-error` (stock raises the same error at the failing node), `passed` (stock executed the failing node
+    and the last label without that error) or `inconclusive` (stock never reached the failing node: the say count alone
+    proves nothing, the paths diverge). Only the first two are `conclusive`."""
     from . import launch as L2
     sctx = L2.Ctx(ctx.key, ctx.game, "stock", ctx.out / ("stock-" + ctx.out.name), dict(ctx.opts))
     try:
         stop = e["say"] + 40
-        r, cov, errs = run_one(sctx, "replay-s%d-%s" % (seed, e["id"]), seed, budget_s, stall_s, 0, stop_say=stop, engine="stock")
+        name = "replay-s%d-%s" % (seed, e["id"])
+        r, cov, errs = run_one(sctx, name, seed, budget_s, stall_s, 0, stop_say=stop, engine="stock")
+        lines_json = _read_json(sctx.out / name / "deep" / "lines.json")
     finally:
         sctx.cleanup()
     out = {"say_reached": (cov or {}).get("say"), "target_say": e["say"], "errors": [], "reason": _done_reason(r["progress"])}
@@ -136,7 +160,9 @@ def stock_replay(ctx, seed, e, budget_s, stall_s):
         if _error_key(se)[0] == key[0] and _error_key(se)[1:] == key[1:]:
             out["same_error"] = True
     out["same_error"] = out.get("same_error", False)
-    out["conclusive"] = out["same_error"] or (cov or {}).get("say", 0) >= e["say"]
+    out["reached_node"] = out["same_error"] or _reached_node(e, lines_json)
+    out["result"] = "same-error" if out["same_error"] else "passed" if out["reached_node"] else "inconclusive"
+    out["conclusive"] = out["result"] != "inconclusive"
     return out
 
 
