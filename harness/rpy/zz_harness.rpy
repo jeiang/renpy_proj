@@ -998,6 +998,7 @@ init 999 python:
 
     def _hz_loop_found(L, kind, period, reps, blk_says):
         t = L.toks
+        span0 = len(t) - period * reps
         if kind == "tok":
             window = t[-period:]
         else:   # the span of the repeated block: back to the (period * reps)th say line
@@ -1007,12 +1008,18 @@ init 999 python:
                 if t[i][0] == "S":
                     need -= 1
             window = t[i:]
+            span0 = i
         labels, acts = [], []
         for x in window:
             if x[0] == "L" and x[1] not in labels:
                 labels.append(x[1])
         acts = [_hz_tok_key(x) for x in window if x[0] in ("A", "C")]
-        L.pending = {"kind": kind, "period": period, "reps": reps, "hashes": list(blk_says[:6]) or ["-"],
+        entry = None   # the action that led into the loop: the last press or choice before the repeated span
+        for x in reversed(t[:max(span0, 0)]):
+            if x[0] in ("A", "C"):
+                entry = _hz_tok_key(x)
+                break
+        L.pending = {"entry": entry, "kind": kind, "period": period, "reps": reps, "hashes": list(blk_says[:6]) or ["-"],
                      "labels": labels[:8], "acts": acts[-8:], "last_act": acts[-1] if acts else None, "ntok": L.ntok}
 
     def _hz_loop_scan_says(L):
@@ -1145,6 +1152,8 @@ init 999 python:
         rec["say"] = D.say
         rec["chain"] = D.loop_chain
         keys = rec["acts"] if D.loop_chain > 1 else ([rec["last_act"]] if rec["last_act"] else [])
+        if rec.get("entry") and rec["entry"] not in keys:
+            keys = keys + [rec["entry"]]
         rec["avoid"] = list(keys)
         stuck = D.loop_chain > _HZ_LOOP_CHAIN_MAX and now - D.loop_chain_t0 >= _HZ_LOOP_STUCK_S   # a fast loop gets 15 s of attempts
         rec["outcome"] = "stuck" if stuck else "broken"
