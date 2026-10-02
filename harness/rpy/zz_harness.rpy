@@ -926,6 +926,20 @@ init 999 python:
         _hz_write("deep-error %d %s" % (n, rec["exception"]["type"]))
         return rec
 
+    def _hz_call_prev(args):
+        # Ren'Py 8.4+ passes one TracebackException and calls a game handler of the old three-string form as handler(*te)
+        # (renpy/execution.py). This handler binds one argument, so Ren'Py hands it `te`: forward the way Ren'Py would for
+        # the game's own handler (SecretIsland: send_error_event(error, full_traceback, file)).
+        if len(args) == 1 and not hasattr(args[0], "encode"):
+            try:
+                import inspect as _hz_inspect
+                _hz_inspect.signature(_hz_prev_handler).bind(args[0])
+            except TypeError:
+                return _hz_prev_handler(*args[0])
+            except (ImportError, AttributeError, ValueError):   # Ren'Py 7 (Python 2): no signature
+                pass
+        return _hz_prev_handler(*args)
+
     def _hz_exc_handler(*args):
         D = _hz_D
         if D.on and not D.done:
@@ -939,7 +953,7 @@ init 999 python:
                 _hz_write("deep-record-failed " + _hz_s(_hz_traceback.format_exc())[-400:].replace("\n", " | "))
             _hz_finish("error" if D.verify is None else "verify-error")
         if _hz_prev_handler:
-            return _hz_prev_handler(*args)
+            return _hz_call_prev(args)
         return False
 
     if _hz_dir:
