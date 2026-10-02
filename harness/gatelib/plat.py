@@ -460,7 +460,7 @@ class Xvfb(Hypr):
             shutil.rmtree(self._tmp, ignore_errors=True)
         self._tmp = None
 
-    SOFT_PKGS = ("mesa", "vulkan-loader", "libglvnd", "libdrm", "systemd")   # software GL and Vulkan, in place of /run/opengl-driver/lib; libdrm and libudev for the player
+    SOFT_PKGS = ("mesa", "vulkan-loader", "libglvnd", "libdrm.out", "systemd")   # software GL and Vulkan, in place of /run/opengl-driver/lib; libdrm and libudev for the player
 
     _soft = None
 
