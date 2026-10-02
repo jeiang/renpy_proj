@@ -1,5 +1,7 @@
 """Parallel workers for correctness runs (deep, lint, probe, route, saveresume) on the Linux GPU host.
 
+Windows are 1896x1056 inside a 1920x1080 output (outer gap 12), the size Hyprland gives them on artemis, so frames compare with the Hyprland baselines.
+
 Each worker (slot) owns a headless sway (`WLR_BACKENDS=headless`, so no output of the real session is used), a work dir
 (`<work>/slot<N>`: clones, save dirs, data dirs) and a slot lock (machinelock.take_shared). The gate runs inside the slot with
 HARNESS_SLOT, HARNESS_COMPOSITOR=sway and the worker's WAYLAND_DISPLAY, DISPLAY and SWAYSOCK. Timing checks (`video`) take the
@@ -20,6 +22,8 @@ import time
 
 COMP_DIR = pathlib.Path("/tmp/renpy_proj.comp")
 SWAY_CFG = """default_border none
+gaps inner 0
+gaps outer 12
 output * resolution 1920x1080
 exec sh -c 'printf "WAYLAND_DISPLAY=%s\\nDISPLAY=%s\\nSWAYSOCK=%s\\n" "$WAYLAND_DISPLAY" "$DISPLAY" "$SWAYSOCK" > {envfile}'
 """
