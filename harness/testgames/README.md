@@ -245,8 +245,8 @@ but the movie shots sit at 88 % of the mean limit and `05-frames` at 80 % of the
 pixels, mean 0.41) is a volatile shot because stock Ren'Py draws a black frame for H.264 (see "Notes on cases that were
 defects"); it is reported and never gated. The cause of the small differences is not isolated here [INFERENCE: rasterizer
 rounding at 1 px frame edges and bilinear sampling for the pattern shot, YUV to RGB conversion for the movies, which also
-differs on a real GPU]. Proposal for the CI job, for the synthetic corpus only: `--gate-args "--diff-mean 0.01 --diff-pct 1.0"`
-(about twice the worst measured value). Do not change the real-game thresholds.
+differs on a real GPU]. Decision (user, 2026-10-02): the CI job for the synthetic corpus runs with
+`--gate-args "--diff-mean 0.01 --diff-pct 1.0"` (about twice the worst measured value). The real-game thresholds do not change.
 
 #### Proof
 
