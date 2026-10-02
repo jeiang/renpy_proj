@@ -17,6 +17,7 @@ The real-game gate stays manual on the Mac and on artemis (user decision). Issue
 | `aniso/` | `SynthAniso` | Ren'Py 8.5.3 | Anisotropic textures (`gl_anisotropic`), the existing A/B game. CI runs the six-shot plan `ci.plan`. It has no menu, so its tier is `route` only. |
 | `py7/` | `Synth7` | Ren'Py 7.4.11 (Python 2) | Python 2 `.rpyc` files compiled by the 7.4.11 SDK at build time. See [Ren'Py 7](#renpy-7-games). |
 | `py7patch/` | `Synth7Patch` | Ren'Py 7.4.11 (Python 2) | A port patch (patch library): one node that only Python 2 runs, and the patch that replaces it. |
+| `py7ai/` | `Synth7AI` | Ren'Py 7.4.11 (Python 2) | A node with `string.join`, which Python 3 lacks and no compat rule covers. No patch is committed: the M6 end-to-end proof (`player upgrade`) writes it. |
 
 ## Ren'Py 7 games
 
