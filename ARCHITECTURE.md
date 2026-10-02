@@ -135,4 +135,4 @@ Each milestone is a GitHub issue labelled `build`. Gates are the harness tiers f
 
 ## Known gaps
 - No large Ren'Py 8.4+ game in the corpus (TheStormWithinUs 8.5.3 is small), no obfuscated game, and no 4K Ren'Py 8 game: see [the corpus-gaps ticket](https://github.com/jeiang/renpy_proj/issues/18).
-- Windows and Linux GPU, video and streaming behaviour is unmeasured until M4 and M5.
+- Linux GPU, video and streaming are measured (harness/M4-status.md, harness/M5-status.md). Windows on a real GPU (D3D12, D3D11VA video, streaming encoders) is not measured yet: see the Windows GPU verification ticket.
