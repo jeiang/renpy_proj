@@ -656,7 +656,7 @@ init 999 python:
             return False
         if type(act).__name__ in _HZ_SKIP_ACTIONS and not (relaxed and type(act).__name__ in _HZ_RELAXED_OK):
             return False
-        if type(act).__name__ == "SetField" and getattr(act, "object", None) is getattr(renpy.store, "_preferences", 0):
+        if type(act).__name__ in ("SetField", "ToggleField") and getattr(act, "object", None) is getattr(renpy.store, "_preferences", 0):
             return False   # quick menu toggles (auto-forward, skip): not the game's choice
         try:
             return bool(renpy.is_sensitive(act))
@@ -744,6 +744,12 @@ init 999 python:
                     _hz_loop_tok(("A", "input:" + _hz_s(ans)))
                     renpy.end_interaction(ans)
                 return
+            if D.verify is None and D.hub_force > 0 and D.n % 4 == 0:
+                # A loop was just detected: press a button of the shown screens (menu buttons included) instead of the usual pick.
+                if _hz_hub_click():
+                    D.hub_force = 0
+                    return
+                D.hub_force -= 1
             ch = renpy.get_screen("choice")
             if ch:
                 if D.n % 4 == 0:
@@ -758,12 +764,6 @@ init 999 python:
                 return
             if D.verify is None and _hz_drv_step(True):
                 return
-            if D.verify is None and D.hub_force > 0:
-                # A loop was just detected and no driver or menu choice is up: press another button of the screen now.
-                if _hz_hub_click():
-                    D.hub_force = 0
-                    return
-                D.hub_force -= 1
             if D.verify is None and now - D.last_new > D.hub_after and D.n % 25 == 0 and not renpy.get_screen("say") and _hz_hub_click():
                 return
             if not _hz_busy():
