@@ -87,6 +87,20 @@ def _done_reason(progress):
     return next((ln.split(None, 1)[1] for ln in reversed(progress) if ln.startswith("deep-done ")), None)
 
 
+def _exit_evidence(r):
+    """One line on how the launch ended: exit code, signal, forced kill, last progress line, last output line."""
+    if r.get("exit_signal"):
+        how = "killed by %s" % r.get("exit_signal_name")
+    elif r.get("exit_code") is not None:
+        how = "exit code %s" % r["exit_code"]
+    else:
+        how = "still running when the harness killed it"
+    last = next((ln for ln in reversed(r.get("progress") or []) if ln.strip()), "-")
+    out = next((ln for ln in reversed(r.get("output_tail") or []) if ln.strip()), "-")
+    return "%s after %s s; last progress line %r; last output line %r (the last %d output lines are in the run record)" % (
+        how, r.get("wall_s"), last[:120], out[:200], len(r.get("output_tail") or []))
+
+
 def _script_name(f):
     """`game/chapter1.rpy` (Ren'Py 8 traceback) and `chapter1.rpyc` (Ren'Py 7 node file) name the same script."""
     return re.sub(r"\.(rpyc?|rpymc?)$", "", os.path.basename(f)) if f else f
@@ -184,14 +198,18 @@ def check_deep(ctx):
         reason = _done_reason(r["progress"])
         run = {"seed": seed, "name": name, "reason": reason, "wall_s": r.get("wall_s"), "coverage": cov,
                "aborted": r.get("aborted"), "sweep_ok": r["sweep_ok"], "library_unchanged": r["library_unchanged"],
-               "errors": [e["id"] for e in errs]}
+               "errors": [e["id"] for e in errs], "exit_code": r.get("exit_code"), "exit_signal": r.get("exit_signal"),
+               "exit_signal_name": r.get("exit_signal_name"), "exited_by_itself": r.get("exited_by_itself"),
+               "timed_out": r.get("timed_out"), "output_tail": r.get("output_tail", [])}
         runs.append(run)
         if not r["sweep_ok"]:
             problems.append("%s: game processes survived the SIGKILL sweep" % name)
         if not r["library_unchanged"]:
             problems.append("%s: %s changed during the run" % (name, L.plat.get().save_root_label))
         if reason is None:
-            problems.append("%s: no deep-done line (%s)" % (name, r.get("aborted") or "stopped early"))
+            run["reason"] = "error"   # a process that ends with no deep-done line is an error, never a silent end
+            run["error_evidence"] = _exit_evidence(r)
+            problems.append("%s: error: no deep-done line (%s); %s" % (name, r.get("aborted") or "stopped early", run["error_evidence"]))
             if r.get("traceback"):   # boot failure: no driver, only the engine's traceback
                 run["boot_traceback"] = r["traceback"][:3000]
         lj = _read_json(ctx.out / name / "deep" / "lines.json")
