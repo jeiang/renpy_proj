@@ -1209,6 +1209,12 @@ init 999 python:
             pass
         return out
 
+    def _hz_last_label():
+        for t in reversed(_hz_lg().toks):
+            if t[0] == "L":
+                return t[1]
+        return ""
+
     class _HzHub(object):
         def __init__(self, deep, cands, shown):
             D = _hz_D
@@ -1216,7 +1222,7 @@ init 999 python:
             self.all = cands
             self.cands = _hz_avoid_filter(cands) if deep else cands
             self.shown = shown
-            self.ctx = ",".join(sorted(x for x in shown if D.drv is not None and D.drv.is_hub([x])))
+            self.ctx = _hz_last_label()   # the label that showed the screen: a button counts per place in the script
             self.rng = D.rng if deep else D.nrng
 
         def expr(self, src, default=None):
@@ -1229,7 +1235,7 @@ init 999 python:
             return getattr(renpy.store, name, default)
 
         def visits(self, c):
-            """Presses of this button on the current hub screen (a button pressed on another screen does not count)."""
+            """Presses of this button at the current place (the last label executed); a button pressed elsewhere does not count."""
             return _hz_D.visits.get(self.ctx + "|" + (c if isinstance(c, str) else c.key), 0)
 
         def least(self, cands):
