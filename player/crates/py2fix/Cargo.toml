@@ -4,6 +4,7 @@ description = "Token-level rewriter of Python 2-only syntax into Python 3, for R
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
+license.workspace = true
 
 [features]
 default = ["python"]

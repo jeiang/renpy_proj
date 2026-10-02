@@ -4,6 +4,7 @@ description = "Game file view: overlay, mods, patch files and the read-only game
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
+license.workspace = true
 
 [dependencies]
 pyo3 = { workspace = true }

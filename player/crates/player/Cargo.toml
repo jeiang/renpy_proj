@@ -4,6 +4,7 @@ description = "The player binary: runs a Ren'Py 7/8 game from its game/ folder."
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
+license.workspace = true
 
 [features]
 default = ["wayland"]

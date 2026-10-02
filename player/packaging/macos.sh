@@ -156,6 +156,9 @@ if [ "$probe_only" = 0 ]; then
 </plist>
 PLIST
 
+    # Licence notices: THIRD_PARTY.md, LGPL text for the FFmpeg dylibs, Rust crate licences.
+    "$here/licences/stage.sh" "$app/Contents/Resources/licenses"
+
     log "libraries that are not macOS system libraries, before bundling:"
     foreign_deps "$exe" | sed 's/^/    /'
 

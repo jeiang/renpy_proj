@@ -194,14 +194,14 @@ Added for "M4: Linux and Windows on real GPUs" (issue #37). Scope now (user, 202
 
 ## Remote machines
 
-- **artemis-host.example** (Linux GPU host): NixOS 26.11, x86_64, Ryzen 7 7800X3D, AMD RX 9070-class (Navi 48, gfx1201, RADV Vulkan, radeonsi VA-API), Hyprland Wayland session `wayland-1` on `/run/user/1000` (outputs HDMI-A-1 and the hypr-rdp output, 1920x1080). Reach it with `ssh -o BatchMode=yes user@<artemis-host> "bash -c '...'"` (fish login shell; no `-t`). Never run `sudo`/`doas`; never print secrets.
+- **artemis** (`<artemis-host>`, Linux GPU host; the real address and login are in the gitignored `local/hosts.toml`, key `artemis.ssh_target`): NixOS 26.11, x86_64, Ryzen 7 7800X3D, AMD RX 9070-class (Navi 48, gfx1201, RADV Vulkan, radeonsi VA-API), Hyprland Wayland session `wayland-1` on `/run/user/1000` (outputs HDMI-A-1 and the hypr-rdp output, 1920x1080). Reach it with `ssh -o BatchMode=yes <artemis-login> "bash -c '...'"` (`python3 tools/hosts.py artemis.ssh_target` prints the login) (fish login shell; no `-t`). Never run `sudo`/`doas`; never print secrets.
   - Git: bare repo `~/Projects/renpy_proj-remote/repo.git` (the coordinator pushes `main` there). Clone it to `~/Projects/renpy_proj-remote/<slug>` and push your branch back to it; the coordinator fetches and merges. Only `~/Projects` survives a reboot.
   - Test games (released copies, never in git): `~/Projects/renpy_proj-remote/corpus/` (SecretIsland, WaifuAcademy, BlackRose, Harem_Hotel). Clone a game per run with `cp -a --reflink=auto` into your checkout's gitignored `corpus/`.
   - GPU: launch games through `gamemoderun` (it stops llm-server, qbittorrent and jellyfin for the run and restarts them).
   - GUI: export `XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=wayland-1 HYPRLAND_INSTANCE_SIGNATURE=$(ls /run/user/1000/hypr)`. Window list and geometry: `hyprctl clients -j`. Window-scoped capture: `grim -g "<x>,<y> <w>x<h>"` of that window's geometry after checking it is the visible top window on its workspace; never capture the whole output. No synthetic input (`hyprctl dispatch` focus or workspace commands are allowed; `wtype`/`ydotool` are not).
   - Machine lock: `/tmp/renpy_proj.run.lock` on artemis with the same owner-file rules as on the Mac.
   - Window opacity: the Hyprland config makes windows slightly transparent, so a game window blends with the wallpaper and looks dim. Every Linux run sets the game window fully opaque with hyprctl before any screenshot. The host runs a new Hyprland with the Lua config syntax, so use the current per-window property command; old `keyword`/`setprop` forms may not work. Verified on Hyprland 0.56: `hyprctl eval "hl.dispatch(hl.dsp.window.set_prop({ prop = 'opaque', value = '1', window = 'address:<ADDR>' }))"`, with ADDR from `hyprctl clients -j`.
-- **Windows VM** `Administrator@<windows-vm>` (key auth): Server 2022, 4 vCPU, 8 GB, no GPU, VS 2022 Build Tools, Git, rustup. Work under `C:\spike\`. wgpu uses WARP (D3D12 software adapter) there.
+- **Windows VM** `<windows-vm-login>` (key auth; the real login is in `local/hosts.toml`, key `windows_vm.ssh_target`): Server 2022, 4 vCPU, 8 GB, no GPU, VS 2022 Build Tools, Git, rustup. Work under `C:\spike\`. wgpu uses WARP (D3D12 software adapter) there.
 
 ## Platform rules
 

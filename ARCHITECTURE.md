@@ -109,7 +109,7 @@ flowchart TB
 - Patches are plain files, handled by CLI list, validate and apply-test commands. The AI upgrade pass writes the same format.
 
 ## Licensing ([licence](research/licence/README.md))
-Private for now, and kept publishable later. Nothing is GPL-only, provided these rules hold:
+The project is MIT OR Apache-2.0 ([LICENSE-MIT](LICENSE-MIT), [LICENSE-APACHE](LICENSE-APACHE)); third-party notices are in [THIRD_PARTY.md](THIRD_PARTY.md). Nothing is GPL-only, provided these rules hold:
 - **FFmpeg:** an LGPL build, shipped as shared libraries.
 - **`00director.rpy`:** excluded.
 - **Ren'Py's LGPL leftovers:** fribidi, `sysfont.py` and `SDL_gfx` are not carried over.

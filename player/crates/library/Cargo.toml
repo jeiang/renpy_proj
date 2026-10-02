@@ -4,6 +4,7 @@ description = "Game library: scanning, library.toml, pre-flight status and the e
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
+license.workspace = true
 
 [dependencies]
 anyhow = { workspace = true }

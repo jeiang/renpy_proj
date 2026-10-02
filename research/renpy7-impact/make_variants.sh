@@ -6,7 +6,7 @@
 #   d-portmerge: b-rpyc decompiled with unrpyc, original .rpyc kept beside the new .rpy
 set -eu
 W=${0:A:h:h:h}/corpus; SRC=$W/wr7.app/Contents/Resources/autorun/game
-UNRPYC=/Users/aidanp/Projects/renpy_proj/research/rpyc-loading/unrpyc
+UNRPYC=${UNRPYC:-${0:A:h:h:h}/research/rpyc-loading/unrpyc}   # research/fetch-sources.sh rpyc-loading
 for v in a-src b-rpyc c-portfresh d-portmerge; do rm -rf $W/wr8-$v; mkdir -p $W/wr8-$v; /bin/cp -Rc $SRC $W/wr8-$v/game; rm -rf $W/wr8-$v/game/cache; rm -f $W/wr8-$v/game/zz_*; done
 find $W/wr8-b-rpyc/game $W/wr8-c-portfresh/game $W/wr8-d-portmerge/game -name '*.rpy' -delete
 python3 $UNRPYC/unrpyc.py $W/wr8-c-portfresh/game | tail -3

@@ -4,6 +4,7 @@ description = "Patch library: parses and validates port-patch TOML files (Ren'Py
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
+license.workspace = true
 
 [dependencies]
 pyo3 = { workspace = true }

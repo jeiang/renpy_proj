@@ -4,6 +4,7 @@ description = "Save detector and stock-save import (pickle scan, class resolutio
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
+license.workspace = true
 
 [dependencies]
 pyo3 = { workspace = true }
