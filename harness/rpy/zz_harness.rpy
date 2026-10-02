@@ -15,31 +15,31 @@
 # "cmd-error LINE REPR" and "cmd-error-trace ...". start, load, jump, movie and quit do not return normally.
 # Events: boot | loaded | save-directory NAME | say N | text N HASH | label NAME | menu True|False | tags a b c | movie-channel NAME | cmd ... | video-result {json}
 init 999 python:
-    import os, io, time, json, hashlib, collections, sys, types
-    _hz_D = sys.modules.get("_hz_deep")
+    import os as _hz_os, io as _hz_io, time as _hz_time, json as _hz_json, hashlib as _hz_hashlib, collections as _hz_collections, sys as _hz_sys, types as _hz_types   # private aliases: a game variable named `time` or `random` must not hide a module
+    _hz_D = _hz_sys.modules.get("_hz_deep")
     if _hz_D is None:
         try:
-            _hz_D = types.ModuleType("_hz_deep")
+            _hz_D = _hz_types.ModuleType("_hz_deep")
         except TypeError:   # Ren'Py 7: string literals are unicode, module names must be bytes
-            _hz_D = types.ModuleType(b"_hz_deep")
-        sys.modules["_hz_deep"] = _hz_D
+            _hz_D = _hz_types.ModuleType(b"_hz_deep")
+        _hz_sys.modules["_hz_deep"] = _hz_D
         _hz_D.on = False
         _hz_D.started = False
         _hz_D.start_t = 0.0
-    _hz_dir = os.environ.get("HARNESS_DIR")
-    _hz_st = collections.OrderedDict(say=0, tags=None, menu=None, movie="-", auto=False, click=False, adv=None,
+    _hz_dir = _hz_os.environ.get("HARNESS_DIR")
+    _hz_st = _hz_collections.OrderedDict(say=0, tags=None, menu=None, movie="-", auto=False, click=False, adv=None,
                                      n=0, prefs=False, inputs=0)   # OrderedDict: not a Revertable type, so load/rollback keep it
 
-    _HZ_INPUT = os.environ.get("HZ_INPUT_ANSWER") or "Tester"
-    _HZ_INPUT_LIMIT = int(os.environ.get("HZ_INPUT_LIMIT") or "3")
+    _HZ_INPUT = _hz_os.environ.get("HZ_INPUT_ANSWER") or "Tester"
+    _HZ_INPUT_LIMIT = int(_hz_os.environ.get("HZ_INPUT_LIMIT") or "3")
     # Per-game "screen=action" pairs, separated by ";": an action expression (store names) run once each time that
     # screen is showing, for custom choice screens the driver cannot answer (as a click on that button would).
-    _HZ_SCREEN_ACTIONS = [tuple(x.split("=", 1)) for x in (os.environ.get("HZ_SCREEN_ACTIONS") or "").split(";") if "=" in x]
+    _HZ_SCREEN_ACTIONS = [tuple(x.split("=", 1)) for x in (_hz_os.environ.get("HZ_SCREEN_ACTIONS") or "").split(";") if "=" in x]
 
     def _hz_write(s):
         if isinstance(s, bytes):   # py2 str holding non-ASCII text
             s = s.decode("utf-8", "replace")
-        with io.open(os.path.join(_hz_dir, "progress.txt"), "a", encoding="utf-8") as f:
+        with _hz_io.open(_hz_os.path.join(_hz_dir, "progress.txt"), "a", encoding="utf-8") as f:
             f.write(s + u"\n")
 
     def _hz_say(event, interact=True, **kw):
@@ -55,8 +55,8 @@ init 999 python:
             if _hz_st.get("text") != _hz_st["say"]:
                 _hz_st["text"] = _hz_st["say"]
                 raw = what if isinstance(what, bytes) else what.encode("utf-8", "replace")
-                h = hashlib.sha1(raw).hexdigest()[:8] if what else "-"
-                if not sys.modules["_hz_deep"].on:
+                h = _hz_hashlib.sha1(raw).hexdigest()[:8] if what else "-"
+                if not _hz_sys.modules["_hz_deep"].on:
                     _hz_write("text %d %s" % (_hz_st["say"], h))
                 _hz_loop_say(h)
             return orig(self, who, what, *a, **kw)
@@ -94,7 +94,7 @@ init 999 python:
             _hz_last = [0.0]
 
             def _hz_periodic():
-                t = time.time()
+                t = _hz_time.time()
                 # Keep a fixed 0.2 s grid. PERIODIC fires every 50 ms, so "0.2 s since the last poll" drifts to
                 # about 0.245 s and made stock Ren'Py 7 advance lines 22% slower than the player's 0.2 s timer.
                 if t >= _hz_last[0] + 0.2:
@@ -112,7 +112,7 @@ init 999 python:
             _hz_loop_reset()
         if c == "start":
             _hz_D.started = True
-            _hz_D.start_t = time.time()
+            _hz_D.start_t = _hz_time.time()
             renpy.run(Start())
         elif c == "load":
             renpy.load(a)
@@ -161,11 +161,11 @@ init 999 python:
             st["prefs"] = True
             _preferences.text_cps = 0       # instant text: the frame after a say does not depend on timing
             _preferences.afm_enable = False
-        p = os.path.join(_hz_dir, "cmd.txt")
-        if os.path.exists(p):
+        p = _hz_os.path.join(_hz_dir, "cmd.txt")
+        if _hz_os.path.exists(p):
             with open(p) as f:
                 txt = f.read()
-            os.remove(p)
+            _hz_os.remove(p)
             for line in txt.splitlines():
                 if line.strip():
                     line = line.strip()
@@ -262,7 +262,7 @@ init 999 python:
         orig = V.get_movie_texture
 
         def gmt(*a, **kw):
-            t = time.time()
+            t = _hz_time.time()
             rv = orig(*a, **kw)
             if rv[1]:
                 if not _hz_mv_channel and a:
@@ -271,7 +271,7 @@ init 999 python:
                     pos = renpy.music.get_pos(a[0] if a else kw.get("channel", "movie"))   # the Movie may sit on a dynamic channel
                 except Exception:
                     pos = None
-                _hz_mv.append((t, pos, (time.time() - t) * 1000.0))
+                _hz_mv.append((t, pos, (_hz_time.time() - t) * 1000.0))
             return rv
 
         V.get_movie_texture = gmt
@@ -317,7 +317,7 @@ label hz_movie:
 
 init 999 python:
     def _hz_run_movie(path, fps, secs, warm, hold):
-        t_start = time.time()
+        t_start = _hz_time.time()
         # Ren'Py trims frame_times to config.performance_window (5 s); keep the whole run.
         config.performance_window = warm + secs + 5.0
         _hz_write("movie-begin %s" % path)
@@ -355,8 +355,8 @@ init 999 python:
             r["renderer"] = dict((k, str(v)) for k, v in renpy.get_renderer_info().items())
         except Exception as e:
             r["renderer_err"] = str(e)
-        with open(os.path.join(_hz_dir, "video.json"), "w") as f:
-            json.dump(r, f)
+        with open(_hz_os.path.join(_hz_dir, "video.json"), "w") as f:
+            _hz_json.dump(r, f)
         _hz_write("video-result done")
         renpy.pause(hold)   # the movie keeps playing: the gate takes its screenshot now, outside the measured window
         renpy.quit(save=False)
@@ -380,7 +380,7 @@ screen _hz_poll_screen():
 # State lives in the module sys.modules["_hz_deep"], not in the store: loads and rollbacks must not touch it.
 # ======================================================================================================================
 init 999 python:
-    import re, random, traceback as _hz_traceback
+    import re as _hz_re, random as _hz_random, traceback as _hz_traceback
 
     _HZ_NAMES = ["Alex", "Sam", "Jordan", "Taylor", "Morgan", "Riley", "Casey", "Jamie", "Robin", "Drew"]
     _HZ_RING = 8
@@ -394,15 +394,15 @@ init 999 python:
             return repr(x)
 
     def _hz_json_write(path, obj):
-        txt = json.dumps(obj, ensure_ascii=True, indent=1, sort_keys=True)
+        txt = _hz_json.dumps(obj, ensure_ascii=True, indent=1, sort_keys=True)
         if isinstance(txt, bytes):
             txt = txt.decode("ascii")
         tmp = path + ".tmp"
-        with io.open(tmp, "w", encoding="utf-8") as f:
+        with _hz_io.open(tmp, "w", encoding="utf-8") as f:
             f.write(txt)
-        if os.path.exists(path):
-            os.remove(path)
-        os.rename(tmp, path)
+        if _hz_os.path.exists(path):
+            _hz_os.remove(path)
+        _hz_os.rename(tmp, path)
 
     def _hz_is_engine_file(fn):
         fn = (fn or "").replace("\\", "/")
@@ -410,7 +410,7 @@ init 999 python:
 
     def _hz_sha1(src):
         raw = src if isinstance(src, bytes) else _hz_s(src).encode("utf-8")
-        return hashlib.sha1(raw).hexdigest()
+        return _hz_hashlib.sha1(raw).hexdigest()
 
     def _hz_code_file(code):
         f = getattr(code, "filename", None)
@@ -435,13 +435,13 @@ init 999 python:
         D.stall = float(w[2])
         D.save_gap = float(w[3]) if len(w) > 3 else 0.0
         D.stop_say = int(w[4]) if len(w) > 4 else 0
-        D.rng = random.Random(D.seed)
+        D.rng = _hz_random.Random(D.seed)
         D.verify = None
         D.verify_state = None
         D.verify_deadline = 0.0
         D.on = True
         D.done = False
-        D.t0 = time.time()
+        D.t0 = _hz_time.time()
         D.last_new = D.t0
         D.last_tick = 0.0
         D.n = 0
@@ -454,9 +454,9 @@ init 999 python:
         D.last_save_t = 0.0
         D.last_save_cost = 0.0
         D.last_presave = None
-        D.lines = collections.OrderedDict()
-        D.labels = collections.OrderedDict()
-        D.trail = collections.deque(maxlen=12)
+        D.lines = _hz_collections.OrderedDict()
+        D.labels = _hz_collections.OrderedDict()
+        D.trail = _hz_collections.deque(maxlen=12)
         D.errors = 0
         D.menu_ticks = 0
         D.plays = 0
@@ -471,9 +471,9 @@ init 999 python:
         D.decisions = 0
         _hz_loop_deep_init()
         D.code_index = None
-        os.path.isdir(os.path.join(_hz_dir, "deep")) or os.makedirs(os.path.join(_hz_dir, "deep"))
-        tot_lines = collections.OrderedDict()
-        tot_labels = collections.OrderedDict()
+        _hz_os.path.isdir(_hz_os.path.join(_hz_dir, "deep")) or _hz_os.makedirs(_hz_os.path.join(_hz_dir, "deep"))
+        tot_lines = _hz_collections.OrderedDict()
+        tot_labels = _hz_collections.OrderedDict()
         for n in renpy.game.script.namemap.values():
             fn = getattr(n, "filename", None)
             if not fn or _hz_is_engine_file(fn):
@@ -493,7 +493,7 @@ init 999 python:
         _hz_deep_begin("0 %s 1000000 0" % w[1])
         D.verify = (w[2], int(w[0]))
         D.verify_state = "wait"
-        D.verify_deadline = time.time() + float(w[1])
+        D.verify_deadline = _hz_time.time() + float(w[1])
         D.save_gap = 1e9   # a verify run makes no saves
 
     def _hz_find_pycode(filename, lineno):
@@ -525,17 +525,17 @@ init 999 python:
 
     def _hz_flush(final=False):
         D = _hz_D
-        d = os.path.join(_hz_dir, "deep")
+        d = _hz_os.path.join(_hz_dir, "deep")
         hit_labels = [k for k in D.labels if k in D.tot_labels]
-        cov = {"seed": D.seed, "elapsed_s": round(time.time() - D.t0, 1), "say": D.say, "nodes": D.nodes,
+        cov = {"seed": D.seed, "elapsed_s": round(_hz_time.time() - D.t0, 1), "say": D.say, "nodes": D.nodes,
                "lines_hit": len(D.lines), "lines_total": D.tot_lines, "labels_hit": len(hit_labels),
                "labels_total": len(D.tot_labels), "saves": D.saves, "save_s": round(D.save_s, 2),
                "save_error": D.save_err, "decisions": D.decisions, "hub_clicks": D.hub_clicks, "inputs": D.inputs, "errors": D.errors,
                "renpy": renpy.version_only, "final": final}
         cov.update(_hz_loop_cov())
-        _hz_json_write(os.path.join(d, "coverage.json"), cov)
+        _hz_json_write(_hz_os.path.join(d, "coverage.json"), cov)
         if final:
-            _hz_json_write(os.path.join(d, "lines.json"), {"lines": ["%s:%d" % k for k in D.lines], "labels": hit_labels})
+            _hz_json_write(_hz_os.path.join(d, "lines.json"), {"lines": ["%s:%d" % k for k in D.lines], "labels": hit_labels})
 
     def _hz_before(node):
         D = _hz_D
@@ -550,7 +550,7 @@ init 999 python:
         key = (fn, node.linenumber)
         if key not in D.lines:
             D.lines[key] = 1
-            D.last_new = time.time()
+            D.last_new = _hz_time.time()
         if D.verify is not None:
             if D.verify_state == "entered":
                 D.verify_state = "ok"
@@ -563,7 +563,7 @@ init 999 python:
         code = getattr(node, "code", None)
         if not (_hz_is_pycode(code) and code.mode == "exec"):
             return
-        now = time.time()
+        now = _hz_time.time()
         # Adaptive gap: saves may use at most a tenth of the run time (a hub loop runs thousands of PyCode nodes a minute).
         # The error-time save (deep-errN) resumes at the failing node whether or not a rolling save was made there.
         if now - D.last_save_t < max(D.save_gap, D.last_save_cost * 9):
@@ -576,7 +576,7 @@ init 999 python:
             renpy.save(slot, extra_info="deep")
             D.saves += 1
             D.last_save_t = now
-            D.last_save_cost = time.time() - now
+            D.last_save_cost = _hz_time.time() - now
             D.save_s += D.last_save_cost
             D.last_presave = {"slot": slot, "exec_n": D.exec_n, "file": fn, "line": node.linenumber, "say": D.say}
         except _hz_ctl:
@@ -685,7 +685,7 @@ init 999 python:
         D = _hz_D
         if not D.on or D.done:
             return
-        now = time.time()
+        now = _hz_time.time()
         if now - D.last_tick < 0.04:
             return
         D.last_tick = now
@@ -724,7 +724,7 @@ init 999 python:
                     D.lines_at_play_start = len(D.lines)
                     D.menu_ticks = 0
                     D.restart_t = now
-                    D.pending = [x for x in json.loads(os.environ.get("HZ_AFTER_START") or "[]")]
+                    D.pending = [x for x in _hz_json.loads(_hz_os.environ.get("HZ_AFTER_START") or "[]")]
                     _hz_write("deep-play %d" % (D.plays + 1))
                     _hz_loop_reset()
                     renpy.run(Start())
@@ -744,7 +744,7 @@ init 999 python:
             if renpy.get_screen("input"):
                 if D.n % 4 == 0:
                     D.inputs += 1
-                    if os.environ.get("HZ_INPUT_EXPLICIT") == "1":
+                    if _hz_os.environ.get("HZ_INPUT_EXPLICIT") == "1":
                         ans = _HZ_INPUT   # the game's own answer in every mode: a rejection loop is the loop guard's to end
                     else:
                         ans = _HZ_NAMES[int(D.rng.random() * len(_HZ_NAMES))] + (str(D.inputs) if D.inputs > 3 else "")
@@ -771,6 +771,8 @@ init 999 python:
                 return
             if D.verify is None and _hz_drv_step(True):
                 return
+            if D.verify is None and D.n % 4 == 0 and _hz_call_screen_press():
+                return
             if D.verify is None and now - D.last_new > D.hub_after and D.n % 25 == 0 and not renpy.get_screen("say") and _hz_hub_click():
                 return
             if not _hz_busy():
@@ -790,7 +792,7 @@ init 999 python:
     _hz_prev_handler = config.exception_handler
 
     def _hz_resolve_names(text, f_locals, f_globals, out, seen):
-        for m in re.finditer(r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*", text):
+        for m in _hz_re.finditer(r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*", text):
             parts = m.group(0).split(".")
             obj = f_locals.get(parts[0], f_globals.get(parts[0]))
             if obj is None:
@@ -837,7 +839,7 @@ init 999 python:
     def _hz_record_error(args):
         D = _hz_D
         ctx = renpy.game.context()
-        exc = sys.exc_info()[1]
+        exc = _hz_sys.exc_info()[1]
         te = args[0] if len(args) == 1 else None
         full = _hz_s(getattr(te, "full", None) if te is not None else (args[1] if len(args) > 1 else ""))
         D.errors += 1
@@ -847,7 +849,7 @@ init 999 python:
             node = renpy.game.script.lookup(ctx.current)
         except Exception:
             pass
-        rec = {"id": "err-%d" % n, "seed": D.seed, "say": D.say, "nodes": D.nodes, "elapsed_s": round(time.time() - D.t0, 1),
+        rec = {"id": "err-%d" % n, "seed": D.seed, "say": D.say, "nodes": D.nodes, "elapsed_s": round(_hz_time.time() - D.t0, 1),
                "renpy": renpy.version_only, "labels_trail": list(D.trail),
                "exception": {"type": type(exc).__name__ if exc is not None else "?", "message": _hz_s(exc)[:2000]},
                "traceback": full[-12000:], "save_directory": config.save_directory}
@@ -870,7 +872,7 @@ init 999 python:
         seen = {}
         used = []
         target = None
-        tb = sys.exc_info()[2]
+        tb = _hz_sys.exc_info()[2]
         while tb is not None:
             fr = tb.tb_frame
             co = fr.f_code
@@ -915,7 +917,7 @@ init 999 python:
             rec["error_save_failed"] = repr(e)[:200]
         rec["tracesave"] = "_tracesave-1"
         rec["coverage_lines"] = len(D.lines)
-        _hz_json_write(os.path.join(_hz_dir, "deep", "err-%d.json" % n), rec)
+        _hz_json_write(_hz_os.path.join(_hz_dir, "deep", "err-%d.json" % n), rec)
         _hz_write("deep-error %d %s" % (n, rec["exception"]["type"]))
         return rec
 
@@ -960,8 +962,8 @@ screen _hz_deep_screen():
 #     h.rng, h.note(text). Without a driver answer the driver clicks the least visited candidate.
 # ======================================================================================================================
 init 999 python:
-    import random
-    import fnmatch
+    import random as _hz_random
+    import fnmatch as _hz_fnmatch
 
     _HZ_LOOP_SAY_MIN = 10
     _HZ_LOOP_SAY_REPS = 3
@@ -970,7 +972,7 @@ init 999 python:
     _HZ_LOOP_IDLE_REPS = 50   # a block of labels only repeats this often before it is a loop
     _HZ_AVOID_TTL = 30
     _HZ_LOOP_CHAIN_MAX = 3
-    _HZ_LOOP_STUCK_S = 30.0
+    _HZ_LOOP_STUCK_S = 60.0   # the same loop for this long, with no new label and no new script line
 
     class _HzLoopState(object):
         def __init__(self):
@@ -1155,7 +1157,7 @@ init 999 python:
         if rec.get("entry") and rec["entry"] not in keys:
             keys = keys + [rec["entry"]]
         rec["avoid"] = list(keys)
-        stuck = D.loop_chain > _HZ_LOOP_CHAIN_MAX and now - D.loop_chain_t0 >= _HZ_LOOP_STUCK_S   # a fast loop gets 15 s of attempts
+        stuck = D.loop_chain > _HZ_LOOP_CHAIN_MAX and now - D.loop_chain_t0 >= _HZ_LOOP_STUCK_S and now - D.last_new >= _HZ_LOOP_STUCK_S
         rec["outcome"] = "stuck" if stuck else "broken"
         D.loops.append(rec)
         _hz_write("deep-loop %d %s %d %s" % (D.loop_n, rec["kind"], rec["period"], rec["hashes"][0]))
@@ -1235,7 +1237,7 @@ init 999 python:
         def __repr__(self):
             return "<cand %s>" % self.key
 
-    def _hz_cands(relaxed=False):
+    def _hz_cands(relaxed=False, fallback=True):
         out, seen = [], set()
         for f in list(renpy.display.focus.focus_list):
             act = getattr(f.widget, "clicked", None)
@@ -1244,7 +1246,7 @@ init 999 python:
                 if c.key not in seen:
                     seen.add(c.key)
                     out.append(c)
-        if not out and not relaxed:
+        if not out and not relaxed and fallback:
             return _hz_cands(True)   # no real candidate: every other sensitive button of the shown screens
         return out
 
@@ -1303,18 +1305,18 @@ init 999 python:
     class _HzDriver(object):
         def __init__(self, path):
             ns = {"__name__": "hz_driver"}
-            with io.open(path, "r", encoding="utf-8") as f:
+            with _hz_io.open(path, "r", encoding="utf-8") as f:
                 src = f.read()
             exec(compile(src, path, "exec"), ns)
             self.ns = ns
-            self.name = ns.get("NAME") or os.path.splitext(os.path.basename(path))[0]
+            self.name = ns.get("NAME") or _hz_os.path.splitext(_hz_os.path.basename(path))[0]
             self.hubs = list(ns.get("HUBS", ()))
             self.dismiss = list(ns.get("DISMISS", ()))
 
         def is_hub(self, shown):
             for pat in self.hubs:
                 for s in shown:
-                    if fnmatch.fnmatchcase(s, pat):
+                    if _hz_fnmatch.fnmatchcase(s, pat):
                         return True
             return False
 
@@ -1326,15 +1328,15 @@ init 999 python:
             f = self.ns.get("choice")
             return f(h, caps) if f else None
 
-    _hz_D.nrng = random.Random(0)
+    _hz_D.nrng = _hz_random.Random(0)
     _hz_D.drv = None
     _hz_D.visits = {}
     _hz_D.avoid = {}
     _hz_D.drv_acts = 0
     _hz_D.drv_wait = 0
-    if _hz_dir and os.environ.get("HZ_DRIVER"):
+    if _hz_dir and _hz_os.environ.get("HZ_DRIVER"):
         try:
-            _hz_D.drv = _HzDriver(os.environ["HZ_DRIVER"])
+            _hz_D.drv = _HzDriver(_hz_os.environ["HZ_DRIVER"])
             _hz_write("drv-loaded %s" % _hz_D.drv.name)
         except Exception as e:
             _hz_write("drv-error load %r" % (e,))
@@ -1352,6 +1354,28 @@ init 999 python:
         if rv is not None:
             renpy.end_interaction(rv)
 
+    _HZ_FLOW = ("Jump", "Call", "ChoiceReturn", "ChoiceJump", "Return")
+
+    def _hz_call_screen_press():
+        """A `call screen` interaction that has buttons which move the script on (Jump, Call): press the least pressed one
+        here, like a player does. Ending it with True instead returns from the `call screen` (the menu hub of a game, the
+        navigator of AHouseInTheRift) and the story falls out of its loop or raises LabelNotFound."""
+        try:
+            itype = getattr(renpy.game.context().info, "_current_interact_type", None)
+        except Exception:
+            itype = None
+        if itype != "screen":
+            return False
+        cands = [c for c in _hz_avoid_filter(_hz_cands(False, False)) if c.kind in _HZ_FLOW]
+        if not cands:
+            return False
+        D = _hz_D
+        ctx = _hz_last_label()
+        m = min(D.visits.get(ctx + "|" + c.key, 0) for c in cands)
+        best = [c for c in cands if D.visits.get(ctx + "|" + c.key, 0) == m]
+        _hz_run_cand(best[int(D.rng.random() * len(best))], "screen", ctx)
+        return True
+
     def _hz_drv_step(deep):
         """A driver hub is showing: press the driver's pick (or the least visited button). True when the tick is used."""
         D = _hz_D
@@ -1360,7 +1384,7 @@ init 999 python:
             return False
         shown = _hz_shown()
         for nm in sorted(shown):
-            if any(fnmatch.fnmatchcase(nm, pat) for pat in drv.dismiss):
+            if any(_hz_fnmatch.fnmatchcase(nm, pat) for pat in drv.dismiss):
                 _hz_write("drv-dismiss %s" % nm)   # a modal help popup hides the hub's buttons
                 renpy.hide_screen(nm)
                 renpy.restart_interaction()
