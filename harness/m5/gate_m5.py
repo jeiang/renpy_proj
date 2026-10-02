@@ -7,7 +7,7 @@ Run with the Playwright venv (see harness/stream_probe.py header):
   /tmp/pwenv/bin/python harness/m5/gate_m5.py --host artemis --out harness/out/m5-artemis
 
 --host mac: serve on this Mac; the browser opens the Mac's LAN URL. --host artemis: serve on artemis over ssh (the player
-binary there is --remote-player); the browser opens artemis' NetBird address. The serving host holds
+binary there is --remote-player); the browser opens the address of `artemis.stream_host` in local/hosts.toml (--url-host). The serving host holds
 the machine lock for the whole run: the Mac case runs under harness/tools/runlock.py, the artemis case starts runlock.py there. Nothing sends OS input: the page
 sends JSON messages through the data channels. Evidence: result.json, page.png, video.png, progress.txt in --out.
 """
@@ -15,6 +15,9 @@ import argparse, json, os, re, shlex, signal, subprocess, sys, time, shutil, url
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, "..", ".."))
+sys.path.insert(0, REPO)
+from tools.hosts import host   # machine-specific addresses: local/hosts.toml
+
 LOCK = "/tmp/renpy_proj.run.lock"
 OBSERVE = os.path.join(HERE, "zz_m5observe.rpy")
 GAME = "SecretIsland-0.18.8.0-pc-released"
@@ -105,7 +108,10 @@ def parse_cputime(s):
 
 class Artemis(Mac):
     name = "artemis"
-    SSH = ["ssh", "-o", "BatchMode=yes", "user@<artemis-host>"]
+
+    @property
+    def SSH(self):
+        return ["ssh", "-o", "BatchMode=yes", host("artemis", "ssh_target")]   # local/hosts.toml (gitignored)
 
     def __init__(self, a):
         self.a = a
@@ -190,7 +196,7 @@ def main():
     ap.add_argument("--port", type=int, default=18080)
     ap.add_argument("--browser", default="chromium")
     ap.add_argument("--headed", action="store_true")
-    ap.add_argument("--url-host", help="replace the host of the printed URL (for example a NetBird address)")
+    ap.add_argument("--url-host", help="replace the host of the printed URL (for example `artemis.stream_host` of local/hosts.toml)")
     ap.add_argument("--says", type=int, default=8, help="dialogue lines to advance through the data channel")
     ap.add_argument("--extra", default="--latency-overlay", help="extra `player serve` options")
     a = ap.parse_args()

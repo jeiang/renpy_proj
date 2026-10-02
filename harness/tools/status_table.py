@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 """Print the per-game, per-check table of harness/M2-status.md from finished gate runs.
 
-  status_table.py <out dir> [Game,Game,...]   (holds <Game>-stock/ and <Game>-player/ result dirs; default: the M2 games)
+  status_table.py <out dir> [Game,Game,...]   (holds <Game>-stock/ and <Game>-player/ result dirs; default: every real game of the corpus)
   status_table.py <out dir> m3                  the Ren'Py 7 games of corpus.toml (renpy 7.x)
 """
 import json
 import pathlib
 import sys
 
-GAMES = ["SecretIsland", "WaifuAcademy", "Ripples", "TheStormWithinUs", "DOF", "Bumpkin015"]
 CHECKS = ["lint", "probe", "route", "saveresume", "video"]
 
 
@@ -19,14 +18,14 @@ def first_problem(c):
 
 
 def corpus_games(prefix):
-    import tomllib
-    with open(pathlib.Path(__file__).resolve().parents[1] / "corpus.toml", "rb") as f:
-        return [k for k, g in tomllib.load(f)["games"].items() if g.get("renpy", "").startswith(prefix)]
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+    from gatelib import launch as L   # corpus.toml plus corpus.local.toml
+    return [k for k, g in L.load_corpus()["games"].items() if g.get("renpy", "").startswith(prefix)]
 
 
 def main(out, games=None):
     out = pathlib.Path(out)
-    GAMES = games or globals()["GAMES"]
+    GAMES = games or [g for g in corpus_games("") if not g.startswith("Synth")]
     print("| game | engine | " + " | ".join(CHECKS) + " |")
     print("|---|---|" + "---|" * len(CHECKS))
     fails = []

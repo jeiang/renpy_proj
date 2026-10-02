@@ -31,11 +31,11 @@ The script waits for the main menu, clicks the splash Yes/No choice and Start th
 
 | Run | Server | Browser | Link | Result | Latency after input p50 / p95 (ms) | Latency all frames p50 / p95 (ms) | Server CPU (one core) |
 |---|---|---|---|---|---|---|---|
-| Mac, Chromium | Mac, VideoToolbox | Mac | LAN address 192.0.2.210 | pass | 119 / 160 | 127 / 170 | 13.7% |
+| Mac, Chromium | Mac, VideoToolbox | Mac | LAN address of the Mac | pass | 119 / 160 | 127 / 170 | 13.7% |
 | Mac, WebKit (headed) | Mac | Mac | LAN | pass | 117 / 147 | 120 / 148 | 15.8% |
-| artemis, Chromium | artemis, encoder not recorded (see below) | Mac | NetBird 198.51.100.91, RTT 86 ms | pass | 147 / 185 | 150 / 187 | 10.5% |
+| artemis, Chromium | artemis, encoder not recorded (see below) | Mac | overlay VPN, RTT 86 ms | pass | 147 / 185 | 150 / 187 | 10.5% |
 
-Latency is glass to glass: the server burns its millisecond clock as 32 black/white cells into the top-left of each encoded frame (`--latency-overlay`); the page decodes the cells of each rendered frame (`requestVideoFrameCallback`) and subtracts it from the server clock estimated by the lowest-RTT ping/pong over the data channel. It therefore includes capture, readback, convert, encode, network, jitter buffer, decode and render, and excludes the display scan-out. The clock offset comes from the lowest-RTT sample and assumes a symmetric path; over NetBird (86 ms RTT) an asymmetric path would shift the artemis figure by up to half the RTT. Timelines are in `result.json` (`latency_timeline`). Evidence (gitignored): `harness/out/m5-{mac,artemis,mac-webkit}/` with `result.json`, `page.png`, `video.png`, `progress.txt`.
+Latency is glass to glass: the server burns its millisecond clock as 32 black/white cells into the top-left of each encoded frame (`--latency-overlay`); the page decodes the cells of each rendered frame (`requestVideoFrameCallback`) and subtracts it from the server clock estimated by the lowest-RTT ping/pong over the data channel. It therefore includes capture, readback, convert, encode, network, jitter buffer, decode and render, and excludes the display scan-out. The clock offset comes from the lowest-RTT sample and assumes a symmetric path; over the VPN (86 ms RTT) an asymmetric path would shift the artemis figure by up to half the RTT. Timelines are in `result.json` (`latency_timeline`). Evidence (gitignored): `harness/out/m5-{mac,artemis,mac-webkit}/` with `result.json`, `page.png`, `video.png`, `progress.txt`.
 
 Observed: 5 of 5 checks pass in all three runs. Dialogue advanced on clicks every time; Enter advanced a say in some presses only (some lines are click-only in this game, or a transition ate the key). Audio RMS max 0.053 on all runs. Frame rate during play was 14.8 fps on both hosts, because the game redraws about 3 fps and the 100 ms repeat fills the rest.
 
@@ -44,7 +44,7 @@ Which artemis encoder ran is not recorded: the gate did not save the server's `/
 ## Findings that changed the code
 
 1. **Audio clock.** The first gate run showed video latency growing from 25 ms to 1 s and, in another run, 4.5 s, while the audio and video network stats were clean. The browser held video back to line it up with audio, because the audio RTP timeline came from the count of mixed samples while the mixer thread ran slightly slower than 48 kHz under game load. Audio is now clock-locked in `stream`: exactly 48000 frames per wall second leave, short input is padded with silence after 40 ms, long input is trimmed to 100 ms. Latency is then flat.
-2. **Keepalive.** With a 1 s keepalive, Chromium treated sparse frames as network jitter and its jitter buffer reached 1.4 s over NetBird. A 100 ms repeat of a static picture keeps it at 40 to 70 ms. Cost: a static VideoToolbox picture is about 0.3 Mbit/s and an encode every 100 ms. `STREAM_KEEPALIVE_MS` overrides it.
+2. **Keepalive.** With a 1 s keepalive, Chromium treated sparse frames as network jitter and its jitter buffer reached 1.4 s over the VPN. A 100 ms repeat of a static picture keeps it at 40 to 70 ms. Cost: a static VideoToolbox picture is about 0.3 Mbit/s and an encode every 100 ms. `STREAM_KEEPALIVE_MS` overrides it.
 3. **Input mapping.** Pointer positions map to the size of the frame being encoded (the game chose 1738x978), not to the `--size` option.
 4. Flush frames (a repeat 2 frame periods after a change, so the decoder releases the last picture) keep the picture's timecode, and the page counts each timecode once; otherwise the 1 s display delay of the repeat showed up as latency.
 
