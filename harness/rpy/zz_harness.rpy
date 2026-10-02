@@ -642,12 +642,16 @@ init 999 python:
                         "QuickSave", "QuickLoad", "ToggleScreen", "Skip", "Replay", "EndReplay", "Confirm", "SetMute", "ToggleMute", "MouseMove",
                         "OpenURL", "Start", "Show", "Hide", "HideInterface", "Partial", "InvertSelected", "Scroll", "XScrollValue", "YScrollValue")
 
-    def _hz_action_ok(act):
+    _HZ_RELAXED_OK = ("Show", "Hide", "ToggleScreen", "Partial", "HideInterface")   # allowed when no other button exists
+
+    def _hz_action_ok(act, relaxed=False):
         if isinstance(act, (list, tuple)):
-            return len(act) > 0 and all(_hz_action_ok(a) for a in act)
+            return len(act) > 0 and all(_hz_action_ok(a, relaxed) for a in act)
+        if type(act).__name__ == "NullAction":
+            return False   # a button that does nothing (a disabled "Drive" button): never pressed
         if act is None or isinstance(act, (bool, int)) or not hasattr(act, "__call__") and not hasattr(act, "get_sensitive"):
             return False
-        if type(act).__name__ in _HZ_SKIP_ACTIONS:
+        if type(act).__name__ in _HZ_SKIP_ACTIONS and not (relaxed and type(act).__name__ in _HZ_RELAXED_OK):
             return False
         if type(act).__name__ == "SetField" and getattr(act, "object", None) is getattr(renpy.store, "_preferences", 0):
             return False   # quick menu toggles (auto-forward, skip): not the game's choice
@@ -952,6 +956,7 @@ init 999 python:
     _HZ_LOOP_SAY_REPS = 3
     _HZ_LOOP_TOK_REPS = 4
     _HZ_LOOP_TOK_MAXP = 40
+    _HZ_LOOP_IDLE_REPS = 50   # a block of labels only repeats this often before it is a loop
     _HZ_AVOID_TTL = 30
     _HZ_LOOP_CHAIN_MAX = 3
 
@@ -962,6 +967,7 @@ init 999 python:
             self.ntok = 0
             self.pending = None
             self.failed = False
+            self.idle_ntok = -10 ** 9
 
     def _hz_lg():
         L = getattr(_hz_D, "lg", None)
@@ -1015,8 +1021,21 @@ init 999 python:
         for p in range(1, min(_HZ_LOOP_TOK_MAXP, n // reps) + 1):
             blk = t[n - p:]
             if all(t[n - p * k:n - p * (k - 1)] == blk for k in range(2, reps + 1)):
-                if [x for x in blk if x[0] != "S"]:
+                if [x for x in blk if x[0] not in ("S", "L")]:
                     _hz_loop_found(L, "tok", p, reps, [x[1] for x in blk if x[0] == "S"])
+                    return
+                if [x for x in blk if x[0] == "S"]:
+                    _hz_loop_found(L, "tok", p, reps, [x[1] for x in blk if x[0] == "S"])
+                    return
+                # Labels only, no press and no line in between: the game's own idle cycle (a timer that jumps back while a hub
+                # screen waits for a click). Ask the driver to press something; it is a loop only when the cycle keeps going.
+                if _hz_D.on and L.ntok - L.idle_ntok > 40:
+                    L.idle_ntok = L.ntok
+                    _hz_D.hub_force = 25
+                    _hz_write("deep-idle %d %s" % (p, ",".join(x[1] for x in blk[:4])))
+                big = _HZ_LOOP_IDLE_REPS
+                if n // p >= big and all(t[n - p * k:n - p * (k - 1)] == blk for k in range(2, big + 1)):
+                    _hz_loop_found(L, "tok", p, big, [])
                     return
 
     def _hz_loop_tok(t):
@@ -1028,7 +1047,7 @@ init 999 python:
                     return
             L.toks.append(t)
             L.ntok += 1
-            lim = _HZ_LOOP_TOK_MAXP * _HZ_LOOP_TOK_REPS + 64
+            lim = _HZ_LOOP_TOK_MAXP * _HZ_LOOP_IDLE_REPS + 64
             if len(L.toks) > lim * 2:
                 del L.toks[:len(L.toks) - lim]
             if L.pending is None and not L.failed:
@@ -1185,15 +1204,17 @@ init 999 python:
         def __repr__(self):
             return "<cand %s>" % self.key
 
-    def _hz_cands():
+    def _hz_cands(relaxed=False):
         out, seen = [], set()
         for f in list(renpy.display.focus.focus_list):
             act = getattr(f.widget, "clicked", None)
-            if act is not None and _hz_action_ok(act):
+            if act is not None and _hz_action_ok(act, relaxed):
                 c = _HzCand(act)
                 if c.key not in seen:
                     seen.add(c.key)
                     out.append(c)
+        if not out and not relaxed:
+            return _hz_cands(True)   # no real candidate: every other sensitive button of the shown screens
         return out
 
     def _hz_shown():
