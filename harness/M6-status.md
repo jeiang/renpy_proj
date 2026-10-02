@@ -125,7 +125,7 @@ Verdict: **player bug**. The deep driver does not cause it.
 ## Open items
 
 - Player bug: AstralLust `ui.interact` stack (above).
-- Player bug (minor): `Layout` object of the Ren'Py 7 compat layer lacks `yesno_prompt` (unknown-signature save prompt).
+- Fixed (#49): the Ren'Py 7 `layout` object lacked `yesno_prompt`; `compat/yesno.py` provides it (game `confirm` or `yesno_prompt` screen, else the player screen `_py2c_yesno`). Proof: `gate.py run --engine player --game Synth7Trust --tier trust`.
 - Silent process ends: Braveheart seeds 1 and 2, Ripples seed 2 (record the exit code and the stderr of the player in the deep check).
 - Stock replay: when the stock run diverges (it never reaches the failing label), `conclusive` is true if only the say count is reached. It should require the failing label. This made AstralLust look conclusive. Not changed.
 - Driver and coverage endings that are not game ends: `stuck` on HaremHotel, Bumpkin015, WaifuAcademy (see the table).
