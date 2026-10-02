@@ -31,18 +31,18 @@ def yesno_prompt(screen, message):
 
     store = renpy.store
 
-    if renpy.config.confirm_screen and renpy.has_screen("confirm"):
+    if renpy.config.confirm_screen and renpy.exports.has_screen("confirm"):
         name = "confirm"
-    elif renpy.has_screen("yesno_prompt"):
+    elif renpy.exports.has_screen("yesno_prompt"):
         name = "yesno_prompt"
     else:
         name = SCREEN
 
     try:
-        renpy.show_screen(name, message=message, yes_action=store.Return(True), no_action=store.Return(False))
+        renpy.exports.show_screen(name, message=message, yes_action=store.Return(True), no_action=store.Return(False))
         return renpy.ui.interact()
     finally:
-        renpy.hide_screen(name)
+        renpy.exports.hide_screen(name)
 
 
 def install():

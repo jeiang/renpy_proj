@@ -15,7 +15,7 @@ import sys
 
 HERE = pathlib.Path(__file__).resolve().parent
 BUILD = HERE / "build"
-GAMES = ["aniso", "story", "media", "text", "view", "py7", "py7patch", "py7ai"]
+GAMES = ["aniso", "story", "media", "text", "view", "py7", "py7patch", "py7ai", "py7trust"]
 
 
 def load(name):

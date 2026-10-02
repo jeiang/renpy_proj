@@ -400,7 +400,7 @@ def check_trust(ctx):
     screen = ctx.game.get("trust_screen", "_py2c_yesno")
     problems = []
     launches = []
-    plan = L.parse_plan("cmd auto on\ncmd click on\nwait menu True\ncmd start\ncmd advance 3\nwait advance-done\n"
+    plan = L.parse_plan("cmd auto on\ncmd click on\nwait menu True\ncmd start\ncmd advance 2\nwait advance-done\ncmd auto off\ncmd click off\n"
                         "settle 2\ncmd save harness\nwait saved\nsettle 1\nquit\n")
     a = L.launch(ctx, "trust-create", engine="player", plan=plan, timeout=600, keep_saves=True)
     launches.append(_launch_summary(a))
@@ -411,8 +411,10 @@ def check_trust(ctx):
     seed = ctx.out / "trust-seed"
     shutil.rmtree(seed, ignore_errors=True)
     seed.mkdir(parents=True)
-    for p in made:   # the .save files only: the signing key stays behind, so launch 2 has a new key
-        shutil.copy2(p, seed / p.name)
+    for p in made:   # the .save files only, in their save folder: the signing key stays behind, so launch 2 has a new key
+        dest = seed / p.parent.relative_to(ctx.out / "trust-create" / "saves-player")
+        dest.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(p, dest / p.name)
     if not made:
         return {"check": "trust", "status": "fail", "problems": problems + ["no player save found"], "launches": launches}
     results = {}
