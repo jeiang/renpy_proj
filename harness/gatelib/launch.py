@@ -636,6 +636,7 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
             res["exited"] = proc.poll() is not None
             res["rc"] = proc.poll()
             res["wall_s"] = round(time.time() - t0, 1)
+            res["t_start"], res["t_end"] = round(t0, 1), round(time.time(), 1)   # unix times of the game process: overlap of parallel launches
             res["aborted"] = run.aborted
             res["shots"] = run.shots
             res["stage_times"] = run.stage_times
