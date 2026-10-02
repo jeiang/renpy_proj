@@ -52,3 +52,17 @@ Games AWorldBetweenUs (60 fps WebM) and AHouseInTheRift (30 fps), 3 replicas eac
 ## Campaign on artemis
 
 See "State at hand-over" for the original Mac campaign. The Mac campaign was stopped at game 10 (nine games had a `result.json`; DFraction was partial and is rerun). Its results are kept as `harness/out/m6-mac` (gitignored) for comparison only; all reported results come from the artemis run.
+
+## Bumpkin015 `01-menu` on artemis (outlined text)
+
+The failure was a stock-baseline mismatch, not a text-crate fault. The Linux stock baseline ran the game's bundled Ren'Py 8.1.3; the player carries Ren'Py 8.5.3 (the Mac baseline already uses the 8.5.3 SDK: `engine = "sdk-853"`). On artemis, 1896x1056, same shot:
+
+| pair | changed pixels (> 24/255) | mean |
+|---|---|---|
+| stock 8.1.3 (bundled) against player | 0.78% | 0.0027 |
+| stock 8.1.3 against stock 8.5.3 (Linux SDK) | 0.78% | 0.0027 |
+| stock 8.5.3 against player | 0.0009% (15 + 4 px) | 0.00004 |
+
+- Ren'Py 8.1.3 draws every outlined label (menu, title) exactly 1 px to the right of 8.5.3. The version text (no outline) and the spinner do not differ (spinner: 0 changed pixels, 8 of 255 max; the stock self diff is 0.0, so it is not animation).
+- Shifting the 8.5.3 shot by 1 px removes the difference: against 8.1.3 the menu labels keep 17 changed pixels (max 33/255), the title 254. So stroker join, stroke width, outline color blend, hinting, font fallback and glyph shapes are the same in both versions. The remaining 1 px is Ren'Py's own text layout (8.5.3 `ftfont.pyx`/`text.py` keep per-glyph `add_left`/`add_top` and draw outlines through a mesh), which the player runs unchanged from 8.5.3. FreeType's stroker against ours: no measurable difference.
+- Fix: `linux_engine = "sdk-853-linux"` for Bumpkin015 in `corpus.toml`, so the Linux stock baseline is the player's Ren'Py version, as on the Mac. No text crate change.
