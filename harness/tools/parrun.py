@@ -23,6 +23,7 @@ ap.add_argument("--engine", default="player")
 ap.add_argument("--player-bin")
 ap.add_argument("--baseline-root")
 ap.add_argument("--work")
+ap.add_argument("--slot-base", type=int, default=0, help="first slot number (use a higher one beside a running campaign)")
 ap.add_argument("--replicas", type=int, default=1, help="run each game R times as <game>.r0 .. (measurement runs)")
 a, rest = ap.parse_known_args()
 rest = [x for x in rest if x != "--"]
@@ -38,6 +39,6 @@ for r in range(a.replicas):
         argv += ["--baseline", str(pathlib.Path(a.baseline_root).resolve() / ("%s.r0" % k if a.replicas > 1 else k))]
     jobs.append((name, argv + rest))
 t0 = time.time()
-res = W.run_pool(jobs, a.workers, a.work or L.work_dir(), log=lambda m: print(m, flush=True))
+res = W.run_pool(jobs, a.workers, a.work or L.work_dir(), log=lambda m: print(m, flush=True), base=a.slot_base)
 print("[parrun] width %d wall %.1f s rc %s" % (a.workers, time.time() - t0, res), flush=True)
 sys.exit(1 if any(res.values()) else 0)

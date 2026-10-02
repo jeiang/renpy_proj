@@ -81,26 +81,26 @@ def slot_env(comp, slot, work_root):
     return env
 
 
-def run_pool(jobs, width, work_root, log=print):
+def run_pool(jobs, width, work_root, log=print, base=0):
     """jobs: list of (name, argv). Runs them `width` at a time, each worker on its own slot, compositor and work dir.
-    -> {name: return code}. A job runs `argv` as a child (usually `gate.py run ...`); the pool never holds a lock itself."""
+    -> {name: return code}. Slots are numbered `base` .. `base`+width-1 (a second pool beside a running campaign uses a higher base). A job runs `argv` as a child (usually `gate.py run ...`); the pool never holds a lock itself."""
     q = queue.Queue()
     for j in jobs:
         q.put(j)
     results, lock = {}, threading.Lock()
-    comps = [Compositor(i).start() for i in range(width)]
+    comps = [Compositor(base + i).start() for i in range(width)]
 
     def worker(slot):
-        env = slot_env(comps[slot], slot, work_root)
+        env = slot_env(comps[slot], base + slot, work_root)
         while True:
             try:
                 name, argv = q.get_nowait()
             except queue.Empty:
                 return
-            log("[pool] slot %d: %s start %s" % (slot, name, time.strftime("%H:%M:%S")))
+            log("[pool] slot %d: %s start %s" % (base + slot, name, time.strftime("%H:%M:%S")))
             t0 = time.time()
             rc = subprocess.run(argv, env=env).returncode
-            log("[pool] slot %d: %s end rc %s after %.0f s" % (slot, name, rc, time.time() - t0))
+            log("[pool] slot %d: %s end rc %s after %.0f s" % (base + slot, name, rc, time.time() - t0))
             with lock:
                 results[name] = rc
 
