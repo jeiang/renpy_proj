@@ -461,7 +461,8 @@ init 999 python:
         D.menu_ticks = 0
         D.plays = 0
         D.hub_clicks = 0
-        D.hub_after = min(20.0, D.stall / 4.0)
+        D.hub_after = min(3.0, D.stall / 4.0)   # seconds without a new script line before a screen's button is pressed
+        D.empty_plays = 0
         D.lines_at_play_start = 0
         D.pending = []
         D.restart_t = 0.0
@@ -621,6 +622,8 @@ init 999 python:
     def _hz_label_deep(name, abnormal):
         D = _hz_D
         if D.on:
+            if _hz_s(name) not in D.labels and not _hz_s(name).startswith("_"):
+                D.loop_chain = 0   # a break that reaches a label never seen before worked: the loop is over
             D.labels[_hz_s(name)] = 1
             D.trail.append(_hz_s(name))
         if _hz_old_label_cb2:
@@ -642,12 +645,16 @@ init 999 python:
                         "QuickSave", "QuickLoad", "ToggleScreen", "Skip", "Replay", "EndReplay", "Confirm", "SetMute", "ToggleMute", "MouseMove",
                         "OpenURL", "Start", "Show", "Hide", "HideInterface", "Partial", "InvertSelected", "Scroll", "XScrollValue", "YScrollValue")
 
-    def _hz_action_ok(act):
+    _HZ_RELAXED_OK = ("Show", "Hide", "ToggleScreen", "HideInterface")   # allowed when no other button exists
+
+    def _hz_action_ok(act, relaxed=False):
         if isinstance(act, (list, tuple)):
-            return len(act) > 0 and all(_hz_action_ok(a) for a in act)
+            return len(act) > 0 and all(_hz_action_ok(a, relaxed) for a in act)
+        if type(act).__name__ == "NullAction":
+            return False   # a button that does nothing (a disabled "Drive" button): never pressed
         if act is None or isinstance(act, (bool, int)) or not hasattr(act, "__call__") and not hasattr(act, "get_sensitive"):
             return False
-        if type(act).__name__ in _HZ_SKIP_ACTIONS:
+        if type(act).__name__ in _HZ_SKIP_ACTIONS and not (relaxed and type(act).__name__ in _HZ_RELAXED_OK):
             return False
         if type(act).__name__ == "SetField" and getattr(act, "object", None) is getattr(renpy.store, "_preferences", 0):
             return False   # quick menu toggles (auto-forward, skip): not the game's choice
@@ -703,7 +710,8 @@ init 999 python:
                     # The story ended (or a bad ending came back to the menu). Play again with the next draws while the
                     # last play still reached script lines no earlier play had; stop when one adds nothing.
                     D.plays += 1
-                    if len(D.lines) == D.lines_at_play_start or D.plays >= 30:
+                    D.empty_plays = D.empty_plays + 1 if len(D.lines) == D.lines_at_play_start else 0   # a play of other draws may add lines: stop after 3 that add none
+                    if D.empty_plays >= 3 or D.plays >= 30:
                         _hz_finish("story-end")
                         return
                     D.lines_at_play_start = len(D.lines)
@@ -756,7 +764,7 @@ init 999 python:
                     D.hub_force = 0
                     return
                 D.hub_force -= 1
-            if D.verify is None and now - D.last_new > D.hub_after and D.n % 25 == 0 and _hz_hub_click():
+            if D.verify is None and now - D.last_new > D.hub_after and D.n % 25 == 0 and not renpy.get_screen("say") and _hz_hub_click():
                 return
             if not _hz_busy():
                 renpy.end_interaction(True)
@@ -952,8 +960,10 @@ init 999 python:
     _HZ_LOOP_SAY_REPS = 3
     _HZ_LOOP_TOK_REPS = 4
     _HZ_LOOP_TOK_MAXP = 40
+    _HZ_LOOP_IDLE_REPS = 50   # a block of labels only repeats this often before it is a loop
     _HZ_AVOID_TTL = 30
     _HZ_LOOP_CHAIN_MAX = 3
+    _HZ_LOOP_STUCK_S = 30.0
 
     class _HzLoopState(object):
         def __init__(self):
@@ -962,6 +972,7 @@ init 999 python:
             self.ntok = 0
             self.pending = None
             self.failed = False
+            self.idle_ntok = -10 ** 9
 
     def _hz_lg():
         L = getattr(_hz_D, "lg", None)
@@ -1015,8 +1026,21 @@ init 999 python:
         for p in range(1, min(_HZ_LOOP_TOK_MAXP, n // reps) + 1):
             blk = t[n - p:]
             if all(t[n - p * k:n - p * (k - 1)] == blk for k in range(2, reps + 1)):
-                if [x for x in blk if x[0] != "S"]:
+                if [x for x in blk if x[0] not in ("S", "L")]:
                     _hz_loop_found(L, "tok", p, reps, [x[1] for x in blk if x[0] == "S"])
+                    return
+                if [x for x in blk if x[0] == "S"]:
+                    _hz_loop_found(L, "tok", p, reps, [x[1] for x in blk if x[0] == "S"])
+                    return
+                # Labels only, no press and no line in between: the game's own idle cycle (a timer that jumps back while a hub
+                # screen waits for a click). Ask the driver to press something; it is a loop only when the cycle keeps going.
+                if _hz_D.on and L.ntok - L.idle_ntok > 40:
+                    L.idle_ntok = L.ntok
+                    _hz_D.hub_force = 25
+                    _hz_write("deep-idle %d %s" % (p, ",".join(x[1] for x in blk[:4])))
+                big = _HZ_LOOP_IDLE_REPS
+                if n // p >= big and all(t[n - p * k:n - p * (k - 1)] == blk for k in range(2, big + 1)):
+                    _hz_loop_found(L, "tok", p, big, [])
                     return
 
     def _hz_loop_tok(t):
@@ -1028,7 +1052,7 @@ init 999 python:
                     return
             L.toks.append(t)
             L.ntok += 1
-            lim = _HZ_LOOP_TOK_MAXP * _HZ_LOOP_TOK_REPS + 64
+            lim = _HZ_LOOP_TOK_MAXP * _HZ_LOOP_IDLE_REPS + 64
             if len(L.toks) > lim * 2:
                 del L.toks[:len(L.toks) - lim]
             if L.pending is None and not L.failed:
@@ -1074,6 +1098,7 @@ init 999 python:
         D.loop_n = 0
         D.loop_chain = 0
         D.loop_sig = set()
+        D.loop_chain_t0 = 0.0
         D.break_ntok = -10 ** 9
         D.avoid = {}
         D.visits = {}
@@ -1098,6 +1123,8 @@ init 999 python:
             D.loop_chain += 1
         else:
             D.loop_chain = 1
+        if D.loop_chain == 1:
+            D.loop_chain_t0 = now
         D.loop_sig = sig
         rec["n"] = D.loop_n
         rec["screens"] = sorted(_hz_shown())
@@ -1106,10 +1133,11 @@ init 999 python:
         rec["chain"] = D.loop_chain
         keys = rec["acts"] if D.loop_chain > 1 else ([rec["last_act"]] if rec["last_act"] else [])
         rec["avoid"] = list(keys)
-        rec["outcome"] = "stuck" if D.loop_chain > _HZ_LOOP_CHAIN_MAX else "broken"
+        stuck = D.loop_chain > _HZ_LOOP_CHAIN_MAX and now - D.loop_chain_t0 >= _HZ_LOOP_STUCK_S   # a fast loop gets 15 s of attempts
+        rec["outcome"] = "stuck" if stuck else "broken"
         D.loops.append(rec)
         _hz_write("deep-loop %d %s %d %s" % (D.loop_n, rec["kind"], rec["period"], rec["hashes"][0]))
-        if D.loop_chain > _HZ_LOOP_CHAIN_MAX:
+        if stuck:
             _hz_finish("stuck")
             return True
         for k in keys:
@@ -1185,15 +1213,17 @@ init 999 python:
         def __repr__(self):
             return "<cand %s>" % self.key
 
-    def _hz_cands():
+    def _hz_cands(relaxed=False):
         out, seen = [], set()
         for f in list(renpy.display.focus.focus_list):
             act = getattr(f.widget, "clicked", None)
-            if act is not None and _hz_action_ok(act):
+            if act is not None and _hz_action_ok(act, relaxed):
                 c = _HzCand(act)
                 if c.key not in seen:
                     seen.add(c.key)
                     out.append(c)
+        if not out and not relaxed:
+            return _hz_cands(True)   # no real candidate: every other sensitive button of the shown screens
         return out
 
     def _hz_shown():
