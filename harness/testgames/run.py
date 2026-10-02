@@ -116,8 +116,8 @@ def check_compat(run_dir, game):
     if len(py2fix) < 8:
         problems.append("only %d py2fix sites (expected 8 or more)" % len(py2fix))
     fixes = [e for e in ev if e["kind"] == "fix"]
-    if len(fixes) < 1:
-        problems.append("no `fix` event: the mixed-type ordering fix did not run")
+    if len(fixes) < 4:
+        problems.append("%d `fix` events (expected 4: two init blocks and two story blocks that fail in one file)" % len(fixes))
     if not any(e["kind"] == "skip" and e["file"] and "un.rpyc" in e["file"] for e in ev):
         problems.append("un.rpyc was not skipped (no `skip` event)")
     return problems

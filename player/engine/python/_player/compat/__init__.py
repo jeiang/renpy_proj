@@ -12,7 +12,7 @@ from _player.compat.report import event, fingerprint
 
 __all__ = ["Detection", "detect", "event", "fingerprint", "install", "loaded", "plain_python3", "active"]
 
-RULES_VERSION = 3
+RULES_VERSION = 4
 """Bump when a rewrite rule changes: it is part of every compile cache key."""
 
 active = False

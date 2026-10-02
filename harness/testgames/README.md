@@ -39,8 +39,8 @@ engine gives.
 | `__metaclass__`, `__nonzero__`, `next`, `__div__`, `__cmp__`, `__eq__` without `__hash__` | `rules_classes.rpy` | class rewrites |
 | `exec "..."` in a function, `exec code in ns`, locals set by `exec` | `rules_exec.rpy` | `exec-in-function` (and the `exec` statement through py2fix) |
 | Backticks, `<>`, old octal, `10L`, `ur""`, `raise E, v`, `except E, e`, tuple parameters | `rules_syntax_values.rpy` | py2fix |
-| `print` statements: plain, `print >>f, x`, trailing comma, bare `print`, in a loose module | `loose/legacy_mod.py`, `rules_legacy.rpy` | py2fix and the import hook for loose `.py` files |
-| Mixed-type ordering at init and in the story (`sorted([3, "a", None])`, `1 < "a"`, `max(1, "a")`) | `rules_ordering.rpy` | error-driven ordering fix with retry |
+| `print` statements: plain, `print >>f, x`, trailing comma then a bare `print >>f`, a trailing-comma loop, in a loose module | `loose/legacy_mod.py`, `rules_legacy.rpy` | py2fix and the import hook for loose `.py` files |
+| Mixed-type ordering in two init blocks and two story blocks of one file (`sorted([3, "a", None])`, `1 < "a"`, `max(1, "a")`) | `rules_ordering.rpy` | error-driven ordering fix with retry |
 | Python 2 save state: `long`, byte `str`, `unicode`, `set`, classic class, `OrderedDict`, tuples, nested containers | `rules_state.rpy` | saves made by stock 7.4.11 (`saveresume`) load; an after-load check raises if a value differs |
 | Colon with no block after `scene ... with t:` and `show x:`; screen property with no value (`focus_mask`) | `loose/syntax_loose.rpy` | parser leniencies (engine patch 0750) |
 | `un.rpyc`, a compiled empty script under the name of a decompiler stub | `build.py` | `skip` of decompiler stubs |
@@ -65,19 +65,47 @@ the game key (`PLAYER_PATCHES_APPLY_TEST=1`), reads the fingerprint and the node
 patch to a seed folder `patches/<fingerprint>/patch.toml` that the gate copies into the data folder (`--seed-data`). Without
 the patch the player run fails at that node with `'str' object has no attribute 'decode'`.
 
-## Known open items
+## Notes on cases that were defects
 
-- `Synth7Patch` `saveresume` fails on the stock 7.4.11 engine too (macOS and artemis): after `load` the game shows one line and
-  returns to the main menu. The cause is not found; lint, probe and route pass on stock and on the player, and the player applies
-  the port patch. Until it is fixed, run this game with `--only lint,probe,route`.
-- The rollback path of the ordering fix is not in the gate: with rollback allowed the player goes back to the last checkpoint and
-  the line before the failing node shows twice, so its dialogue hashes differ from stock. `rules_ordering.rpy` calls
-  `renpy.block_rollback()` to test the in-place retry path.
-- `print >>f, x,` followed by a bare `print >>f`: Python 2 writes `x` and a newline, the token fixer's output may write a space
-  before the newline [INFERENCE, not confirmed]. The case is not in the game.
-- Two failing blocks with Python 2 ordering in one file: the compat module treats the second as "fixed once and failed again"
-  (all module-level code objects have `co_firstlineno` 1 in `errors.fix_ordering`). `rules_ordering_init.rpy` and `rules_ordering.rpy`
-  are split to avoid it. [INFERENCE from the stdout log of the first Synth7 player run; not fixed here.]
+- **Several failing blocks in one file.** `py7/game/rules_ordering.rpy` holds two failing `init python` blocks and two failing
+  story blocks. `errors.fix_ordering` once keyed a fixed site by `co_firstlineno`, which is 1 for every module-level code
+  object, so the second block counted as "fixed once and failed again". The key now holds the first line of the node's code
+  block. `check_compat` expects four `fix` events.
+- **`print >>f, x,` and a bare `print >>f`.** Python 2 writes the pending space of a trailing comma only before the next item,
+  so `x` and a newline. The old rewrite wrote `end=" "` at once and left a space before the newline. A file with such a
+  statement now goes through `_py2c_print`, which keeps the softspace (`loose/legacy_mod.py` covers `print >>buf, "d",` then
+  a bare `print >>buf`, and a loop that prints with a trailing comma).
+- **`Synth7Patch` `saveresume`.** The cause was the game, not the engine or the patch. The gate saves after `save_after` lines
+  while auto-click keeps running during the settle time. The old script had 7 lines, so the save was made on the
+  next to last line, and after the load only one line remained before the game returned to the main menu. The script has
+  20 lines now.
+- **Video check.** The gate used a synthetic clip for A/V sync on the assumption that corpus movies have no audio, and its
+  warning ("game movie has no audio") was printed when `ffmpeg` was not on `PATH`, whatever the movie held. The `vp9_opus.webm` clip
+  does have an Opus track (`ffmpeg -i` shows `Audio: opus, 48000 Hz, mono`). The check now uses the game movie when the movie
+  channel reports an audio position, and builds the synthetic clip only when it does not. The clip is 20 s long (longer than
+  the 3 s + 15 s window), because a 4 s clip that loops makes the unwrapped position lose about 40 ms per loop and the drift
+  limit of 100 ms failed.
+- **H.264 clip black on stock.** A stock limitation, not a mistake in the game. The clip is a valid Constrained Baseline
+  H.264 file that FFmpeg decodes; the Ren'Py 8.5.3 stock engine draws nothing for H.264 whatever the file (see
+  `research/py2compat-facts/README.md`, C2, where four real H.264 files from a commercial game gave the identical empty
+  frame while VP9 and VP8 drew). The route plan marks the movie shots `volatile`, so a black H.264 frame on stock does not fail the gate.
+
+Not in the gate: the rollback path of the ordering fix. With rollback allowed the player goes back to the last checkpoint and
+the line before the failing node shows twice, so its dialogue hashes differ from stock. `rules_ordering.rpy` calls
+`renpy.block_rollback()` to test the in-place retry path.
+
+## Results
+
+Mac (Apple Silicon, `build/synth-fix`, `run.py`, stock then the player against the stock baseline): all seven games pass lint,
+probe, route and saveresume on stock and on the player. `Synth7` passes `check_compat` (four `fix` events from `rules_ordering.rpy`,
+the print cases equal to stock). `Synth7Patch` passes on stock and on the player (patch applied, `saveresume` included).
+The gate video check on `SynthMedia` (stock, `--tier full --only video`) passes with the game movie as the A/V source (offset
+max 31 ms, drift 27 ms). Real-game regression after the player change (tier `m1`, baselines from `harness/out`): SecretIsland,
+BlackRose and HaremHotel pass.
+
+artemis (Hyprland, real GPU): the run for all seven games is started with
+`python3 harness/testgames/run.py --player-bin .../player` in the `synth-fix` clone. It was still in progress when this
+section was written (SynthAniso stock and player and SynthStory stock passed); the final artemis result is not recorded here.
 
 ## Build
 
