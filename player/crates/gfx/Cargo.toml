@@ -4,6 +4,7 @@ description = "wgpu draw backend (WgpuDraw), GLSL translator, textures, YUV vide
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
+license.workspace = true
 
 [dependencies]
 pyo3 = { workspace = true }

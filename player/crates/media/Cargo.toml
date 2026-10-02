@@ -4,6 +4,7 @@ description = "FFmpeg decode, cpal output: renpy.audio.renpysound and video fram
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
+license.workspace = true
 
 [dependencies]
 pyo3 = { workspace = true }

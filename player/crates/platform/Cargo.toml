@@ -4,6 +4,7 @@ description = "Window, events and input: renpy.pygame.display/event/key/mouse/ti
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
+license.workspace = true
 
 [features]
 # `--no-default-features` on the player builds an X11-only binary (winit without its Wayland backend).

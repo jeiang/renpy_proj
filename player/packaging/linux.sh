@@ -55,5 +55,7 @@ LDD=$(NIX_LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}" ldd "$PKG/player")
 echo "$LDD"
 bad=$(echo "$LDD" | awk '/=> \//{print $3}' | grep -v "^$PKG/lib/" | grep -Ev '/(ld-linux-x86-64|libc|libm|libdl|libpthread|librt|libutil|libresolv|libmvec|libgcc_s|libdrm|libasound|libudev|libvulkan|libwayland-[a-z-]*|libxkbcommon[a-z-]*|libX[a-z0-9]*|libxcb[a-z-]*)\.so' || true)
 if [ -n "$bad" ]; then echo "linux.sh: unexpected dependencies:" >&2; echo "$bad" >&2; exit 1; fi
+# Licence notices: MIT OR Apache-2.0 of the player, THIRD_PARTY.md, LGPL text for the FFmpeg libraries, Rust crate licences.
+"$HERE/licences/stage.sh" "$PKG/licenses"
 (cd "$OUT" && tar -czf "$NAME.tar.gz" "$NAME")
 echo "linux.sh: $OUT/$NAME.tar.gz"

@@ -206,6 +206,8 @@ for f in "$PKG/player" "$PKG"/lib/*.so*; do
   done
 done
 [ -z "$bad" ] || { echo "manylinux: dependencies that are neither bundled nor host-provided:$bad" >&2; exit 1; }
+# Licence notices (see packaging/licences/stage.sh).
+bash "$PLAYER/packaging/licences/stage.sh" "$PKG/licenses"
 (cd "$OUT" && tar -czf "$NAME.tar.gz" "$NAME")
 log "glibc policy check"
 bash "$HERE/check-glibc.sh" "$PKG"

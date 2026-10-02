@@ -61,6 +61,21 @@ New-Item -ItemType Directory -Force $pkg | Out-Null
 Copy-Item $exe $pkg
 Copy-Item (Join-Path $ff 'bin\*.dll') $pkg
 
+# Licence notices (same set as packaging/licences/stage.sh) plus the licence files of the BtbN FFmpeg build.
+$repo = Split-Path -Parent $player
+$lic  = Join-Path $pkg 'licenses'
+New-Item -ItemType Directory -Force $lic | Out-Null
+foreach ($f in 'LICENSE-MIT', 'LICENSE-APACHE', 'THIRD_PARTY.md') {
+    $src = Join-Path $repo $f
+    if (-not (Test-Path $src)) { throw "missing $src" }
+    Copy-Item $src $lic
+}
+$notices = Join-Path $PSScriptRoot 'licences'
+Copy-Item (Join-Path $notices '*.txt') $lic
+Copy-Item (Join-Path $notices 'RUST_DEPENDENCIES.md') $lic
+$ffLic = Join-Path $ff 'LICENSE.txt'
+if (Test-Path $ffLic) { Copy-Item $ffLic (Join-Path $lic 'FFmpeg-BtbN-LICENSE.txt') }
+
 # Imports: system DLLs and FFmpeg only.
 $deps = (cmd /c "dumpbin /dependents `"$pkg\player.exe`"") | Where-Object { $_ -match '^\s+\S+\.dll\s*$' } | ForEach-Object { $_.Trim() }
 $bad = $deps | Where-Object { $_ -match '^(vcruntime|msvcp|api-ms-win-crt|ucrtbase)' }

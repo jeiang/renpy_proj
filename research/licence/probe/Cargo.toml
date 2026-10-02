@@ -2,6 +2,7 @@
 # Candidate set for the player: wgpu renderer, winit window/input, str0m WebRTC, text (cosmic-text + harfrust + swash),
 # image loading, audio (cpal + symphonia), embedded Python (pyo3), FFmpeg (ffmpeg-next) and dav1d bindings.
 [package]
+license = "MIT OR Apache-2.0"
 name = "licence-probe"
 version = "0.0.0"
 edition = "2021"
