@@ -26,6 +26,7 @@ import time
 HERE = pathlib.Path(__file__).resolve().parent
 HARNESS = HERE.parent
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(HARNESS))
 
 # game -> (testgames folder, checks to run instead of the whole tier or None, extra gate arguments)
 GAMES = {
@@ -132,11 +133,18 @@ def patch_seed(player, game_dir, tmp):
     fingerprint with that hash. Both depend on the `.rpyc` bytes, which differ from build to build."""
     import re
     patch_src = (HERE / "py7patch" / "patches" / "patch.toml").read_text()
-    env = dict(os.environ, PLAYER_PATCHES_APPLY_TEST="1", PLAYER_COMPAT_NOTICE="off")
+    import gatelib.machinelock as ML
+    import gatelib.plat as plat
+    # the host environment of the platform layer (library paths on NixOS, no desktop session under Xvfb)
+    env = dict(plat.get().game_env(os.environ), PLAYER_PATCHES_APPLY_TEST="1", PLAYER_COMPAT_NOTICE="off")
     probe = pathlib.Path(tmp) / "probe-data"
 
     def apply_test():
-        r = subprocess.run([player, str(game_dir), "--data", str(probe)], capture_output=True, text=True, env=env, timeout=600)
+        ML.take(7200, "synth7patch apply-test")   # a game launch: under the machine lock like every gate launch
+        try:
+            r = subprocess.run([player, str(game_dir), "--data", str(probe)], capture_output=True, text=True, env=env, timeout=600)
+        finally:
+            ML.release()
         return r.stdout
 
     out = apply_test()
