@@ -11,6 +11,7 @@ import os
 import pathlib
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -543,6 +544,20 @@ def find_tracebacks(base, data_dir):
     return found
 
 
+OUTPUT_TAIL_LINES = 200
+
+
+def exit_info(rc, exited, output):
+    """How the game process ended: exit code, terminating signal and the last lines of its output (stdout and stderr share one pipe)."""
+    sig = -rc if rc is not None and rc < 0 else None
+    try:
+        sig_name = signal.Signals(sig).name if sig else None
+    except ValueError:
+        sig_name = "signal %d" % sig
+    return {"exit_code": rc if rc is None or rc >= 0 else None, "exit_signal": sig, "exit_signal_name": sig_name,
+            "exited_by_itself": exited, "output_tail": output.splitlines()[-OUTPUT_TAIL_LINES:]}
+
+
 def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed_saves=None, keep_saves=False,
            inject=True, extra_files=None, exclusive=False):
     """Run one game process. `engine` is 'auto' (ctx.engine_name), 'stock' or 'player'. -> result dict.
@@ -679,6 +694,7 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
         for i, p in enumerate(tbs):
             shutil.copy(p, out / ("%s.%d.txt" % (p.name, i)))
     so = (out / "stdout.log").read_text(errors="replace")
+    res.update(exit_info(res["rc"], res["exited"], so))
     # A traceback on stdout is fatal unless it is a game-side network thread failing (SecretIsland's gameanalytics thread
     # cannot resolve its host on any machine; stock Ren'Py prints the same).
     parts = re.split(r"(?m)^Exception in thread", so)   # parts[0]: main thread output; the rest: one background thread each
