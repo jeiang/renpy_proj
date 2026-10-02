@@ -203,6 +203,10 @@ def make_handler(previous):
                     notice.notify("Ren'Py 7 compatibility: fixed a Python 2 comparison (%s) and retried." % where.split(" in ")[0])
                     _retire_traceback(te)
 
+                    # The error stopped a screen or a ui.* block half built. Stock Ren'Py never gets here (Python 2 has no
+                    # such error), and nothing else clears the open widget stack before the retry runs the next interaction.
+                    renpy.ui.reset()
+
                     if renpy.exports.can_rollback() and not ctx.init_phase:
                         renpy.exports.rollback(force=True)  # raises RollbackException: run_context re-enters
 
