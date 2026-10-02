@@ -84,11 +84,7 @@ def main(dirs):
                     row["deep_errors"] = len(j.get("errors") or [])
             cov = load(g / "deep-s1" / "deep" / "coverage.json")
             if cov:
-                row["lines"] = cov.get("lines")
-                row["labels"] = cov.get("labels")
-                row["final"] = cov.get("final")
-                ln = load(g / "deep-s1" / "deep" / "lines.json")
-                row["line_set"] = len(ln) if isinstance(ln, (list, dict)) else None
+                row.update({k: cov.get(k) for k in ("lines_hit", "labels_hit", "say", "nodes", "decisions", "inputs", "saves", "errors")})
             print(" ", row)
         for (game, c), w in sorted(walls.items()):
             print("  wall %-12s %-10s mean %.1f s max %.1f s (%d launches)" % (game, c, statistics.mean(w), max(w), len(w)))
