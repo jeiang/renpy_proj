@@ -559,6 +559,7 @@ class Xvfb(Hypr):
             raise RuntimeError("xwd failed (rc %d): %s" % (r.returncode, r.stderr.decode(errors="replace").strip()[:200]))
         pw, ph, rgb = read_xwd(r.stdout)
         pngdiff.write_png(dest, pw, ph, rgb)
+        return True
 class Sway(Hypr):
     """A headless sway (wlroots) per worker: `swaymsg -t get_tree` stands in for `hyprctl clients -j`, so window lookup, the covered
     check and grim capture are the Hypr code on a converted client list. Selected by HARNESS_COMPOSITOR=sway with SWAYSOCK and

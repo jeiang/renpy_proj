@@ -258,7 +258,20 @@ Branch `build/synth-ci`, player from the same branch (manylinux package, built o
 - Ubuntu 24.04 in rootless podman (the package list above, the repository mounted, the host machine lock held around the
   container, Xvfb inside): `SynthStory`, `SynthMedia`, `Synth7` and `Synth7Patch` pass on stock and on the player
   (`run.py` exit 0, 582 s). The other three games use the same code paths and were run on NixOS only.
-- Not run under Xvfb: the gate `video` check of `SynthMedia` (`--tier full --only video`).
+- Rerun on `build/synth-left` (NixOS, Xvfb, Mesa from nixpkgs, the manylinux package with the libstdc++ fix, thresholds
+  `--gate-args "--diff-mean 0.01 --diff-pct 1.0"`, one `systemd-run --user --scope` job, 16 min 16 s wall time for `run.py`):
+  stock and player pass for all seven games (14 runs, `run.py` exit 0; the compat check of `Synth7` and `Synth7Patch` passes).
+  Worst player-against-stock route diff over the 52 baseline shots, not counting the volatile H.264 shot: mean 0.00441
+  (`09-movie-theora`; VP9 0.00435, AV1 0.00422) and 0.40 % changed pixels (`05-frames`). At the CI thresholds that is 44 %
+  of the mean limit and 40 % of the pixel limit.
+- `Synth7AI` (not in `run.py`; run with `gate.py` at the synth tier, stock then player against the stock baseline): stock
+  passes (lint, probe, route, saveresume). The player fails probe and route with `string.join` (`AttributeError`) because
+  no patch is committed; this is the intended input of the M6 `player upgrade` proof. Lint and saveresume pass.
+- The gate `video` check of `SynthMedia` under Xvfb and lavapipe (`--engine player --tier full --only video`): pass. Presented
+  114.3 fps (100 % of the nominal 24.0 fps, capped), decoded 24.0 fps, 0 late frames, A/V offset at most 36 ms, drift 17 ms.
+
+The rerun found a harness defect: the merge of the Sway platform class had split `Xvfb.capture`, so the method returned
+nothing and every shot of every game failed with "no screenshot". It is fixed in `gatelib/plat.py` (`return True`).
 
 The run found one packaging defect: the first manylinux package bundled `libstdc++.so.6` (GLIBCXX 3.4.25) in `lib/`, which the
 player's RUNPATH put before the system one, so every Mesa driver failed with `GLIBCXX_3.4.29 not found`, wgpu found no
