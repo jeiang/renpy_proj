@@ -172,21 +172,82 @@ The gate uses Hyprland and `grim`; the stock SDKs are dynamic ELF files and need
 nix shell nixpkgs#python312 nixpkgs#grim nixpkgs#ffmpeg -c python3 harness/testgames/run.py --player-bin /abs/path/player
 ```
 
-### Linux CI (Xvfb and lavapipe)
+### CI on Linux
 
-No GPU, no compositor: an X server in memory and Mesa's software Vulkan driver (lavapipe).
+A GitHub runner has no GPU and no compositor. The gate has an Xvfb platform mode for it (`gatelib/plat.py`, class `Xvfb`,
+selected with `HARNESS_DISPLAY=xvfb`). Per launch it starts an Xvfb on a free display (`-displayfd`), runs the game under a
+whitelisted environment (`env -i` plus `HOME`, `USER`, `LANG`, a clean `PATH`, `DISPLAY`, a private `XDG_RUNTIME_DIR`,
+`DBUS_SESSION_BUS_ADDRESS=disabled:`, `LIBGL_ALWAYS_SOFTWARE=1`, `SDL_AUDIODRIVER=dummy`), finds the game window by pid
+(`xdotool search --pid`, `xwininfo -id`: read-only) and captures only that window (`xwd -id`, converted to PNG by the gate).
+It sends no input. There is no window manager, so a window is never covered. Stock Ren'Py draws with Mesa llvmpipe (GL); the
+player draws with Mesa lavapipe (Vulkan, wgpu). Optional variables: `HARNESS_XVFB_SCREEN` (default `1920x1080x24`),
+`HARNESS_VK_ICD` (path of the lavapipe ICD JSON; Ubuntu finds it without), `HARNESS_GAME_ENV` (extra `NAME=value` lines for
+the game, for example `RUST_LOG`).
+
+Packages (Ubuntu 24.04; this exact list is the image the recipe was proved in, see "Proof" below):
 
 ```sh
-Xvfb :99 -screen 0 1920x1080x24 &
-export DISPLAY=:99 VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json   # or VK_DRIVER_FILES
-export WGPU_BACKEND=vulkan WGPU_ADAPTER_NAME=llvmpipe                              # force the software adapter
-python3 harness/testgames/run.py --player-bin "$PWD/player/target/release/player"
+sudo apt-get install -y --no-install-recommends python3 git procps util-linux ca-certificates \
+    xvfb xkb-data x11-xkb-utils xdotool x11-utils x11-apps \
+    mesa-vulkan-drivers libvulkan1 libgl1-mesa-dri libglx-mesa0 libegl1 \
+    libasound2t64 libdrm2 libudev1 libxkbcommon0 libxkbcommon-x11-0 libx11-6 libxcursor1 libxrandr2 libxi6 \
+    libxinerama1 libxss1 libpulse0 ffmpeg
 ```
 
-`gatelib/plat.py` captures windows with Hyprland tools today; an Xvfb job needs a capture helper (`xwd`/`import -window`)
-there. Until it exists, a CI job without a compositor runs the checks that do not need a window capture:
-`--only lint,probe,saveresume` (the route check needs shots). The lavapipe proof on artemis below uses the Hyprland session
-with `WGPU_ADAPTER_NAME` set.
+`xdotool` finds the window, `x11-utils` has `xwininfo`, `x11-apps` has `xwd`. `ffmpeg` is the runner's, for the gate
+video check only. Python must be 3.11 or newer (24.04 has 3.12). The corpus build needs the SDKs and the LGPL generator:
+`harness/testgames/fetch.sh`, then `nix build .#ffmpeg-synth -o /tmp/ffmpeg-synth` (needs Nix; or `SYNTH_ALLOW_GPL=1` with
+the distribution's ffmpeg for the media clips).
+
+The player is the manylinux package (`player/packaging/manylinux`, glibc 2.28): build it with `build.sh` (rootless podman,
+about 3 minutes with a warm cache, 25 minutes cold) or take the tarball of an earlier job. It leaves libstdc++, libdrm,
+ALSA, udev, the Vulkan loader and X11 to the host, so the packages above are needed.
+
+```sh
+export HARNESS_DISPLAY=xvfb
+harness/testgames/fetch.sh
+FFMPEG_SYNTH=/tmp/ffmpeg-synth python3 harness/testgames/build.py
+python3 harness/testgames/run.py --no-build --player-bin "$PWD/player/build-out/manylinux/player-linux-x86_64/player"
+```
+
+`run.py` runs stock and then the player for all seven games at the synth tier (lint, probe, route, saveresume) and exits 0
+when all pass. Video: `python3 harness/gate.py run --engine player --game SynthMedia --tier full --only video` (the
+SynthMedia movie is the source; needs `ffmpeg`).
+
+NixOS (artemis) variant, no desktop session in the game: the gate, run under
+`nix shell nixpkgs#python312 nixpkgs#xvfb nixpkgs#xkbcomp nixpkgs#xdotool nixpkgs#xwininfo nixpkgs#xwd nixpkgs#ffmpeg`, builds
+`nixpkgs#mesa`, `vulkan-loader`, `libglvnd`, `libdrm.out` and `systemd` and puts them in `NIX_LD_LIBRARY_PATH` (not
+`/run/opengl-driver/lib`, which would be the real GPU) and sets `VK_ICD_FILENAMES` to the nixpkgs `lvp_icd.x86_64.json`.
+Run the whole job under `systemd-run --user --scope -p MemoryMax=12G -p TasksMax=500`: a missing session bus once made
+libdbus start `dbus-launch` in a loop and the machine ran out of memory (the gate now disables the bus for the game).
+
+Run time (artemis, 8 cores used by llvmpipe, other jobs sharing the machine lock): the sum of the gate seconds for the seven games
+is about 12 minutes for stock and about 18 minutes for the player; wall time for the whole `run.py` was 29 minutes (1716 s)
+with idle gaps while other launches held the lock. Expect 30 to 40 minutes on a 4-core runner [INFERENCE].
+
+#### Frames: llvmpipe (stock) against lavapipe (player)
+
+The route check diffs the player's frames against stock. On the 49 route shots of the corpus, with the default thresholds
+(`--diff-mean 0.005`, `--diff-pct 0.5`), the worst non-volatile values were: mean absolute difference 0.0044
+(`SynthMedia` movie shots VP9, Theora, AV1: 0.0042 to 0.0044) and 0.40 % of pixels changed by more than 24/255
+(`SynthView` `05-frames`; the movie shots 0.14 to 0.18 %); every other shot is below 0.002 mean and 0.02 %. Everything passes,
+but the movie shots sit at 88 % of the mean limit and `05-frames` at 80 % of the pixel limit. The H.264 movie shot (99.8 % of
+pixels, mean 0.41) is a volatile shot because stock Ren'Py draws a black frame for H.264 (see "Notes on cases that were
+defects"); it is reported and never gated. The cause of the small differences is not isolated here [INFERENCE: rasterizer
+rounding at 1 px frame edges and bilinear sampling for the pattern shot, YUV to RGB conversion for the movies, which also
+differs on a real GPU]. Proposal for the CI job, for the synthetic corpus only: `--gate-args "--diff-mean 0.01 --diff-pct 1.0"`
+(about twice the worst measured value). Do not change the real-game thresholds.
+
+#### Proof
+
+Branch `build/synth-ci`. Stock and player passed for all seven games (14 runs, `run.py` exit 0) with the player from
+`build/synth-ci` (manylinux package) on artemis under Xvfb, lavapipe and llvmpipe, with Mesa from nixpkgs. The Ubuntu 24.04
+package list above was proved in a rootless podman container (image `ubuntu:24.04` plus those packages, the repository mounted,
+the host machine lock held around the container); see the results of that run in the commit message and the report. The
+run found one packaging defect: the first manylinux package bundled `libstdc++.so.6` (GLIBCXX 3.4.25) in `lib/`, which the
+player's RUNPATH put before the system one, so every Mesa driver failed with `GLIBCXX_3.4.29 not found`, wgpu found no
+adapter and the player fell back to the software drawer ("this player draws with the wgpu renderer only"). It is fixed in
+`container-build.sh` (libstdc++ is host-provided).
 
 ### Windows (WARP)
 
