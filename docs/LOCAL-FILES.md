@@ -74,4 +74,4 @@ Gitignored files live in the **main checkout**. Worktrees under `.worktrees/` fi
 
 - Per-game config of the real games (names, file names, movie paths, plans, drivers) stays in the gitignored `harness/corpus.local.toml` and `harness/local/`. Game titles may appear in prose documents. In a worktree, the harness finds these files in the main checkout (`local_path` in `harness/gatelib/launch.py`).
 - The real-game gate is a maintainer tool. The public CI path is the synthetic games.
-- `research/shared-engine-launcher/evidence/` is still tracked in git until the history rewrite removes it. Keep your copy on disk.
+- `research/shared-engine-launcher/evidence/` (9 files of quoted game dialogue) is no longer tracked and was removed from history. Keep your copy on disk.
