@@ -162,7 +162,11 @@ jobs:
         run: |
           cargo clippy --workspace --all-targets --release -- -D warnings
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          cargo test --release --workspace
+          # Test binaries of the crates that use pyo3 cannot link on Windows: pyo3-ffi imports Python as a DLL unless
+          # pyhost's static link lines are present, and a second pyo3 config for the tests clashes with pyhost
+          # (LNK2005). Those crates are excluded; their tests run on Linux and macOS. One workspace-wide run keeps
+          # the feature set that the package build resolved.
+          cargo test --release --workspace --exclude engine --exclude gfx --exclude media --exclude patches --exclude platform --exclude player --exclude py2fix --exclude saves --exclude surface --exclude text --exclude vfs
       - uses: actions/upload-artifact@v7
         with:
           name: package-windows
