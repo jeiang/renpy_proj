@@ -84,6 +84,35 @@ The gate on real commercial games is a maintainer tool. It needs games that this
 
 On Windows, `cargo test` runs only for the crates that do not use Python (`encode`, `library`, `pyhost`, `stream`). The test binaries of the other crates cannot link there: `pyo3-ffi` imports Python as a DLL unless the static link lines of `pyhost` are present. Linux and macOS run all tests.
 
+### Durations and caches
+
+Wall-clock times of the jobs, measured on the pull request runs of PR #53 and on the release dry run.
+
+| Job | Cold | Warm |
+|---|---|---|
+| `rustfmt` | 10 s | 10 s |
+| `Licence notices are current` | 1 min 35 s | 1 min 30 s |
+| `Build`, Linux | 17 min (release run) | 5 min |
+| `Build`, macOS arm64 | 19 min (release run) | 8 min |
+| `Build`, Windows x64 | 24 min (release run) | 5 min |
+| `Synthetic corpus` | 18 min (SDK cache cold) | not measured |
+
+A release run is always cold, because a tag run can restore caches only from the default branch. The first run on `main` after the CI
+change saves the caches. Wait for that run to finish before you push a release tag.
+
+Sizes of the caches that one pull request run saves (`gh cache list`):
+
+| Cache | Size |
+|---|---|
+| Rust build (`v0-rust-...`), macOS / Windows | 0.6 GB / 0.7 to 1.3 GB |
+| Nix store (macOS) | 1.3 GB |
+| `manylinux-target`, `manylinux-inputs` | 1.0 GB, 0.7 GB |
+| `macos-inputs`, `windows-inputs` | 0.3 GB, 0.4 GB |
+| `synth-sdk` (Ren'Py SDKs, fonts) | 0.25 GB |
+
+GitHub keeps 10 GB of caches for each repository and evicts the oldest first. Pull request caches are visible only to that pull
+request, so the cache of `main` is the one that every later run and every release restores.
+
 Fetched inputs (Ren'Py source, wheels, static CPython, FFmpeg, Ren'Py SDKs) are cached with `actions/cache`. The keys are the hashes of
 the fetch and build scripts, so a change to a pin rebuilds them. The real-game gate is not part of CI.
 
