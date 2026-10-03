@@ -229,8 +229,12 @@ impl Mixer {
             return;
         }
         let mut old_tight = c.playing.as_ref().is_some_and(|t| t.tight);
+        let end = c.playing.as_ref().and_then(|t| t.media.clock_end());
         let old = c.playing.take();
         c.playing = c.queued.take();
+        if let (Some(end), Some(t)) = (end, c.playing.as_ref()) {
+            t.media.carry_clock(end);
+        }
         if let Some(o) = old {
             self.dying.push(o);
         }
@@ -402,8 +406,12 @@ impl Mixer {
                         buf[..read_length * 2].fill(0.0);
                     } else {
                         let mut old_tight = c.playing.as_ref().is_some_and(|t| t.tight);
+                        let end = c.playing.as_ref().and_then(|t| t.media.clock_end());
                         let old = c.playing.take();
                         c.playing = c.queued.take();
+                        if let (Some(end), Some(t)) = (end, c.playing.as_ref()) {
+                            t.media.carry_clock(end);
+                        }
                         if let Some(o) = old {
                             self.dying.push(o);
                         }

@@ -120,8 +120,45 @@ struct State {
     /// (its pts plus the interval): the play position of a file with no audio.
     video_frame_dur: f64,
     video_shown_end: f64,
+    /// Where the previous file of a loop ended on the shared clock (see `Shared::clock_end`): the
+    /// first frame of this file is due then, so the time between that end and the render tick that
+    /// noticed it does not add up over the loops.
+    carry_end: Option<f64>,
     pause_time: f64,
     time_offset: f64,
+}
+
+/// A carried clock end older than this is a stall, not a loop wrap: the file starts at once.
+const CARRY_MAX: f64 = 0.25;
+
+impl State {
+    fn new(audio_duration: i64) -> State {
+        State {
+            ready: false,
+            needs_decode: false,
+            quit: false,
+            audio_finished: false,
+            video_finished: false,
+            has_video: false,
+            video_path: String::new(),
+            total_duration: 0.0,
+            error: None,
+            audio_q: VecDeque::new(),
+            audio_out_index: 0,
+            audio_queue_samples: 0,
+            audio_duration,
+            video_only: false,
+            audio_read_samples: 0,
+            vq: VecDeque::new(),
+            video_pts_offset: None,
+            video_read_time: 0.0,
+            video_frame_dur: 1.0 / 30.0,
+            video_shown_end: 0.0,
+            carry_end: None,
+            pause_time: 0.0,
+            time_offset: 0.0,
+        }
+    }
 }
 
 impl State {
@@ -192,6 +229,31 @@ impl Shared {
         rv
     }
 
+    /// True when nothing is left to show or play (see `Media::drained`).
+    fn drained(&self) -> bool {
+        let st = self.st.lock();
+        st.ready
+            && st.has_video
+            && st.video_finished
+            && st.vq.is_empty()
+            && (if st.video_only { st.last_frame_done() } else { st.audio_finished && st.audio_q.is_empty() })
+    }
+
+    /// For a file with video and no audio: the time on the frame clock at which its last frame
+    /// ends, `None` for any other file or before the first frame.
+    fn clock_end(&self) -> Option<f64> {
+        let st = self.st.lock();
+        match st.video_pts_offset {
+            Some(off) if st.video_only && st.video_shown_end > 0.0 => Some(off + st.video_shown_end + st.time_offset),
+            _ => None,
+        }
+    }
+
+    /// Makes the first frame of this file due at `end` (from `clock_end` of the file it follows).
+    fn carry_clock(&self, end: f64) {
+        self.st.lock().carry_end = Some(end);
+    }
+
     /// Decoder, path (hardware name or software) and plane layout of the first video frame; empty before it.
     pub fn video_path(&self) -> String {
         self.st.lock().video_path.clone()
@@ -219,7 +281,12 @@ impl Shared {
         let off = match st.video_pts_offset {
             Some(o) => o,
             None => {
-                let o = offset_time - first.pts;
+                let carried = st.carry_end.take().map(|end| end - st.time_offset);
+                let o = match carried {
+                    // The file continues a loop: its clock starts where the last one ended.
+                    Some(end) if st.video_only && (0.0..=CARRY_MAX).contains(&(offset_time - end)) => end - first.pts,
+                    _ => offset_time - first.pts,
+                };
                 st.video_pts_offset = Some(o);
                 o
             }
@@ -260,30 +327,7 @@ impl Media {
             -1
         };
         let sh = Arc::new(Shared {
-            st: Mutex::new(State {
-                ready: false,
-                needs_decode: false,
-                quit: false,
-                audio_finished: false,
-                video_finished: false,
-                has_video: false,
-                video_path: String::new(),
-                total_duration: 0.0,
-                error: None,
-                audio_q: VecDeque::new(),
-                audio_out_index: 0,
-                audio_queue_samples: 0,
-                audio_duration,
-                video_only: false,
-                audio_read_samples: 0,
-                vq: VecDeque::new(),
-                video_pts_offset: None,
-                video_read_time: 0.0,
-                video_frame_dur: 1.0 / 30.0,
-                video_shown_end: 0.0,
-                pause_time: 0.0,
-                time_offset: 0.0,
-            }),
+            st: Mutex::new(State::new(audio_duration)),
             cv: Condvar::new(),
             name,
             want_video: video != 0,
@@ -310,12 +354,17 @@ impl Media {
     /// the audio either does not exist (video-only file, silence from the mixer clock) or is fully
     /// read. The channel can then move to the queued file without waiting for an audio callback.
     pub fn drained(&self) -> bool {
-        let st = self.sh.st.lock();
-        st.ready
-            && st.has_video
-            && st.video_finished
-            && st.vq.is_empty()
-            && (if st.video_only { st.last_frame_done() } else { st.audio_finished && st.audio_q.is_empty() })
+        self.sh.drained()
+    }
+
+    /// See `Shared::clock_end`.
+    pub fn clock_end(&self) -> Option<f64> {
+        self.sh.clock_end()
+    }
+
+    /// See `Shared::carry_clock`.
+    pub fn carry_clock(&self, end: f64) {
+        self.sh.carry_clock(end)
     }
 
     /// The play position in seconds of a file with video and no audio track: the end of the last
@@ -628,6 +677,8 @@ struct Decoder {
     audio_target: i64,
     audio_next_pts: f64,
     video_next_pts: f64,
+    /// pts of the previous decoded video frame: its distance to the next one is the frame interval.
+    prev_video_pts: Option<f64>,
     frame_dur: f64,
     rate: u32,
 }
@@ -692,6 +743,7 @@ impl Decoder {
             audio_target: 0,
             audio_next_pts: 0.0,
             video_next_pts: 0.0,
+            prev_video_pts: None,
             frame_dur: 1.0 / 30.0,
             rate,
         };
@@ -1175,6 +1227,15 @@ impl Decoder {
             }
         };
         self.video_next_pts = pts + self.frame_dur;
+        // The stream's average frame rate can disagree with the frame spacing (an Ogg Theora file
+        // that says 30 fps and has a frame every 1/60 s). The play position of a file with no audio
+        // ends where its last frame ends, so use the spacing the frames really have.
+        if let Some(prev) = self.prev_video_pts.replace(pts)
+            && pts - prev > 0.0
+            && pts - prev < 1.0
+        {
+            self.sh.st.lock().video_frame_dur = pts - prev;
+        }
 
         if pts < self.sh.skip {
             return None;
@@ -1482,3 +1543,90 @@ unsafe fn build_frame(f: *const ffi::AVFrame, pts: f64) -> Result<VideoFrame, St
         })
     }
 }
+
+#[cfg(test)]
+mod loop_clock_tests {
+    use super::*;
+
+    /// A video-only file of `n` frames at `fps` whose frames are all decoded, as `Shared` would hold it.
+    fn fake_clip(n: usize, fps: f64) -> Arc<Shared> {
+        let mut st = State::new(-1);
+        st.ready = true;
+        st.has_video = true;
+        st.video_only = true;
+        st.video_finished = true;
+        st.video_frame_dur = 1.0 / fps;
+        st.total_duration = n as f64 / fps;
+        for k in 0..n {
+            st.vq.push_back(Arc::new(VideoFrame {
+                width: 2,
+                height: 2,
+                layout: PlaneLayout::Yuv420p,
+                color: ColorInfo { full_range: false, matrix: Matrix::Bt709 },
+                planes: Vec::new(),
+                pts: k as f64 / fps,
+            }));
+        }
+        Arc::new(Shared { st: Mutex::new(st), cv: Condvar::new(), name: "fake".into(), want_video: true, frame_drops: false, skip: 0.0 })
+    }
+
+    fn set_time(t: f64) {
+        CURRENT_TIME.store(t.to_bits(), Ordering::Relaxed);
+    }
+
+    /// Plays `loops` loops of an `n` frame clip the way the renderer does: once per tick it moves
+    /// to the queued file when the playing one is drained (as `Mixer::hand_over_if_drained`),
+    /// then reads the frames that are due. Returns, per frame, how late it was shown against a
+    /// perfect clock that started with the first frame.
+    fn lateness(n: usize, fps: f64, tick: f64, phase: f64, loops: usize) -> Vec<f64> {
+        let t0 = 1000.0 + phase * tick;
+        let mut cur = fake_clip(n, fps);
+        let mut loop_no = 0;
+        let mut shown = Vec::new();
+        let mut first = None;
+        let mut t = t0;
+        while loop_no < loops {
+            set_time(t);
+            if cur.drained() {
+                let next = fake_clip(n, fps);
+                if let Some(end) = cur.clock_end() {
+                    next.carry_clock(end);
+                }
+                cur = next;
+                loop_no += 1;
+                if loop_no == loops {
+                    break;
+                }
+            }
+            while cur.video_ready() {
+                let Some(f) = cur.read_video().unwrap() else { break };
+                let ideal = (loop_no * n) as f64 / fps + f.pts;
+                let first_at = *first.get_or_insert(t - ideal);
+                shown.push(t - first_at - ideal);
+            }
+            t += tick;
+        }
+        shown
+    }
+
+    #[test]
+    fn loop_wrap_adds_no_time() {
+        let _g = TEST_CLOCK.lock();
+        for (n, fps) in [(60usize, 20.0f64), (60, 60.0), (90, 30.0)] {
+            for phase in [0.0, 0.37, 0.91] {
+                let tick = 1.0 / 60.0;
+                let late = lateness(n, fps, tick, phase, 12);
+                let last = late.last().copied().unwrap();
+                let worst = late.iter().cloned().fold(f64::MIN, f64::max);
+                // A frame is shown at the first tick on or after its time: at most one tick late.
+                // Nothing accumulates: the 12th loop is as late as the first.
+                assert!(worst < tick + 0.002, "{n} frames at {fps} fps, phase {phase}: worst lateness {worst}");
+                assert!(last < tick + 0.002, "{n} frames at {fps} fps, phase {phase}: last frame {last} late");
+                assert!(late.iter().all(|x| *x > -0.0051), "{n} frames at {fps} fps: a frame was shown early: {late:?}");
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+static TEST_CLOCK: Mutex<()> = Mutex::new(());
