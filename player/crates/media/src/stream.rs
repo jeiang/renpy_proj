@@ -124,6 +124,21 @@ struct State {
     time_offset: f64,
 }
 
+impl State {
+    /// True when the last frame of a file with no audio has been on screen for its whole interval.
+    /// The file ends here and not when the last frame is handed out: a looping movie would
+    /// otherwise show its last frame for one render tick and run faster than its frame rate.
+    fn last_frame_done(&self) -> bool {
+        match self.video_pts_offset {
+            Some(off) if self.video_shown_end > 0.0 => {
+                self.pause_time <= 0.0
+                    && current_time() - self.time_offset >= off + self.video_shown_end
+            }
+            _ => true,
+        }
+    }
+}
+
 /// The part of a media file that readers on other threads use.
 pub struct Shared {
     st: Mutex<State>,
@@ -300,7 +315,7 @@ impl Media {
             && st.has_video
             && st.video_finished
             && st.vq.is_empty()
-            && (st.video_only || (st.audio_finished && st.audio_q.is_empty()))
+            && (if st.video_only { st.last_frame_done() } else { st.audio_finished && st.audio_q.is_empty() })
     }
 
     /// The play position in seconds of a file with video and no audio track: the end of the last
@@ -339,7 +354,7 @@ impl Media {
         }
 
         if st.video_only {
-            if st.video_finished && st.vq.is_empty() {
+            if st.video_finished && st.vq.is_empty() && st.last_frame_done() {
                 st.audio_finished = true;
                 return 0;
             }
