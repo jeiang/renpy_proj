@@ -5,14 +5,14 @@ name: ci
 
 on:
   push:
-    branches: [main, build/ci]
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
-# A new push to a pull request cancels the run it supersedes. Runs on main always finish.
+# A new push to a branch or pull request cancels the run it supersedes. Runs on main always finish.
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: read
@@ -56,7 +56,8 @@ jobs:
     timeout-minutes: 90
     env:
       HARNESS_DISPLAY: xvfb
-      # The media generator only makes test files and is never linked or shipped: the runner's ffmpeg is enough.
+      # The media generator only makes test files. Nothing links it and nothing ships it, so the runner's apt ffmpeg
+      # (GPL build) is allowed here. The packages never contain it.
       SYNTH_ALLOW_GPL: '1'
     steps:
       - uses: actions/checkout@v7
