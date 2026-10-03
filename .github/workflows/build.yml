@@ -88,6 +88,17 @@ jobs:
           workspaces: player
       - name: Build the app bundle (ad hoc signed)
         run: player/packaging/macos.sh
+      - name: DEBUG probe
+        if: failure()
+        run: |
+          app=player/build-out/macos/RenPyPlayer.app
+          sw_vers; uname -a; sysctl hw.model hw.memsize
+          probe=$(mktemp -d); mkdir -p $probe/project/game $probe/data
+          cp player/packaging/ctypes_probe.rpy $probe/project/game/script.rpy
+          for i in 1 2 3; do CTYPES_PROBE_OUT=$probe/r$i.txt $app/Contents/MacOS/player $probe/project --data $probe/data 2>&1 | tail -3; cat $probe/r$i.txt 2>/dev/null; done
+          echo "--- without hardened runtime"
+          cp -R $app /tmp/app2; codesign --force --deep -s - /tmp/app2
+          CTYPES_PROBE_OUT=$probe/r9.txt /tmp/app2/Contents/MacOS/player $probe/project --data $probe/data 2>&1 | tail -3; cat $probe/r9.txt 2>/dev/null
       - name: clippy and tests
         if: inputs.checks
         run: |
