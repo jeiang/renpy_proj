@@ -51,6 +51,10 @@ Result: video connected (1738x978), menu seen, first say after the Start click, 
 
 Run under `runlock.py` (no other game run during it; load average about 3 from CI builds, and no "Mac quiet" message arrived, so this is not a fully idle machine). 5 of 5 checks pass. After input p50 / p95 = 98 / 183 ms (148 samples); all frames 137 / 197 ms; 15.3 fps; server CPU 16.4% of one core. After-input p50 is under 130 ms and in line with the earlier 100 to 120 ms, so the 193 ms close-out figure came from a busy machine. No code change was needed. The all-frames p50 includes frames of an idle picture, so it is higher than the earlier 127 ms. Evidence: `harness/out/stream46/lat/`.
 
+## Latency on the machine after 'Mac quiet' (2026-10-03, Chromium, main 970d51b plus the page.html gesture retry)
+
+Run under `runlock.py` after MacRuns reported the Mac quiet (load average about 3 from background CI builds). 5 of 5 checks pass. After input p50 / p95 = 104 / 171 ms (173 samples); all frames 128 / 171 ms; 15.2 fps; server CPU 16.5%. This matches the earlier 100 to 120 ms (p50 under 130 ms); no fix needed. Evidence: `harness/out/stream46/quiet/`.
+
 ## Findings that changed the code
 
 1. **Audio clock.** The first gate run showed video latency growing from 25 ms to 1 s and, in another run, 4.5 s, while the audio and video network stats were clean. The browser held video back to line it up with audio, because the audio RTP timeline came from the count of mixed samples while the mixer thread ran slightly slower than 48 kHz under game load. Audio is now clock-locked in `stream`: exactly 48000 frames per wall second leave, short input is padded with silence after 40 ms, long input is trimmed to 100 ms. Latency is then flat.
