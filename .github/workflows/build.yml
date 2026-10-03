@@ -88,36 +88,6 @@ jobs:
           workspaces: player
       - name: Build the app bundle (ad hoc signed)
         run: player/packaging/macos.sh
-      - name: DEBUG probe
-        if: always()
-        continue-on-error: true
-        run: |
-          mkdir -p dbg; app=player/build-out/macos/RenPyPlayer.app
-          {
-            sw_vers; uname -m
-            echo "== otool exe"; otool -L $app/Contents/MacOS/player
-            echo "== ffi symbols exe"; nm -m $app/Contents/MacOS/player | grep -i "ffi_closure\|ffi_trampoline\|ffi_prep" | head -20
-            echo "== libffi dylibs"; ls -l $app/Contents/Frameworks | grep -i ffi; otool -L $app/Contents/Frameworks/libffi*.dylib
-            echo "== cpython deps"; ls -l player/build-out/cpython/deps | head; cat player/build-out/cpython/stamp
-            echo "== sdk"; xcrun --show-sdk-path; ls -l /usr/lib/libffi* 2>&1
-            echo "== entitlements"; codesign -d --entitlements - $app 2>&1
-          } > dbg/info.txt 2>&1 || true
-          probe=$(mktemp -d); mkdir -p $probe/project/game $probe/data
-          cp player/packaging/ctypes_probe.rpy $probe/project/game/script.rpy
-          for i in 1 2; do
-            CTYPES_PROBE_OUT=$probe/r$i.txt DYLD_PRINT_LIBRARIES=1 $app/Contents/MacOS/player $probe/project --data $probe/data > dbg/run$i.txt 2>&1 || true
-            cat $probe/r$i.txt >> dbg/run$i.txt 2>/dev/null || true
-          done
-          cp -R $app /tmp/app2 && codesign --force --deep -s - /tmp/app2 || true
-          CTYPES_PROBE_OUT=$probe/r9.txt /tmp/app2/Contents/MacOS/player $probe/project --data $probe/data > dbg/norunt.txt 2>&1 || true
-          cat $probe/r9.txt >> dbg/norunt.txt 2>/dev/null || true
-          tail -3 dbg/*.txt | tail -40
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: debug-macos-${{ github.run_attempt }}
-          path: dbg
-          if-no-files-found: ignore
       - name: clippy and tests
         if: inputs.checks
         run: |

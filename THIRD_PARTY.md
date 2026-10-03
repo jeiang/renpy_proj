@@ -95,7 +95,7 @@ libaom is BSD-2-Clause with the AOM Patent License 1.0 (https://aomedia.googleso
 
 The player embeds a static CPython 3.12.8 built by `player/crates/pyhost/cpython/build.sh`.
 Copyright (c) 2001 Python Software Foundation; All Rights Reserved. Licence: `player/packaging/licences/CPython-LICENSE.txt`.
-The build changes no CPython source. It links these libraries statically: libffi (MIT), expat (MIT), zlib (Zlib), bzip2 (BSD-style), xz/liblzma (0BSD / public domain), OpenSSL (Apache-2.0).
+The build changes no CPython source. It links these libraries statically (on macOS libffi is the system library): libffi (MIT), expat (MIT), zlib (Zlib), bzip2 (BSD-style), xz/liblzma (0BSD / public domain), OpenSSL (Apache-2.0).
 
 ## Rust crates
 
