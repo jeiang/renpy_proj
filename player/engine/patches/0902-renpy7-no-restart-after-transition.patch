@@ -1,0 +1,19 @@
+# Reason: Ren'Py 7 games. Ren'Py 8 restarts the interaction when the ongoing transition of the top layer has expired ("End an obsolete ongoing transition" in `Interface.interact_core`); the restart makes `screen.per_interact` evaluate every shown screen a second time. Ren'Py 7.4.11 does not restart there. LuckyParadox's main menu rolls `renpy.random.choice` in the screen, so 0.5 s after the menu appears (end of `config.enter_transition`) the background re-rolled and cut to another image. The pops stay; the restart is skipped when `renpy.lexer.renpy7_syntax` is set (Ren'Py 7 detection).
+
+diff --git a/renpy/display/core.py b/renpy/display/core.py
+--- a/renpy/display/core.py
++++ b/renpy/display/core.py
+@@ -2921,8 +2921,12 @@
+                     self.ongoing_transition.pop(None, None)
+                     self.transition_time.pop(None, None)
+                     self.transition_from.pop(None, None)
+-                    self.restart_interaction = True
+ 
++                    # Player patch: Ren'Py 7 never restarted here, and a restart evaluates the
++                    # screens again (a `renpy.random.choice` in a screen then re-rolls).
++                    if not renpy.lexer.renpy7_syntax:
++                        self.restart_interaction = True
++
+                 # See if we want to restart the interaction entirely.
+                 if self.restart_interaction and not self.display_reset:
+                     return True, None
