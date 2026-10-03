@@ -252,8 +252,14 @@ def main():
             res["checks"]["video_connected"] = res["video_size"][0] > 0
             page.evaluate("""async () => { const v = window.__stream.video; const ctx = new (window.AudioContext||window.webkitAudioContext)();
               await Promise.race([ctx.resume(), new Promise(r => setTimeout(r, 3000))]); const src = ctx.createMediaStreamSource(v.srcObject); const an = ctx.createAnalyser(); an.fftSize = 2048; src.connect(an);
-              window.__rmsMax = 0; const buf = new Float32Array(an.fftSize);
+              window.__ctx = ctx; window.__rmsMax = 0; const buf = new Float32Array(an.fftSize);
               setInterval(() => { an.getFloatTimeDomainData(buf); let s = 0; for (const x of buf) s += x*x; const r = Math.sqrt(s/buf.length); if (r > window.__rmsMax) window.__rmsMax = r; }, 50); }""")
+            if a.browser == "safari":
+                # Safari starts an AudioContext created outside a user gesture suspended; a WebDriver click is a gesture.
+                page.evaluate("() => { document.addEventListener('pointerdown', () => window.__ctx.resume(), {once: true}); }")
+                page.click("body")
+                time.sleep(0.5)
+            res["audio_state"] = {"after_setup": page.evaluate("({ctx: window.__ctx.state, paused: window.__stream.video.paused, muted: window.__stream.video.muted})")}
             clicks = []
 
             def click(x, y):
@@ -282,6 +288,7 @@ def main():
             res["checks"]["menu_seen"] = menu is not None
             page.screenshot(path=a.out + "/page-menu.png")
             time.sleep(2)
+            res["audio_state"]["after_first_inputs"] = page.evaluate("({ctx: window.__ctx.state, paused: window.__stream.video.paused, muted: window.__stream.video.muted})")
             cpu0, w0 = host.cputime(), time.time()
             lat0 = len(page.evaluate('window.__stream.latency()'))
             fr0 = page.evaluate("window.__stream.video.getVideoPlaybackQuality().totalVideoFrames")

@@ -191,6 +191,10 @@ async function connect() {
   await p.setRemoteDescription({ type: "answer", sdp: sdp.answer });
   if (video.requestVideoFrameCallback) video.requestVideoFrameCallback(onFrame);
 }
+// Safari may refuse the play() from ontrack (it runs outside a user gesture): retry on the first gestures.
+for (const ev of ["pointerdown", "keydown", "touchend"]) {
+  document.addEventListener(ev, () => { if (video.srcObject && video.paused) video.play().catch(() => {}); }, { capture: true });
+}
 btn.addEventListener("click", () => { connect().catch(e => { setState("error: " + e); btn.classList.remove("hide"); }); });
 
 // ---- test hooks -----------------------------------------------------------
