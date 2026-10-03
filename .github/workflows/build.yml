@@ -19,7 +19,6 @@ env:
 
 jobs:
   linux:
-    if: false
     name: Linux x86_64 (manylinux_2_28)
     runs-on: ubuntu-24.04
     timeout-minutes: 120
@@ -108,7 +107,6 @@ jobs:
           retention-days: 7
 
   windows:
-    if: false
     name: Windows x64
     runs-on: windows-2022
     timeout-minutes: 120
