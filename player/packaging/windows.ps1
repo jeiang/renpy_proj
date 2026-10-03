@@ -83,6 +83,10 @@ Write-Host "player.exe imports: $($deps -join ' ')"
 if ($bad) { throw "player.exe depends on the dynamic CRT: $($bad -join ' ')" }
 Write-Host ("player.exe size: {0:n1} MB" -f ((Get-Item "$pkg\player.exe").Length / 1MB))
 
+# No Nix store path may reach the package (same rule as packaging/check-no-nix-store.sh; licenses is skipped).
+Add-Type -TypeDefinition 'public static class NixScan { public static bool Has(string p) { var b = System.IO.File.ReadAllBytes(p); return System.MemoryExtensions.IndexOf(new System.ReadOnlySpan<byte>(b), new System.ReadOnlySpan<byte>(System.Text.Encoding.ASCII.GetBytes("/nix/store"))) >= 0; } }'
+$bad = Get-ChildItem $pkg -Recurse -File | Where-Object { $_.FullName -notmatch '[\\/]licenses[\\/]' -and [NixScan]::Has($_.FullName) }
+if ($bad) { throw "package contains /nix/store paths: $($bad.FullName -join ', ')" }
 $zip = Join-Path $out 'player-windows-x86_64.zip'
 if (Test-Path $zip) { Remove-Item $zip }
 Compress-Archive -Path $pkg -DestinationPath $zip

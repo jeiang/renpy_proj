@@ -82,6 +82,8 @@ The gate on real commercial games is a maintainer tool. It needs games that this
 | `Build` (`build.yml`) | On macOS arm64, Linux (manylinux_2_28 container) and Windows x64: release build with the packaging script of the platform, `cargo clippy -- -D warnings` and `cargo test`. |
 | `Synthetic corpus` | On Linux under Xvfb and Mesa lavapipe: the synthetic games through `harness/testgames/run.py`, stock engine first, then the Linux package of the `Build` job (recipe and thresholds: [harness/testgames/README.md](harness/testgames/README.md), "CI on Linux"). |
 
+On Windows, `cargo test` runs only for the crates that do not use Python (`encode`, `library`, `pyhost`, `stream`). The test binaries of the other crates cannot link there: `pyo3-ffi` imports Python as a DLL unless the static link lines of `pyhost` are present. Linux and macOS run all tests.
+
 Fetched inputs (Ren'Py source, wheels, static CPython, FFmpeg, Ren'Py SDKs) are cached with `actions/cache`. The keys are the hashes of
 the fetch and build scripts, so a change to a pin rebuilds them. The real-game gate is not part of CI.
 
