@@ -82,7 +82,8 @@ fi
 # ---- Setup.local: every extension module builtin ----
 # The SDK headers (Apple libffi) and a stub .tbd for /usr/lib/libffi.dylib: nix's ld cannot read the SDK's
 # libffi.tbd (same reason as the libiconv stub below). The exports are those of the SDK libffi.tbd.
-SDK=$(/usr/bin/xcrun --show-sdk-path 2>/dev/null || true)
+# env -u: the nix dev shell sets DEVELOPER_DIR and SDKROOT to its own SDK, which has no libffi headers.
+SDK=$(env -u DEVELOPER_DIR -u SDKROOT /usr/bin/xcrun --show-sdk-path 2>/dev/null || true)
 [ -f "$SDK/usr/include/ffi/ffi.h" ] || SDK=${SDKROOT:-}
 [ -f "$SDK/usr/include/ffi/ffi.h" ] || { echo "pyhost: the macOS SDK has no usr/include/ffi/ffi.h" >&2; exit 1; }
 mkdir -p "$OUT/sysdeps"
