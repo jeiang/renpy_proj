@@ -17,8 +17,10 @@
 #   3. Signs every dylib, then the app, ad hoc with the hardened runtime:
 #        codesign --force -s - -o runtime --timestamp=none
 #      and runs `codesign --verify --strict --deep`.
-#   4. Runs the ctypes probe (packaging/ctypes_probe.rpy) under the signed binary: `ctypes.CFUNCTYPE`
+#   4. Runs two probes under the signed binary. The ctypes probe (packaging/ctypes_probe.rpy): `ctypes.CFUNCTYPE`
 #      callbacks need libffi closures, which the hardened runtime can refuse (research/pypack open item d).
+#      The ssl probe (packaging/ssl_probe.rpy): the default certificate file is the system one, not a
+#      /nix/store path, certificates load from it, and a verified handshake works when the machine has network.
 #   5. Developer ID signing and notarization (human-in-the-loop, they need the user's Apple account):
 #        DEVELOPER_ID_IDENTITY   "Developer ID Application: Name (TEAMID)": signs with a secure timestamp
 #        NOTARY_KEYCHAIN_PROFILE a `xcrun notarytool store-credentials` profile name: notarizes and staples
@@ -229,21 +231,32 @@ fi
 
 [ -x "$exe" ] || { echo "no signed app at $app (run without --probe-only first)" >&2; exit 1; }
 
-# --- 4. ctypes probe under the hardened runtime -----------------------------------------------------
-probe="$(mktemp -d)"
-mkdir -p "$probe/project/game" "$probe/data"
-cp "$here/ctypes_probe.rpy" "$probe/project/game/script.rpy"
-CTYPES_PROBE_OUT="$probe/result.txt" "$exe" "$probe/project" --data "$probe/data" >"$probe/stdout.txt" 2>&1 || true
-if [ -s "$probe/result.txt" ] && grep -q '^ctypes callback ok' "$probe/result.txt"; then
-    log "ctypes probe: $(cat "$probe/result.txt")"
-else
-    log "ctypes probe FAILED (output follows)"
-    cat "$probe/result.txt" "$probe/stdout.txt" 2>/dev/null | sed 's/^/    /'
-    find "$probe/data/logs" -name traceback.txt -exec cat {} \; 2>/dev/null | sed 's/^/    /'
-    rm -rf "$probe"
-    exit 1
-fi
-rm -rf "$probe"
+# --- 4. probes under the hardened runtime -----------------------------------------------------------
+# Each probe is a game whose init block writes its result to $<NAME>_PROBE_OUT and exits. $1 is the probe
+# name, $2 the line the result file must start with. Run with the environment the user's shell has, minus
+# any SSL variable, so the player's own defaults are the ones under test.
+run_probe() {
+    local name="$1" ok="$2" upper dir
+    upper="$(echo "$name" | tr '[:lower:]' '[:upper:]')"
+    dir="$(mktemp -d)"
+    mkdir -p "$dir/project/game" "$dir/data"
+    cp "$here/${name}_probe.rpy" "$dir/project/game/script.rpy"
+    env -u SSL_CERT_FILE -u SSL_CERT_DIR -u NIX_SSL_CERT_FILE "${upper}_PROBE_OUT=$dir/result.txt" \
+        "$exe" "$dir/project" --data "$dir/data" >"$dir/stdout.txt" 2>&1 || true
+    if [ -s "$dir/result.txt" ] && grep -q "^$ok" "$dir/result.txt"; then
+        log "$name probe: $(cat "$dir/result.txt")"
+        rm -rf "$dir"
+    else
+        log "$name probe FAILED (output follows)"
+        cat "$dir/result.txt" "$dir/stdout.txt" 2>/dev/null | sed 's/^/    /'
+        find "$dir/data/logs" -name traceback.txt -exec cat {} \; 2>/dev/null | sed 's/^/    /'
+        rm -rf "$dir"
+        exit 1
+    fi
+}
+run_probe ctypes 'ctypes callback ok'
+run_probe ssl 'ssl probe ok'
+run_probe python 'python probe ok'
 [ "$probe_only" = 1 ] && exit 0
 
 # --- 5. Developer ID signature and notarization (HITL) -----------------------------------------------
