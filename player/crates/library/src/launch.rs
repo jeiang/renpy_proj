@@ -102,7 +102,11 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(25));
         }
         assert_eq!(serve.urls, vec!["http://192.0.2.1:8080/".to_string()]);
-        let args: Vec<String> = std::fs::read_to_string(&argv).unwrap().lines().map(String::from).collect();
+        let args: Vec<String> = std::fs::read_to_string(&argv)
+            .unwrap()
+            .lines()
+            .map(String::from)
+            .collect();
         assert_eq!(args, ["serve", "/g/game", "--data", "/d/data"]);
         serve.stop();
         std::fs::remove_dir_all(&dir).unwrap();
