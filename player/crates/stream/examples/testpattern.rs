@@ -146,7 +146,7 @@ fn main() -> anyhow::Result<()> {
         }
         let mut data = base.clone();
         let c = clicks.load(Ordering::Relaxed);
-        let panel = if c % 2 == 0 {
+        let panel = if c.is_multiple_of(2) {
             [200, 60, 60]
         } else {
             [60, 200, 90]

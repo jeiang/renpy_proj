@@ -40,9 +40,18 @@ fn layout_of(l: PlaneLayout) -> Layout {
         PlaneLayout::Yuv420p10 => mk(false, true, 10, false, 1, 1),
         PlaneLayout::Yuv422p10 => mk(false, true, 10, false, 1, 0),
         PlaneLayout::Yuv444p10 => mk(false, true, 10, false, 0, 0),
-        PlaneLayout::Gbrp => Layout { rgb: true, ..mk(false, false, 8, false, 0, 0) },
-        PlaneLayout::Gbrp10 => Layout { rgb: true, ..mk(false, true, 10, false, 0, 0) },
-        PlaneLayout::Gbrp12 => Layout { rgb: true, ..mk(false, true, 12, false, 0, 0) },
+        PlaneLayout::Gbrp => Layout {
+            rgb: true,
+            ..mk(false, false, 8, false, 0, 0)
+        },
+        PlaneLayout::Gbrp10 => Layout {
+            rgb: true,
+            ..mk(false, true, 10, false, 0, 0)
+        },
+        PlaneLayout::Gbrp12 => Layout {
+            rgb: true,
+            ..mk(false, true, 12, false, 0, 0)
+        },
     }
 }
 

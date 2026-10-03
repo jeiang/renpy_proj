@@ -30,7 +30,10 @@ fn print_with_trailing_comma_keeps_softspace() {
         out("print >>f, 'b',\nprint >>f\nprint x\n"),
         "_py2c_print('b', soft=True, file=f)\n_py2c_print(file=f)\n_py2c_print(x)\n"
     );
-    assert_eq!(out("for i in l: print i,\nprint\n"), "for i in l: _py2c_print(i, soft=True)\n_py2c_print()\n");
+    assert_eq!(
+        out("for i in l: print i,\nprint\n"),
+        "for i in l: _py2c_print(i, soft=True)\n_py2c_print()\n"
+    );
 }
 
 #[test]
