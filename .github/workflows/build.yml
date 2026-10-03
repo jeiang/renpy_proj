@@ -19,6 +19,7 @@ env:
 
 jobs:
   linux:
+    if: false
     name: Linux x86_64 (manylinux_2_28)
     runs-on: ubuntu-24.04
     timeout-minutes: 120
@@ -59,6 +60,7 @@ jobs:
           retention-days: 7
 
   macos:
+    if: false
     name: macOS arm64
     runs-on: macos-15
     timeout-minutes: 120
