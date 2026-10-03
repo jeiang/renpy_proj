@@ -55,10 +55,10 @@ Every newly built, ad hoc signed `player` binary triggers the macOS application 
 ## Not done or not covered
 
 - No readback-free path (above). The measured cost is small at 1080p: 0.04 to 0.2 ms on the game thread.
-- Safari proper (safaridriver) was not tried; WebKit through Playwright, headed, passed. Headless WebKit does not gather ICE candidates on this Mac.
+- Safari proper (safaridriver) is blocked: session creation fails with "Allow remote automation" disabled (Safari Settings > Developer; `safaridriver --enable` needs an admin password). Not run; WebKit through Playwright, headed, passed. Headless WebKit does not gather ICE candidates on this Mac.
 - Windows was not built (stream crate uses `wincrypto` there; untried).
 - NVENC and AMF/QSV/MF encoders are untested.
-- The library Stream button was not clicked.
+- The library Stream button was not clicked (no OS-level input). A unit test (`launch::tests::spawn_serve_runs_the_serve_subcommand_and_collects_urls`) proves the button's spawn function starts `player serve <game> --data <data>`, the start of the gate command, and collects the `Stream URL:` lines. The click itself and the child's output in a real GUI session are unproven.
 - Opus tap runs at the mixer rate; a game that sets `config.sound_sample_rate` other than 48000 was not tried.
 - The browser's playout of the first frame after Connect includes a 280 ms first sample (cold path), then settles to 20 ms on the Mac LAN before game load.
 
