@@ -1,19 +1,17 @@
 #!/usr/bin/env python3
 """Record a game window on macOS from launch, at 60 fps, for a fixed time. Stdlib only.
 
-  runlock.py -- record_window.py --engine stock|player --game DIR --out DIR [--secs 40] [--engine-bin PATH]
+  runlock.py -- record_window.py --engine stock|player --engine-bin PATH --game DIR --out DIR [--secs 40] [--probe SCRIPT.rpy]
 
 Starts a full-screen avfoundation capture (ffmpeg), launches the game, raises its window, then writes
   <out>/<engine>-screen.mkv      full-screen capture (x264 crf 10)
   <out>/<engine>-timeline.json   wall times (launch, ffmpeg start, first window) and window bounds in points
-Crop afterwards with tools/flicker_measure.py. The game runs from DIR (a scratch clone, never ~/Games).
+Crop and classify afterwards with a per-game script (kept local, see docs/LOCAL-FILES.md). The game runs from DIR (a scratch clone, never ~/Games).
 """
 import argparse, json, os, pathlib, signal, subprocess, sys, time
 
 HERE = pathlib.Path(__file__).resolve().parent
-WINBOUNDS = HERE.parent / "work" / "bin" / "winbounds"
-SDK = pathlib.Path("/Users/aidanp/Projects/renpy_proj/research/test-corpus/sdk/renpy-7.4.11-sdk/renpy.sh")
-PLAYER = pathlib.Path("/Users/aidanp/Projects/renpy_proj/.worktrees/mac-final/player/target/release/player")
+WINBOUNDS = HERE.parent / "work" / "bin" / "winbounds"  # swiftc -O -o harness/work/bin/winbounds harness/tools/winbounds.swift
 
 
 def pids_of(pattern):
@@ -41,8 +39,8 @@ def main():
     ap.add_argument("--game", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--secs", type=float, default=40)
-    ap.add_argument("--engine-bin")
-    ap.add_argument("--probe", action="store_true", help="install tools/lf_menu_probe.rpy (passes the language screen, logs menu events)")
+    ap.add_argument("--engine-bin", required=True, help="stock: the SDK's renpy.sh; player: the player binary")
+    ap.add_argument("--probe", help="a .rpy probe script: copied into the game for stock, passed as --harness-script to the player; its log path is in LF_LOG")
     ap.add_argument("--headless-dump", help="player only: PLAYER_HEADLESS=1, no capture, dump every presented frame as PNG into this dir")
     a = ap.parse_args()
     out = pathlib.Path(a.out).resolve(); out.mkdir(parents=True, exist_ok=True)
@@ -62,12 +60,12 @@ def main():
     if a.engine == "stock":
         if a.probe:
             import shutil
-            shutil.copy(HERE / "lf_menu_probe.rpy", game / "game" / "zz_lf_probe.rpy")
-        argv = [a.engine_bin or str(SDK), str(game), "--savedir", str(scratch / "saves7")]
+            shutil.copy(a.probe, game / "game" / "zz_probe.rpy")
+        argv = [a.engine_bin, str(game), "--savedir", str(scratch / "saves7")]
     else:
-        argv = [a.engine_bin or str(PLAYER), str(game), "--data", str(scratch / "data"), "--logdir", str(scratch / "logs")]
+        argv = [a.engine_bin, str(game), "--data", str(scratch / "data"), "--logdir", str(scratch / "logs")]
         if a.probe:
-            argv += ["--harness-script", str(HERE / "lf_menu_probe.rpy")]
+            argv += ["--harness-script", str(pathlib.Path(a.probe).resolve())]
     tl = dict(engine=a.engine, argv=argv, bounds=[])
     mkv = out / (a.engine + "-screen.mkv")
     ff = None if a.headless_dump else subprocess.Popen(["ffmpeg", "-y", "-f", "avfoundation", "-framerate", "60", "-capture_cursor", "0", "-pixel_format", "uyvy422",
