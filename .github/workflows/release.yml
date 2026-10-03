@@ -1,0 +1,80 @@
+# Tagged release: `git tag v0.1.0 && git push origin v0.1.0`.
+# Builds the three packages (build.yml), regenerates the Rust licence notices with cargo about, writes SHA-256
+# checksums and creates a DRAFT GitHub Release. Publish the draft by hand after you have looked at it.
+#   macOS: ad hoc signed .app in a zip. No Developer ID yet, so Gatekeeper asks the user to allow it.
+#   Linux: manylinux_2_28 tarball.
+#   Windows: zip.
+# Checks (clippy, tests, synthetic corpus) are not repeated here: ci.yml already ran them on the tagged commit.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  notices:
+    name: Licence notices (cargo about)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-about@0.9.2
+      - name: Regenerate RUST_DEPENDENCIES.md and compare with the committed file
+        run: |
+          (cd player && cargo fetch --locked)
+          player/packaging/licences/generate.sh
+          git diff --exit-code -- player/packaging/licences/RUST_DEPENDENCIES.md
+      - uses: actions/upload-artifact@v7
+        with:
+          name: notices
+          path: player/packaging/licences/RUST_DEPENDENCIES.md
+          if-no-files-found: error
+          retention-days: 7
+
+  build:
+    needs: notices
+    uses: ./.github/workflows/build.yml
+    with:
+      checks: false
+
+  release:
+    name: Draft GitHub Release
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+      - name: Name the assets and write checksums
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          mkdir dist
+          cp artifacts/package-linux/player-linux-x86_64.tar.gz "dist/renpy-player-$TAG-linux-x86_64-manylinux_2_28.tar.gz"
+          cp artifacts/package-macos/player-macos-arm64.zip "dist/renpy-player-$TAG-macos-arm64.zip"
+          cp artifacts/package-windows/player-windows-x86_64.zip "dist/renpy-player-$TAG-windows-x86_64.zip"
+          cp artifacts/notices/RUST_DEPENDENCIES.md "dist/renpy-player-$TAG-rust-dependency-licences.md"
+          cp THIRD_PARTY.md "dist/renpy-player-$TAG-THIRD_PARTY.md"
+          (cd dist && sha256sum * > SHA256SUMS && cat SHA256SUMS)
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          flags=(--draft --verify-tag --title "$TAG" --generate-notes)
+          case "$TAG" in *-*) flags+=(--prerelease) ;; esac
+          gh release create "$TAG" "${flags[@]}" dist/*

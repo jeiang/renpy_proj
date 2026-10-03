@@ -5,6 +5,8 @@
 #   source  -> <player>/upstream/src/Python-3.12.8        (fetched here)
 #   scratch -> <player>/upstream/cpython-build
 #   output  -> <player>/build-out/cpython/{lib,deps,boot,stdlib.zip,pyo3-config.txt,stamp}
+# libffi is the macOS system one (/usr/lib/libffi.dylib), as in the python.org builds: Apple's libffi finds
+# /usr/lib/libffi-trampolines.dylib itself. The nix libffi hardcodes the store path of its trampolines dylib.
 # Static third-party libraries come from nix (nixpkgs#pkgsStatic.<pkg>).
 # The five faults from research/pypack/README.md section 2 are handled at the marked FAULT lines.
 set -eu
@@ -36,21 +38,20 @@ esac
 
 # ---- static dependencies from nix (resolved before the environment is cleaned) ----
 # Prefetched inputs (hermetic builds, for example the Nix package): PYHOST_<NAME> names the store path of
-# each static dependency (NAME is FFI, FFI_DEV, BZ, BZ_DEV, XZ, XZ_DEV, EXP, EXP_DEV, ZL, ZL_DEV, SSL or
+# each static dependency (NAME is BZ, BZ_DEV, XZ, XZ_DEV, EXP, EXP_DEV, ZL, ZL_DEV, SSL or
 # SSL_DEV). Without it the script asks `nix build` (the dev shell flow).
 nixp() {
   eval "pre=\${PYHOST_$2:-}"
   if [ -n "$pre" ]; then echo "$pre"; return; fi
-  command -v nix >/dev/null || { echo "pyhost: nix is required for the static libffi, bzip2, xz, expat, zlib and openssl (run inside 'nix develop .#player', or set PYHOST_<NAME>)" >&2; exit 1; }
+  command -v nix >/dev/null || { echo "pyhost: nix is required for the static bzip2, xz, expat, zlib and openssl (run inside 'nix develop .#player', or set PYHOST_<NAME>)" >&2; exit 1; }
   nix build --no-link --print-out-paths "$NIXPKGS.$1" 2>/dev/null | head -1
 }
-FFI=$(nixp libffi.out FFI); FFI_DEV=$(nixp libffi.dev FFI_DEV)
 BZ=$(nixp bzip2.out BZ); BZ_DEV=$(nixp bzip2.dev BZ_DEV)
 XZ=$(nixp xz.out XZ); XZ_DEV=$(nixp xz.dev XZ_DEV)
 EXP=$(nixp expat.out EXP); EXP_DEV=$(nixp expat.dev EXP_DEV)
 ZL=$(nixp zlib.out ZL); ZL_DEV=$(nixp zlib.dev ZL_DEV)
 SSL=$(nixp openssl.out SSL); SSL_DEV=$(nixp openssl.dev SSL_DEV)
-for v in FFI FFI_DEV BZ BZ_DEV XZ XZ_DEV EXP EXP_DEV ZL ZL_DEV SSL SSL_DEV; do
+for v in BZ BZ_DEV XZ XZ_DEV EXP EXP_DEV ZL ZL_DEV SSL SSL_DEV; do
   eval "p=\${$v}"; [ -n "$p" ] && [ -d "$p" ] || { echo "pyhost: nix build of pkgsStatic dependency $v failed" >&2; exit 1; }
 done
 PYTHON_HOME_TMP=${TMPDIR:-/tmp}
@@ -79,7 +80,31 @@ if [ ! -d "$SRC" ]; then
 fi
 
 # ---- Setup.local: every extension module builtin ----
-INC="-I$FFI_DEV/include -I$BZ_DEV/include -I$XZ_DEV/include -I$EXP_DEV/include -I$ZL_DEV/include -I$SSL_DEV/include"
+# The SDK headers (Apple libffi) and a stub .tbd for /usr/lib/libffi.dylib: nix's ld cannot read the SDK's
+# libffi.tbd (same reason as the libiconv stub below). The exports are those of the SDK libffi.tbd.
+# env -u: the nix dev shell sets DEVELOPER_DIR and SDKROOT to its own SDK, which has no libffi headers.
+SDK=$(env -u DEVELOPER_DIR -u SDKROOT /usr/bin/xcrun --show-sdk-path 2>/dev/null || true)
+[ -f "$SDK/usr/include/ffi/ffi.h" ] || SDK=${SDKROOT:-}
+[ -f "$SDK/usr/include/ffi/ffi.h" ] || { echo "pyhost: the macOS SDK has no usr/include/ffi/ffi.h" >&2; exit 1; }
+mkdir -p "$OUT/sysdeps"
+cat > "$OUT/sysdeps/libffi.tbd" <<TBD
+--- !tapi-tbd
+tbd-version:     4
+targets:         [ $TBD_TARGET ]
+install-name:    '/usr/lib/libffi.dylib'
+current-version: 40
+compatibility-version: 1
+exports:
+  - targets:         [ $TBD_TARGET ]
+    symbols:         [ _ffi_call, _ffi_closure_alloc, _ffi_closure_free, _ffi_find_closure_for_code_np,
+                       _ffi_get_struct_offsets, _ffi_prep_cif, _ffi_prep_cif_var, _ffi_prep_closure_loc,
+                       _ffi_type_double, _ffi_type_float, _ffi_type_pointer, _ffi_type_sint16,
+                       _ffi_type_sint32, _ffi_type_sint64, _ffi_type_sint8, _ffi_type_uint16,
+                       _ffi_type_uint32, _ffi_type_uint64, _ffi_type_uint8, _ffi_type_void,
+                       _ffi_type_complex_double, _ffi_type_complex_float ]
+...
+TBD
+INC="-I$SDK/usr/include/ffi -I$BZ_DEV/include -I$XZ_DEV/include -I$EXP_DEV/include -I$ZL_DEV/include -I$SSL_DEV/include"
 CORE=-DPy_BUILD_CORE_BUILTIN
 cat > "$B/Setup.local.new" <<SETUP
 *static*
@@ -95,7 +120,7 @@ _codecs_kr $CORE cjkcodecs/_codecs_kr.c
 _codecs_tw $CORE cjkcodecs/_codecs_tw.c
 _contextvars $CORE _contextvarsmodule.c
 _csv $CORE _csv.c
-_ctypes $CORE $INC -DUSING_MALLOC_CLOSURE_DOT_C -DUSING_APPLE_OS_LIBFFI -DHAVE_FFI_PREP_CIF_VAR -DHAVE_FFI_PREP_CLOSURE_LOC -DHAVE_FFI_CLOSURE_ALLOC _ctypes/_ctypes.c _ctypes/callbacks.c _ctypes/callproc.c _ctypes/malloc_closure.c _ctypes/stgdict.c _ctypes/cfield.c $FFI/lib/libffi.a
+_ctypes $CORE $INC -DUSING_MALLOC_CLOSURE_DOT_C -DUSING_APPLE_OS_LIBFFI -DHAVE_FFI_PREP_CIF_VAR -DHAVE_FFI_PREP_CLOSURE_LOC -DHAVE_FFI_CLOSURE_ALLOC _ctypes/_ctypes.c _ctypes/callbacks.c _ctypes/callproc.c _ctypes/malloc_closure.c _ctypes/stgdict.c _ctypes/cfield.c -L$OUT/sysdeps -lffi
 _datetime $CORE _datetimemodule.c
 _elementtree $CORE $INC -DUSE_PYEXPAT_CAPI _elementtree.c $EXP/lib/libexpat.a
 _hashlib $CORE $INC _hashopenssl.c $SSL/lib/libssl.a $SSL/lib/libcrypto.a
@@ -165,7 +190,7 @@ fi
 mkdir -p "$OUT/lib" "$OUT/deps" "$OUT/boot"
 cp "$B/libpython3.12.a" "$OUT/lib/libpython3.12.a"
 rm -f "$OUT"/deps/*.a
-cp "$FFI/lib/libffi.a" "$BZ/lib/libbz2.a" "$XZ/lib/liblzma.a" "$EXP/lib/libexpat.a" "$ZL/lib/libz.a" \
+cp "$BZ/lib/libbz2.a" "$XZ/lib/liblzma.a" "$EXP/lib/libexpat.a" "$ZL/lib/libz.a" \
    "$SSL/lib/libssl.a" "$SSL/lib/libcrypto.a" "$OUT/deps/"
 chmod u+w "$OUT"/deps/*.a
 PY=$B/install/bin/python3.12

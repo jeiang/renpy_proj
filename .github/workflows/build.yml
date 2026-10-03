@@ -1,0 +1,175 @@
+# Reusable workflow: builds the three binary packages. Called by ci.yml (with checks) and release.yml (without).
+# Packages come from the repository's own scripts: player/packaging/{manylinux/build.sh,macos.sh,windows.ps1}.
+# Output: workflow artifacts package-linux, package-macos, package-windows.
+name: build
+
+on:
+  workflow_call:
+    inputs:
+      checks:
+        description: Also run cargo clippy (no warnings allowed) and cargo test on each platform.
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: never
+
+jobs:
+  linux:
+    name: Linux x86_64 (manylinux_2_28)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+      # Fetched inputs, the static dependencies, LGPL FFmpeg, the Rust toolchain and the static CPython.
+      # The key is the set of scripts that define them: a change in one of them rebuilds everything.
+      - name: Cache fetched inputs and the CPython build
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cache/renpy-manylinux/deps
+            ~/.cache/renpy-manylinux/ffmpeg
+            ~/.cache/renpy-manylinux/sdl2
+            ~/.cache/renpy-manylinux/rustup
+            ~/.cache/renpy-manylinux/cargo
+            ~/.cache/renpy-manylinux/dl
+            player/upstream
+            player/build-out/cpython
+          key: manylinux-inputs-${{ hashFiles('player/packaging/manylinux/container-build.sh', 'player/packaging/manylinux/build.sh', 'player/crates/pyhost/cpython/build_linux.sh', 'player/crates/pyhost/cpython/mk*.py', 'player/engine/fetch.sh', 'player/engine/wheels.txt') }}
+      - name: Cache cargo target
+        uses: actions/cache@v6
+        with:
+          path: player/target
+          key: manylinux-target-${{ hashFiles('player/Cargo.lock') }}-${{ github.sha }}
+          restore-keys: |
+            manylinux-target-${{ hashFiles('player/Cargo.lock') }}-
+            manylinux-target-
+      - name: Build the package in the manylinux_2_28 container
+        env:
+          PLAYER_CHECKS: ${{ inputs.checks && '1' || '0' }}
+        run: player/packaging/manylinux/build.sh
+      - uses: actions/upload-artifact@v7
+        with:
+          name: package-linux
+          path: player/build-out/manylinux/player-linux-x86_64.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+  macos:
+    name: macOS arm64
+    runs-on: macos-15
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+      - uses: nixbuild/nix-quick-install-action@v35
+        with:
+          nix_conf: |
+            keep-env-derivations = true
+            keep-outputs = true
+      # The dev shell (Rust, LGPL FFmpeg, FreeType, HarfBuzz) is the build environment of macos.sh.
+      - name: Cache the Nix store
+        uses: nix-community/cache-nix-action@v7
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.nix', 'flake.lock') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-
+          gc-max-store-size-macos: 6G
+      - name: Cache fetched inputs and the CPython build
+        uses: actions/cache@v6
+        with:
+          path: |
+            player/upstream
+            player/build-out/cpython
+          key: macos-inputs-${{ hashFiles('flake.lock', 'player/crates/pyhost/cpython/build.sh', 'player/crates/pyhost/cpython/mk*.py', 'player/engine/fetch.sh', 'player/engine/wheels.txt') }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: player
+      - name: Build the app bundle (ad hoc signed)
+        run: player/packaging/macos.sh
+      - name: clippy and tests
+        if: inputs.checks
+        run: |
+          nix develop .#player -c bash -ec '
+            cd player
+            cargo clippy --workspace --all-targets --release -- -D warnings
+            cargo test --release --workspace'
+      - name: Zip the app
+        run: |
+          ditto -c -k --keepParent player/build-out/macos/RenPyPlayer.app player-macos-arm64.zip
+          ls -l player-macos-arm64.zip
+      - uses: actions/upload-artifact@v7
+        with:
+          name: package-macos
+          path: player-macos-arm64.zip
+          if-no-files-found: error
+          retention-days: 7
+
+  windows:
+    name: Windows x64
+    runs-on: windows-2022
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - run: python -m pip install "Cython>=3,<4"
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      # Static libffi and OpenSSL for CPython come from the vcpkg that the runner image carries.
+      - name: Cache vcpkg packages
+        uses: actions/cache@v6
+        with:
+          path: C:\vcpkg\installed
+          key: windows-vcpkg-${{ hashFiles('player/crates/pyhost/cpython/build_windows.py') }}
+      - name: Restore fetched inputs and the CPython build
+        id: inputs
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            player/upstream
+            player/build-out/cpython
+          key: windows-inputs-${{ hashFiles('player/crates/pyhost/cpython/build_windows.py', 'player/crates/pyhost/cpython/mk*.py', 'player/engine/fetch.sh', 'player/engine/wheels.txt', 'player/packaging/fetch_ffmpeg_windows.ps1') }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: player
+          cache-on-failure: true
+      - name: Build the package
+        shell: pwsh
+        env:
+          PLAYER_VCPKG: C:\vcpkg
+          LIBCLANG_PATH: C:\Program Files\LLVM\bin
+        run: player\packaging\windows.ps1
+      - name: Save fetched inputs and the CPython build
+        if: always() && steps.inputs.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            player/upstream
+            player/build-out/cpython
+          key: ${{ steps.inputs.outputs.cache-primary-key }}
+      - name: clippy and tests
+        if: inputs.checks
+        shell: pwsh
+        env:
+          PLAYER_VCPKG: C:\vcpkg
+          LIBCLANG_PATH: C:\Program Files\LLVM\bin
+          FFMPEG_DIR: ${{ github.workspace }}\player\upstream\ffmpeg-win
+        working-directory: player
+        run: |
+          cargo clippy --workspace --all-targets --release -- -D warnings
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          # Test binaries of the crates that use pyo3 cannot link on Windows: pyo3-ffi imports Python as a DLL unless
+          # pyhost's static link lines are present, and a second pyo3 config for the tests clashes with pyhost
+          # (LNK2005). Those crates are excluded; their tests run on Linux and macOS. One workspace-wide run keeps
+          # the feature set that the package build resolved.
+          cargo test --release --workspace --exclude engine --exclude gfx --exclude media --exclude patches --exclude platform --exclude player --exclude py2fix --exclude saves --exclude surface --exclude text --exclude vfs
+      - uses: actions/upload-artifact@v7
+        with:
+          name: package-windows
+          path: player/build-out/windows/player-windows-x86_64.zip
+          if-no-files-found: error
+          retention-days: 7

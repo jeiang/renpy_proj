@@ -75,7 +75,8 @@ def movie(src_png, dest, vcodec, secs=3, fps=24, audio=None, size=None):
     if vcodec == "vp9":
         args += ["-c:v", "libvpx-vp9", "-b:v", "600k", "-deadline", "good", "-cpu-used", 4]
     elif vcodec == "h264":
-        args += ["-c:v", "libopenh264", "-b:v", "600k"]
+        # The LGPL generator has OpenH264. The GPL ffmpeg of the CI runner (SYNTH_ALLOW_GPL=1) has x264 instead.
+        args += ["-c:v", "libopenh264" if have("libopenh264") else "libx264", "-b:v", "600k"]
     elif vcodec == "theora":
         args += ["-c:v", "libtheora", "-q:v", 8]
     elif vcodec == "av1":

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Regenerates RUST_DEPENDENCIES.md (licence texts of every Rust dependency) with cargo-about.
-# Run it after Cargo.lock changes. Config: player/about.toml. Template: player/about.hbs.
+# Run it after Cargo.lock changes. Use cargo-about 0.9.2, the version CI pins (other versions resolve targets differently). Config: player/about.toml. Template: player/about.hbs.
 #
 #   player/packaging/licences/generate.sh
 set -euo pipefail
@@ -10,4 +10,7 @@ cd "$player"
 run=(cargo about)
 command -v cargo-about >/dev/null || run=(nix shell nixpkgs#cargo-about nixpkgs#cargo nixpkgs#rustc -c cargo about)
 "${run[@]}" generate --offline --locked -c about.toml about.hbs -o "$here/RUST_DEPENDENCIES.md"
+# Some licence texts carry CRLF line endings; git stores them as LF, so the file is made LF-only here.
+tr -d '\r' < "$here/RUST_DEPENDENCIES.md" > "$here/RUST_DEPENDENCIES.md.tmp"
+mv "$here/RUST_DEPENDENCIES.md.tmp" "$here/RUST_DEPENDENCIES.md"
 echo "wrote $here/RUST_DEPENDENCIES.md"

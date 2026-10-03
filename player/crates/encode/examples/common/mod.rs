@@ -37,8 +37,8 @@ pub fn base_scene(w: u32, h: u32) -> Vec<u8> {
     );
     let mut y = h * 3 / 4 + h / 30;
     while y + h / 60 < h * 19 / 20 - h / 30 {
-        for k in 0..3 {
-            let x = w / 16 + k * 0;
+        for _ in 0..3 {
+            let x = w / 16;
             rect(
                 &mut d,
                 x,
@@ -85,7 +85,7 @@ pub fn frame_from(
         }
     }
     if fmt == PixelFormat::Bgra {
-        for p in rgba.chunks_exact_mut(4) {
+        for p in rgba.as_chunks_mut::<4>().0 {
             p.swap(0, 2);
         }
     }

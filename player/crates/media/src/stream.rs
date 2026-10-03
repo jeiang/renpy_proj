@@ -236,7 +236,11 @@ impl Shared {
             && st.has_video
             && st.video_finished
             && st.vq.is_empty()
-            && (if st.video_only { st.last_frame_done() } else { st.audio_finished && st.audio_q.is_empty() })
+            && (if st.video_only {
+                st.last_frame_done()
+            } else {
+                st.audio_finished && st.audio_q.is_empty()
+            })
     }
 
     /// For a file with video and no audio: the time on the frame clock at which its last frame
@@ -244,7 +248,9 @@ impl Shared {
     fn clock_end(&self) -> Option<f64> {
         let st = self.st.lock();
         match st.video_pts_offset {
-            Some(off) if st.video_only && st.video_shown_end > 0.0 => Some(off + st.video_shown_end + st.time_offset),
+            Some(off) if st.video_only && st.video_shown_end > 0.0 => {
+                Some(off + st.video_shown_end + st.time_offset)
+            }
             _ => None,
         }
     }
@@ -284,7 +290,11 @@ impl Shared {
                 let carried = st.carry_end.take().map(|end| end - st.time_offset);
                 let o = match carried {
                     // The file continues a loop: its clock starts where the last one ended.
-                    Some(end) if st.video_only && (0.0..=CARRY_MAX).contains(&(offset_time - end)) => end - first.pts,
+                    Some(end)
+                        if st.video_only && (0.0..=CARRY_MAX).contains(&(offset_time - end)) =>
+                    {
+                        end - first.pts
+                    }
                     _ => offset_time - first.pts,
                 };
                 st.video_pts_offset = Some(o);
@@ -1548,6 +1558,8 @@ unsafe fn build_frame(f: *const ffi::AVFrame, pts: f64) -> Result<VideoFrame, St
 mod loop_clock_tests {
     use super::*;
 
+    static TEST_CLOCK: Mutex<()> = Mutex::new(());
+
     /// A video-only file of `n` frames at `fps` whose frames are all decoded, as `Shared` would hold it.
     fn fake_clip(n: usize, fps: f64) -> Arc<Shared> {
         let mut st = State::new(-1);
@@ -1562,12 +1574,22 @@ mod loop_clock_tests {
                 width: 2,
                 height: 2,
                 layout: PlaneLayout::Yuv420p,
-                color: ColorInfo { full_range: false, matrix: Matrix::Bt709 },
+                color: ColorInfo {
+                    full_range: false,
+                    matrix: Matrix::Bt709,
+                },
                 planes: Vec::new(),
                 pts: k as f64 / fps,
             }));
         }
-        Arc::new(Shared { st: Mutex::new(st), cv: Condvar::new(), name: "fake".into(), want_video: true, frame_drops: false, skip: 0.0 })
+        Arc::new(Shared {
+            st: Mutex::new(st),
+            cv: Condvar::new(),
+            name: "fake".into(),
+            want_video: true,
+            frame_drops: false,
+            skip: 0.0,
+        })
     }
 
     fn set_time(t: f64) {
@@ -1599,7 +1621,9 @@ mod loop_clock_tests {
                 }
             }
             while cur.video_ready() {
-                let Some(f) = cur.read_video().unwrap() else { break };
+                let Some(f) = cur.read_video().unwrap() else {
+                    break;
+                };
                 let ideal = (loop_no * n) as f64 / fps + f.pts;
                 let first_at = *first.get_or_insert(t - ideal);
                 shown.push(t - first_at - ideal);
@@ -1620,13 +1644,19 @@ mod loop_clock_tests {
                 let worst = late.iter().cloned().fold(f64::MIN, f64::max);
                 // A frame is shown at the first tick on or after its time: at most one tick late.
                 // Nothing accumulates: the 12th loop is as late as the first.
-                assert!(worst < tick + 0.002, "{n} frames at {fps} fps, phase {phase}: worst lateness {worst}");
-                assert!(last < tick + 0.002, "{n} frames at {fps} fps, phase {phase}: last frame {last} late");
-                assert!(late.iter().all(|x| *x > -0.0051), "{n} frames at {fps} fps: a frame was shown early: {late:?}");
+                assert!(
+                    worst < tick + 0.002,
+                    "{n} frames at {fps} fps, phase {phase}: worst lateness {worst}"
+                );
+                assert!(
+                    last < tick + 0.002,
+                    "{n} frames at {fps} fps, phase {phase}: last frame {last} late"
+                );
+                assert!(
+                    late.iter().all(|x| *x > -0.0051),
+                    "{n} frames at {fps} fps: a frame was shown early: {late:?}"
+                );
             }
         }
     }
 }
-
-#[cfg(test)]
-static TEST_CLOCK: Mutex<()> = Mutex::new(());

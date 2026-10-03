@@ -478,10 +478,15 @@ mod tests {
                 .unwrap();
             }
         }
-        let lib = load_dirs(&[dir.clone()]);
+        let lib = load_dirs(std::slice::from_ref(&dir));
         assert_eq!(lib.patches.len(), 2, "{:?}", lib.errors);
         assert_eq!(lib.inactive.len(), 1);
-        assert_eq!(load_dirs_with(&[dir.clone()], true).patches.len(), 3);
+        assert_eq!(
+            load_dirs_with(std::slice::from_ref(&dir), true)
+                .patches
+                .len(),
+            3
+        );
         std::fs::remove_dir_all(dir).ok();
     }
 

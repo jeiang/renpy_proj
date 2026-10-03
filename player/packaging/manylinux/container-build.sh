@@ -172,6 +172,11 @@ printf '#!/bin/sh\nexec /usr/bin/gcc -fPIC "$@"\n' > "$CACHE/shim/cc"; chmod +x 
 export PATH=$CACHE/shim:$PATH
 rm -rf "$PLAYER/build-out/engine/stamp.txt"
 (cd "$PLAYER" && cargo build --release -p player)
+if [ "${PLAYER_CHECKS:-0}" = 1 ]; then
+  log "cargo clippy, cargo test"
+  rustup component add clippy >/dev/null
+  (cd "$PLAYER" && cargo clippy --workspace --all-targets --release -- -D warnings && cargo test --release --workspace)
+fi
 
 # ---- package: the steps of packaging/linux.sh, with the same host-provided set ----------------------------------------
 log "package"
@@ -208,6 +213,7 @@ done
 [ -z "$bad" ] || { echo "manylinux: dependencies that are neither bundled nor host-provided:$bad" >&2; exit 1; }
 # Licence notices (see packaging/licences/stage.sh).
 bash "$PLAYER/packaging/licences/stage.sh" "$PKG/licenses"
+bash "$PLAYER/packaging/check-no-nix-store.sh" "$PKG"
 (cd "$OUT" && tar -czf "$NAME.tar.gz" "$NAME")
 log "glibc policy check"
 bash "$HERE/check-glibc.sh" "$PKG"

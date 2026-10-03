@@ -60,10 +60,14 @@ const EMU: &str = r#"
 "#;
 
 fn checker(x: u32, y: u32) -> [u8; 4] {
-    if x % 256 == 0 || y % 256 == 0 {
+    if x.is_multiple_of(256) || y.is_multiple_of(256) {
         return [255, 0, 0, 255];
     }
-    let v = if (x / 8 + y / 8) % 2 == 0 { 230 } else { 25 };
+    let v = if (x / 8 + y / 8).is_multiple_of(2) {
+        230
+    } else {
+        25
+    };
     [v, v, v, 255]
 }
 
