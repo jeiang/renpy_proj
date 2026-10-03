@@ -32,11 +32,18 @@ fn fill(buf: &mut [u8], w: usize, x0: usize, y0: usize, bw: usize, bh: usize, c:
 }
 
 /// Process CPU time (user + system) in seconds.
+#[cfg(unix)]
 fn cpu_secs() -> f64 {
     let mut ru: libc::rusage = unsafe { std::mem::zeroed() };
     unsafe { libc::getrusage(libc::RUSAGE_SELF, &mut ru) };
     let t = |v: libc::timeval| v.tv_sec as f64 + v.tv_usec as f64 / 1e6;
     t(ru.ru_utime) + t(ru.ru_stime)
+}
+
+/// Windows: the example does not measure CPU time (`getrusage` does not exist there).
+#[cfg(not(unix))]
+fn cpu_secs() -> f64 {
+    0.0
 }
 
 fn main() -> anyhow::Result<()> {

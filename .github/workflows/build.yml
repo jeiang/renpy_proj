@@ -136,8 +136,9 @@ jobs:
         with:
           path: C:\vcpkg\installed
           key: windows-vcpkg-${{ hashFiles('player/crates/pyhost/cpython/build_windows.py') }}
-      - name: Cache fetched inputs and the CPython build
-        uses: actions/cache@v6
+      - name: Restore fetched inputs and the CPython build
+        id: inputs
+        uses: actions/cache/restore@v6
         with:
           path: |
             player/upstream
@@ -146,12 +147,21 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: player
+          cache-on-failure: true
       - name: Build the package
         shell: pwsh
         env:
           PLAYER_VCPKG: C:\vcpkg
           LIBCLANG_PATH: C:\Program Files\LLVM\bin
         run: player\packaging\windows.ps1
+      - name: Save fetched inputs and the CPython build
+        if: always() && steps.inputs.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            player/upstream
+            player/build-out/cpython
+          key: ${{ steps.inputs.outputs.cache-primary-key }}
       - name: clippy and tests
         if: inputs.checks
         shell: pwsh
