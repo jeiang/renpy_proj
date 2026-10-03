@@ -68,3 +68,43 @@ impl Drop for Serve {
         self.stop();
     }
 }
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+
+    /// The Stream button calls `spawn_serve(player, game path, data)`. The gate runs
+    /// `player serve <game> --data <data> ...`. Check the exact argv of the child and that the
+    /// printed URLs reach the library window.
+    #[test]
+    fn spawn_serve_runs_the_serve_subcommand_and_collects_urls() {
+        let dir = std::env::temp_dir().join(format!("stream-spawn-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let exe = dir.join("fake-player");
+        let argv = dir.join("argv");
+        std::fs::write(
+            &exe,
+            format!(
+                "#!/bin/sh\nfor a in \"$@\"; do echo \"$a\"; done > '{}'\necho 'Stream URL: http://192.0.2.1:8080/'\necho 'other line'\nsleep 30\n",
+                argv.display()
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&exe, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        let mut serve = spawn_serve(&exe, Path::new("/g/game"), Path::new("/d/data")).unwrap();
+        for _ in 0..200 {
+            serve.poll();
+            if !serve.urls.is_empty() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+        assert_eq!(serve.urls, vec!["http://192.0.2.1:8080/".to_string()]);
+        let args: Vec<String> = std::fs::read_to_string(&argv).unwrap().lines().map(String::from).collect();
+        assert_eq!(args, ["serve", "/g/game", "--data", "/d/data"]);
+        serve.stop();
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+}
