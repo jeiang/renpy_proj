@@ -143,6 +143,7 @@ fn probe_case_insensitive(dir: &Path) -> bool {
     }
     #[cfg(not(unix))]
     {
+        let _ = parent;
         guess
     }
 }
