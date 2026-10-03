@@ -1,17 +1,18 @@
-# Reason: Ren'Py 7 games. Ren'Py 8 restarts the interaction when the ongoing transition of the top layer has expired ("End an obsolete ongoing transition" in `Interface.interact_core`); the restart makes `screen.per_interact` evaluate every shown screen a second time. Ren'Py 7.4.11 does not restart there. LuckyParadox's main menu rolls `renpy.random.choice` in the screen, so 0.5 s after the menu appears (end of `config.enter_transition`) the background re-rolled and cut to another image. The pops stay; the restart is skipped when `renpy.lexer.renpy7_syntax` is set (Ren'Py 7 detection).
+# Reason: Ren'Py 7 games made before 7.8.3. Ren'Py 7.8.3 and 8.3.3 added "End an obsolete ongoing transition" in `Interface.interact_core` (upstream 937c91f, renpy issue #5827: a custom Quick Menu button blocked other input after a transition). It restarts the interaction when the ongoing transition of the top layer has expired, and the restart makes `screen.per_interact` evaluate every shown screen a second time. Earlier engines do not restart there. LuckyParadox (7.4.11) rolls `renpy.random.choice` in its main menu screen, so 0.5 s after the menu appears (end of `config.enter_transition`) the background re-rolled and cut to another image. The pops stay; the restart is skipped when `renpy.lexer.renpy7_syntax` is set (Ren'Py 7 detection) and the game's `config.script_version` is unknown or older than 7.8.3. Games made with 7.8.3 or later keep the restart, as on their own engine.
 
 diff --git a/renpy/display/core.py b/renpy/display/core.py
 --- a/renpy/display/core.py
 +++ b/renpy/display/core.py
-@@ -2921,8 +2921,12 @@
+@@ -2921,8 +2921,13 @@
                      self.ongoing_transition.pop(None, None)
                      self.transition_time.pop(None, None)
                      self.transition_from.pop(None, None)
 -                    self.restart_interaction = True
  
-+                    # Player patch: Ren'Py 7 never restarted here, and a restart evaluates the
-+                    # screens again (a `renpy.random.choice` in a screen then re-rolls).
-+                    if not renpy.lexer.renpy7_syntax:
++                    # Player patch: Ren'Py 7 before 7.8.3 never restarted here, and a restart
++                    # evaluates the screens again (a `renpy.random.choice` in a screen then re-rolls).
++                    sv = renpy.config.script_version
++                    if not (renpy.lexer.renpy7_syntax and (sv is None or tuple(sv) < (7, 8, 3))):
 +                        self.restart_interaction = True
 +
                  # See if we want to restart the interaction entirely.
