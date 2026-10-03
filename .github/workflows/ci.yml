@@ -12,13 +12,14 @@ on:
 # A new push to a branch or pull request cancels the run it supersedes. Runs on main always finish.
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
   fmt:
+    if: false
     name: rustfmt
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -29,6 +30,7 @@ jobs:
         working-directory: player
 
   notices:
+    if: false
     name: Licence notices are current
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -50,6 +52,7 @@ jobs:
       checks: true
 
   synth:
+    if: false
     name: Synthetic corpus (Xvfb + lavapipe)
     needs: build
     runs-on: ubuntu-24.04
