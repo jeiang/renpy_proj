@@ -16,8 +16,6 @@ stdenv.mkDerivation {
   nativeBuildInputs = [ pkgs.xz pkgs.perl ]; # perl: shasum
   PYHOST_CPYTHON_TARBALL = sources.cpythonTarball;
   PYHOST_ENV_CC = "1";
-  PYHOST_FFI = s.libffi.out;
-  PYHOST_FFI_DEV = s.libffi.dev;
   PYHOST_BZ = s.bzip2.out;
   PYHOST_BZ_DEV = s.bzip2.dev;
   PYHOST_XZ = s.xz.out;

@@ -55,15 +55,18 @@ fn main() {
         out.join("deps").display()
     );
     println!("cargo:rustc-link-lib=static=python3.12");
-    for lib in ["ffi", "bz2", "lzma", "expat", "z", "ssl", "crypto"] {
+    for lib in ["bz2", "lzma", "expat", "z", "ssl", "crypto"] {
         println!("cargo:rustc-link-lib=static={lib}");
     }
     if target_os == "macos" {
+        // The system libffi, through the stub in sysdeps (build.sh).
+        println!("cargo:rustc-link-lib=dylib=ffi");
         for fw in ["CoreFoundation", "SystemConfiguration"] {
             println!("cargo:rustc-link-lib=framework={fw}");
         }
     }
     if target_os == "linux" {
+        println!("cargo:rustc-link-lib=static=ffi");
         for lib in ["m", "dl", "util", "pthread"] {
             println!("cargo:rustc-link-lib={lib}");
         }

@@ -166,7 +166,27 @@ fn run_game(args: Vec<String>) -> Result<i32> {
     pyhost::run(cfg, "_player.boot", "main")
 }
 
+/// The static OpenSSL in the Python build and the bundled OpenSSL dylib name a default certificate file under
+/// /nix/store. That path does not exist on a Mac without Nix, so `ssl` could verify no certificate there.
+/// macOS ships its trusted roots in /etc/ssl/cert.pem. OpenSSL reads `SSL_CERT_FILE` before its compiled-in
+/// default, so set it when the user has not. The check in packaging/macos.sh proves it.
+#[cfg(target_os = "macos")]
+fn default_ca_bundle() {
+    const SYSTEM_CA_BUNDLE: &str = "/etc/ssl/cert.pem";
+    if std::env::var_os("SSL_CERT_FILE").is_none()
+        && std::env::var_os("SSL_CERT_DIR").is_none()
+        && Path::new(SYSTEM_CA_BUNDLE).is_file()
+    {
+        // SAFETY: called first in `main`, before the player starts a thread.
+        unsafe { std::env::set_var("SSL_CERT_FILE", SYSTEM_CA_BUNDLE) };
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn default_ca_bundle() {}
+
 fn main() -> Result<()> {
+    default_ca_bundle();
     let mut args: Vec<String> = std::env::args().skip(1).collect();
     // No game and no subcommand (only `--data <dir>` at most): the library window.
     let window_data = match args.as_slice() {
