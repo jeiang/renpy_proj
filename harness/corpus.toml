@@ -1,0 +1,171 @@
+# Committed corpus for the compatibility gate: the stock engines, the player binary and the synthetic games.
+# The real (commercial) games live in harness/corpus.local.toml (gitignored, see docs/LOCAL-FILES.md): gatelib/launch.py
+# load_corpus merges it over this file (its `games` and `engines` tables add to these; a missing file means synthetic games only).
+# Paths are clone SOURCES: read-only, never run in place.
+# A relative path is resolved against the MAIN checkout (the repo root that holds corpus/); "~" is the home folder.
+# `released` copies (corpus/*-released*) have no loose .rpy files, as shipped games do: see research/test-corpus.
+
+# Stock engines. `sdk` runs <path>/renpy.sh <base> <args>; `bundled` runs the game's own launcher in the clone.
+[engines.sdk-853]
+kind = "sdk"
+version = "8.5.3"
+path = "research/shared-engine-launcher/sdk/renpy-8.5.3-sdk"   # arm64, same Ren'Py as the player's Python layer
+[engines.sdk-801]
+kind = "sdk"
+version = "8.0.1"
+path = "research/shared-engine-launcher/sdk/renpy-8.0.1-sdk"   # x86_64 only (Rosetta): SecretIsland's own engine
+[engines.sdk-823]
+kind = "sdk"
+version = "8.2.3"
+path = "research/test-corpus/sdk/renpy-8.2.3-sdk"
+[engines.sdk-745]
+kind = "sdk"
+version = "7.4.5"
+path = "research/test-corpus/sdk/renpy-7.4.5-sdk"     # Ren'Py 7 SDKs: x86_64 Python 2 (lib/mac-x86_64), run under Rosetta
+[engines.sdk-748]
+kind = "sdk"
+version = "7.4.8"
+path = "research/test-corpus/sdk/renpy-7.4.8-sdk"
+[engines.sdk-7411]
+kind = "sdk"
+version = "7.4.11"
+path = "research/test-corpus/sdk/renpy-7.4.11-sdk"
+[engines.sdk-753]
+kind = "sdk"
+version = "7.5.3"
+path = "research/test-corpus/sdk/renpy-7.5.3-sdk"
+[engines.sdk-761]
+kind = "sdk"
+version = "7.6.1"
+path = "research/test-corpus/sdk/renpy-7.6.1-sdk"
+[engines.sdk-773]
+kind = "sdk"
+version = "7.7.3"
+path = "research/test-corpus/sdk/renpy-7.7.3-sdk"
+[engines.sdk-782]
+kind = "sdk"
+version = "7.8.2"
+path = "research/test-corpus/sdk/renpy-7.8.2-sdk"
+[engines.sdk-853-linux]
+kind = "sdk"
+version = "8.5.3"
+path = "research/test-corpus/sdk/renpy-8.5.3-sdk"   # Linux host: the Linux SDK (gitignored), for games that ship no Linux engine
+[engines.bundled]
+kind = "bundled"
+
+# Player adapter. Built by `cargo build --release -p player` in player/.
+[player]
+binary = "player/target/release/player"
+
+# `version` of an sdk engine is compared with the game's `renpy`: when they differ the gate removes game/cache from the
+# scratch clone (the shipped py3analysis.rpyb and bytecode cache are stale on a newer engine; the player ignores game/cache).
+# Linux: on Linux a `linux_<key>` entry of a game replaces `<key>` (gatelib/launch.py load_corpus). The Linux
+# corpus copies live in ~/Projects/renpy_proj-remote/corpus/. The Ren'Py 8 games run their own Linux launcher
+# (`linux_engine = "bundled"`, `linux_exe = "<Game>.sh"`); the Ren'Py 7 games run the SDK of their version, fetched into
+# research/test-corpus/sdk/ (gitignored): https://www.renpy.org/dl/<version>/renpy-<version>-sdk.tar.bz2
+# Per-game keys:
+#   input_answer     text typed into input screens (default "Tester"); input_limit: answers before an input loop fails (default 3)
+#   screen_actions   {screen = "action expression"}: run when that custom screen shows (a button the driver cannot click)
+#   volatile_shots   route shots that hold an animation or video: compared and reported, never failing (like `shot NAME volatile`)
+#   stages           per-stage timeout overrides, e.g. { boot = 240 } (gatelib/stages.py)
+#   probe_lines, save_after, resume_lines   override the gate's defaults (60, 30, 20) for a game whose story is shorter
+#   source / origin   clone source (the released copy if there is one) and the read-only original under ~/Games
+#   base              folder that holds game/ inside the clone ("." or "Contents/Resources/autorun" for a mac app)
+#   exe               launcher inside the clone (bundled engine only)
+#   engine            default stock engine id
+#   plan              route plan in harness/plans/ or harness/local/plans/ (or a path)
+#   driver            free-roam driver harness/local/drivers/<name>.py (gitignored)
+#   after_start       commands sent after New Game (harness/README.md, Plans)
+#   video, video_fps  game-relative movie for the video check (VP9 or Theora, 60 fps here)
+
+# ---- Synthetic CI corpus (issue #40): small games made from generated assets only, built by testgames/build.py into
+# harness/testgames/build/<name>/ (gitignored). `harness/...` paths are relative to the checkout that holds the harness.
+# Run them with `python3 testgames/run.py` (testgames/README.md). The Ren'Py 8 games run on the 8.5.3 SDK as stock; the
+# Ren'Py 7 games are compiled and run by the 7.4.11 SDK (fetch.sh).
+[games.SynthAniso]
+source = "harness/testgames/build/aniso"
+renpy = "8.5.3"
+base = "."
+engine = "sdk-853"
+linux_engine = "sdk-853-linux"
+# The game has no main menu and no say lines: only the route check applies (tier route).
+plan = "testgames/aniso/ci.plan"
+probe_lines = 4
+save_after = 2
+resume_lines = 2
+[games.SynthStory]
+source = "harness/testgames/build/story"
+renpy = "8.5.3"
+base = "."
+engine = "sdk-853"
+linux_engine = "sdk-853-linux"
+plan = "route"
+probe_lines = 40
+save_after = 20
+resume_lines = 10
+[games.SynthMedia]
+source = "harness/testgames/build/media"
+renpy = "8.5.3"
+base = "."
+engine = "sdk-853"
+linux_engine = "sdk-853-linux"
+plan = "testgames/media/media.plan"
+video = "movies/vp9_opus.webm"
+video_fps = 24
+probe_lines = 12
+save_after = 6
+resume_lines = 4
+[games.SynthText]
+source = "harness/testgames/build/text"
+renpy = "8.5.3"
+base = "."
+engine = "sdk-853"
+linux_engine = "sdk-853-linux"
+plan = "testgames/text/text.plan"
+probe_lines = 12
+save_after = 6
+resume_lines = 4
+[games.SynthView]
+source = "harness/testgames/build/view"
+renpy = "8.5.3"
+base = "."
+engine = "sdk-853"
+linux_engine = "sdk-853-linux"
+plan = "testgames/view/view.plan"
+probe_lines = 8
+save_after = 4
+resume_lines = 3
+[games.Synth7]
+source = "harness/testgames/build/py7"
+renpy = "7.4.11"
+base = "."
+engine = "sdk-7411"
+plan = "testgames/py7/py7.plan"
+probe_lines = 26
+save_after = 14
+resume_lines = 8
+[games.Synth7Patch]
+source = "harness/testgames/build/py7patch"
+renpy = "7.4.11"
+base = "."
+engine = "sdk-7411"
+plan = "testgames/py7patch/py7patch.plan"
+probe_lines = 6
+save_after = 3
+resume_lines = 2
+[games.Synth7AI]
+source = "harness/testgames/build/py7ai"
+renpy = "7.4.11"
+base = "."
+engine = "sdk-7411"
+plan = "testgames/py7ai/py7ai.plan"
+probe_lines = 6
+save_after = 3
+resume_lines = 2
+[games.Synth7Trust]
+source = "harness/testgames/build/py7trust"
+renpy = "7.4.11"
+base = "."
+engine = "sdk-7411"
+save_after = 3
+resume_lines = 2
