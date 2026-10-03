@@ -5,11 +5,11 @@ Do not edit by hand.
 
 ## Overview
 
-- Apache License 2.0: 313 crates
-- MIT License: 75 crates
+- Apache License 2.0: 317 crates
+- MIT License: 81 crates
+- BSD 2-Clause "Simplified" License: 22 crates
 - BSD 3-Clause "New" or "Revised" License: 8 crates
 - ISC License: 5 crates
-- BSD 2-Clause "Simplified" License: 3 crates
 - Boost Software License 1.0: 2 crates
 - Do What The F*ck You Want To Public License: 2 crates
 - BSD Zero Clause License: 1 crates
@@ -1321,6 +1321,10 @@ Used by:
 ### Apache License 2.0
 
 Used by:
+- linux-raw-sys 0.12.1 (https://github.com/sunfishcode/linux-raw-sys)
+- linux-raw-sys 0.4.15 (https://github.com/sunfishcode/linux-raw-sys)
+- rustix 0.38.44 (https://github.com/bytecodealliance/rustix)
+- rustix 1.1.5 (https://github.com/bytecodealliance/rustix)
 - target-lexicon 0.13.5 (https://github.com/bytecodealliance/target-lexicon)
 
 ```text
@@ -8826,6 +8830,1414 @@ Used by:
 - openh264-sys2 0.9.8 (https://github.com/ralfbiedert/openh264-rs)
 
 ```text
+/*!
+ * \copy
+ *     Copyright (c)  2008-2013, Cisco Systems
+ *     All rights reserved.
+ *
+ *     Redistribution and use in source and binary forms, with or without
+ *     modification, are permitted provided that the following conditions
+ *     are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in
+ *          the documentation and/or other materials provided with the
+ *          distribution.
+ *
+ *     THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ *     "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ *     LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ *     FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ *     COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+ *     INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ *     BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ *     LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ *     CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ *     LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ *     ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ *     POSSIBILITY OF SUCH DAMAGE.
+ *
+ *  read_config.h
+ *
+ *  Abstract
+ *      Class for reading parameter settings in a configure file.
+ *
+ *  History
+ *      08/18/2008 Created
+ *
+ *****************************************************************************/
+#ifndef READ_CONFIG_H__
+#define READ_CONFIG_H__
+
+#include <stdlib.h>
+#include <string>
+
+
+class CReadConfig {
+ public:
+  CReadConfig();
+  CReadConfig (const char* pConfigFileName);
+  CReadConfig (const std::string& pConfigFileName);
+  virtual ~CReadConfig();
+
+  void Openf (const char* strFile);
+  long ReadLine (std::string* strVal, const int iValSize = 4);
+  const bool EndOfFile();
+  const int GetLines();
+  const bool ExistFile();
+  const std::string& GetFileName();
+
+ private:
+  FILE*             m_pCfgFile;
+  std::string       m_strCfgFileName;
+  unsigned int      m_iLines;
+};
+
+#endif // READ_CONFIG_H__
+
+
+```
+
+### BSD 2-Clause "Simplified" License
+
+Used by:
+- openh264-sys2 0.9.8 (https://github.com/ralfbiedert/openh264-rs)
+
+```text
+/*!
+ * \copy
+ *     Copyright (c)  2009-2013, Cisco Systems
+ *     All rights reserved.
+ *
+ *     Redistribution and use in source and binary forms, with or without
+ *     modification, are permitted provided that the following conditions
+ *     are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in
+ *          the documentation and/or other materials provided with the
+ *          distribution.
+ *
+ *     THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ *     "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ *     LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ *     FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ *     COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+ *     INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ *     BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ *     LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ *     CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ *     LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ *     ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ *     POSSIBILITY OF SUCH DAMAGE.
+ *
+ *
+ *  \file   manage_dec_ref.h
+ *
+ *  Abstract
+ *      Interface for managing reference picture
+ *
+ *  History
+ *      08/14/2009 Created
+ *
+ *****************************************************************************/
+#ifndef WELS_MANAGE_DEC_REF_H__
+#define WELS_MANAGE_DEC_REF_H__
+
+
+#include "typedefs.h"
+#include "decoder_context.h"
+
+namespace WelsDec {
+
+void  WelsResetRefPic (PWelsDecoderContext pCtx);
+void  WelsResetRefPicWithoutUnRef (PWelsDecoderContext pCtx);
+int32_t WelsInitRefList (PWelsDecoderContext pCtx, int32_t iPoc);
+int32_t WelsInitBSliceRefList (PWelsDecoderContext pCtx, int32_t iPoc);
+int32_t WelsReorderRefList (PWelsDecoderContext pCtx);
+int32_t WelsReorderRefList2 (PWelsDecoderContext pCtx);
+int32_t WelsMarkAsRef (PWelsDecoderContext pCtx, PPicture pLastDec = NULL);
+
+} // namespace WelsDec
+
+#endif//WELS_MANAGE_DEC_REF_H__
+
+
+
+```
+
+### BSD 2-Clause "Simplified" License
+
+Used by:
+- openh264-sys2 0.9.8 (https://github.com/ralfbiedert/openh264-rs)
+
+```text
+/*!
+ * \copy
+ *     Copyright (c)  2009-2015, Cisco Systems
+ *     All rights reserved.
+ *
+ *     Redistribution and use in source and binary forms, with or without
+ *     modification, are permitted provided that the following conditions
+ *     are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in
+ *          the documentation and/or other materials provided with the
+ *          distribution.
+ *
+ *     THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ *     "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ *     LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ *     FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ *     COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+ *     INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ *     BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ *     LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ *     CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ *     LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ *     ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ *     POSSIBILITY OF SUCH DAMAGE.
+ *
+ *
+ * \file    WelsLock.h
+ *
+ * \brief   class wrapping for locks
+ *
+ * \date    5/09/2012 Created
+ *
+ *************************************************************************************
+ */
+
+#ifndef _WELS_LOCK_H_
+#define _WELS_LOCK_H_
+
+#include "macros.h"
+#include "typedefs.h"
+#include "WelsThreadLib.h"
+
+namespace WelsCommon {
+
+class CWelsLock {
+  DISALLOW_COPY_AND_ASSIGN (CWelsLock);
+ public:
+  CWelsLock() {
+    WelsMutexInit (&m_cMutex);
+  }
+
+  virtual ~CWelsLock() {
+    WelsMutexDestroy (&m_cMutex);
+  }
+
+  WELS_THREAD_ERROR_CODE  Lock() {
+    return WelsMutexLock (&m_cMutex);
+  }
+
+  WELS_THREAD_ERROR_CODE Unlock() {
+    return WelsMutexUnlock (&m_cMutex);
+  }
+
+ private:
+  WELS_MUTEX   m_cMutex;
+};
+
+class CWelsAutoLock {
+  DISALLOW_COPY_AND_ASSIGN (CWelsAutoLock);
+ public:
+  CWelsAutoLock (CWelsLock& cLock) : m_cLock (cLock) {
+    m_cLock.Lock();
+  }
+
+  virtual ~CWelsAutoLock() {
+    m_cLock.Unlock();
+  }
+
+ private:
+  CWelsLock&    m_cLock;
+};
+
+}
+
+#endif
+
+
+
+
+
+
+
+
+```
+
+### BSD 2-Clause "Simplified" License
+
+Used by:
+- openh264-sys2 0.9.8 (https://github.com/ralfbiedert/openh264-rs)
+
+```text
+/*!
+ * \copy
+ *     Copyright (c)  2009-2015, Cisco Systems
+ *     All rights reserved.
+ *
+ *     Redistribution and use in source and binary forms, with or without
+ *     modification, are permitted provided that the following conditions
+ *     are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in
+ *          the documentation and/or other materials provided with the
+ *          distribution.
+ *
+ *     THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ *     "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ *     LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ *     FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ *     COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+ *     INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ *     BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ *     LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ *     CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ *     LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ *     ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ *     POSSIBILITY OF SUCH DAMAGE.
+ *
+ *
+ * \file    WelsTask.h
+ *
+ * \brief   Interfaces introduced in thread pool
+ *
+ * \date    5/09/2012 Created
+ *
+ *************************************************************************************
+ */
+
+#ifndef _WELS_TASK_H_
+#define _WELS_TASK_H_
+
+#include "codec_def.h"
+
+namespace WelsCommon {
+
+class IWelsTaskSink {
+ public:
+  virtual int OnTaskExecuted() = 0;
+  virtual int OnTaskCancelled() = 0;
+};
+
+class IWelsTask {
+ public:
+  IWelsTask (IWelsTaskSink* pSink) {
+    m_pSink = pSink;
+  };
+  virtual ~IWelsTask() { }
+
+  virtual int Execute() = 0;
+
+  IWelsTaskSink* GetSink() {
+    return m_pSink;
+  };
+
+ protected:
+  IWelsTaskSink*   m_pSink;
+};
+
+}
+
+#endif
+
+
+
+```
+
+### BSD 2-Clause "Simplified" License
+
+Used by:
+- openh264-sys2 0.9.8 (https://github.com/ralfbiedert/openh264-rs)
+
+```text
+/*!
+ * \copy
+ *     Copyright (c)  2009-2015, Cisco Systems
+ *     All rights reserved.
+ *
+ *     Redistribution and use in source and binary forms, with or without
+ *     modification, are permitted provided that the following conditions
+ *     are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in
+ *          the documentation and/or other materials provided with the
+ *          distribution.
+ *
+ *     THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ *     "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ *     LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ *     FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ *     COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+ *     INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ *     BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ *     LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ *     CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ *     LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ *     ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ *     POSSIBILITY OF SUCH DAMAGE.
+ *
+ *
+ * \file    WelsTaskThread.cpp
+ *
+ * \brief   functions for TaskThread
+ *
+ * \date    5/09/2012 Created
+ *
+ *************************************************************************************
+ */
+#include "WelsTaskThread.h"
+
+namespace WelsCommon {
+
+CWelsTaskThread::CWelsTaskThread (IWelsTaskThreadSink* pSink) : m_pSink (pSink) {
+  WelsThreadSetName ("CWelsTaskThread");
+
+  m_uiID = (uintptr_t) (this);
+  m_pTask = NULL;
+}
+
+
+CWelsTaskThread::~CWelsTaskThread() {
+}
+
+void CWelsTaskThread::ExecuteTask() {
+  CWelsAutoLock cLock (m_cLockTask);
+  if (m_pSink) {
+    m_pSink->OnTaskStart (this, m_pTask);
+  }
+
+  if (m_pTask) {
+    m_pTask->Execute();
+  }
+
+  if (m_pSink) {
+    m_pSink->OnTaskStop (this, m_pTask);
+  }
+
+  m_pTask = NULL;
+}
+
+WELS_THREAD_ERROR_CODE CWelsTaskThread::SetTask (WelsCommon::IWelsTask* pTask) {
+  CWelsAutoLock cLock (m_cLockTask);
+
+  if (!GetRunning()) {
+    return WELS_THREAD_ERROR_GENERAL;
+  }
+  WelsMutexLock(&m_hMutex);
+  m_pTask = pTask;
+  WelsMutexUnlock(&m_hMutex);
+  SignalThread();
+
+  return WELS_THREAD_ERROR_OK;
+}
+
+
+}
+
+
+```
+
+### BSD 2-Clause "Simplified" License
+
+Used by:
+- openh264-sys2 0.9.8 (https://github.com/ralfbiedert/openh264-rs)
+
+```text
+/*!
+ * \copy
+ *     Copyright (c)  2009-2015, Cisco Systems
+ *     All rights reserved.
+ *
+ *     Redistribution and use in source and binary forms, with or without
+ *     modification, are permitted provided that the following conditions
+ *     are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in
+ *          the documentation and/or other materials provided with the
+ *          distribution.
+ *
+ *     THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ *     "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ *     LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ *     FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ *     COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+ *     INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ *     BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ *     LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ *     CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ *     LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ *     ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ *     POSSIBILITY OF SUCH DAMAGE.
+ *
+ *
+ * \file    wels_task_base.cpp
+ *
+ * \brief   function for base task
+ *
+ * \date    5/09/2012 Created
+ *
+ *************************************************************************************
+ */
+#include "wels_task_base.h"
+
+namespace WelsEnc {
+
+
+CWelsBaseTask::~CWelsBaseTask() {
+}
+
+
+}
+
+
+
+
+```
+
+### BSD 2-Clause "Simplified" License
+
+Used by:
+- openh264-sys2 0.9.8 (https://github.com/ralfbiedert/openh264-rs)
+
+```text
+/*!
+ * \copy
+ *     Copyright (c)  2009-2015, Cisco Systems
+ *     All rights reserved.
+ *
+ *     Redistribution and use in source and binary forms, with or without
+ *     modification, are permitted provided that the following conditions
+ *     are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in
+ *          the documentation and/or other materials provided with the
+ *          distribution.
+ *
+ *     THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ *     "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ *     LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ *     FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ *     COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+ *     INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ *     BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ *     LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ *     CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ *     LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ *     ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ *     POSSIBILITY OF SUCH DAMAGE.
+ *
+ *
+ * \file    wels_task_base.h
+ *
+ * \brief   interface for base task
+ *
+ * \date    5/09/2012 Created
+ *
+ *************************************************************************************
+ */
+
+
+
+#ifndef  _WELS_BASE_TASK_H_
+#define  _WELS_BASE_TASK_H_
+
+#include "typedefs.h"
+#include "WelsTask.h"
+
+namespace WelsEnc {
+
+class CWelsBaseTask : public WelsCommon::IWelsTask {
+ public:
+  enum ETaskType {
+    WELS_ENC_TASK_ENCODING = 0,
+    WELS_ENC_TASK_ENCODE_FIXED_SLICE = WELS_ENC_TASK_ENCODING,
+    WELS_ENC_TASK_ENCODE_SLICE_LOADBALANCING = WELS_ENC_TASK_ENCODING,
+    WELS_ENC_TASK_ENCODE_SLICE_SIZECONSTRAINED = WELS_ENC_TASK_ENCODING,
+    WELS_ENC_TASK_UPDATEMBMAP = 1,
+    WELS_ENC_TASK_PREPROCESS = 2,
+    WELS_ENC_TASK_ALL = 3,
+  };
+
+  CWelsBaseTask (WelsCommon::IWelsTaskSink* pSink): IWelsTask (pSink) {};
+  virtual ~CWelsBaseTask();
+
+  virtual uint32_t GetTaskType() const = 0;
+
+ private:
+
+};
+
+}
+
+
+#endif
+
+
+
+
+
+```
+
+### BSD 2-Clause "Simplified" License
+
+Used by:
+- openh264-sys2 0.9.8 (https://github.com/ralfbiedert/openh264-rs)
+
+```text
+/*!
+ * \copy
+ *     Copyright (c)  2011-2013, Cisco Systems
+ *     All rights reserved.
+ *
+ *     Redistribution and use in source and binary forms, with or without
+ *     modification, are permitted provided that the following conditions
+ *     are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in
+ *          the documentation and/or other materials provided with the
+ *          distribution.
+ *
+ *     THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ *     "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ *     LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ *     FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ *     COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+ *     INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ *     BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ *     LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ *     CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ *     LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ *     ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ *     POSSIBILITY OF SUCH DAMAGE.
+ *
+ * \file        :  typedef.h
+ *
+ * \brief       :  basic type definition
+ *
+ * \date        :  2011/01/04
+ *
+ * \description :  1. Define basic type with platform-independent;
+ *                 2. Define specific namespace to avoid name pollution;
+ *                 3. C++ ONLY;
+ *
+ *************************************************************************************
+ */
+
+#ifndef WELSVP_TYPEDEF_H
+#define WELSVP_TYPEDEF_H
+
+#define WELSVP_EXTERN_C_BEGIN       extern "C" {
+#define WELSVP_EXTERN_C_END         }
+
+#define WELSVP_NAMESPACE_BEGIN      namespace WelsVP {
+#define WELSVP_NAMESPACE_END        }
+
+// Get the stdint type definitions from typedefs.h in the common lib
+#include "typedefs.h"
+
+#endif
+
+```
+
+### BSD 2-Clause "Simplified" License
+
+Used by:
+- openh264-sys2 0.9.8 (https://github.com/ralfbiedert/openh264-rs)
+
+```text
+/*!
+ * \copy
+ *     Copyright (c)  2013, Cisco Systems
+ *     All rights reserved.
+ *
+ *     Redistribution and use in source and binary forms, with or without
+ *     modification, are permitted provided that the following conditions
+ *     are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in
+ *          the documentation and/or other materials provided with the
+ *          distribution.
+ *
+ *     THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ *     "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ *     LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ *     FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ *     COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+ *     INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ *     BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ *     LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ *     CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ *     LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ *     ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ *     POSSIBILITY OF SUCH DAMAGE.
+ *
+ */
+
+#if defined(HAVE_NEON_AARCH64) && defined(__aarch64__)
+#include "arm_arch64_common_macro.S"
+//int32_t WelsProcessingSampleSad8x8_AArch64_neon (uint8_t*, int32_t, uint8_t*, int32_t);
+WELS_ASM_AARCH64_FUNC_BEGIN WelsProcessingSampleSad8x8_AArch64_neon
+    SIGN_EXTENSION x1, w1
+    SIGN_EXTENSION x3, w3
+    ld1     {v0.8b}, [x0], x1
+    ld1     {v1.8b}, [x2], x3
+    uabdl   v2.8h, v0.8b, v1.8b
+.rept 7
+    ld1     {v0.8b}, [x0], x1
+    ld1     {v1.8b}, [x2], x3
+    uabal   v2.8h, v0.8b, v1.8b
+.endr
+    saddlv  s2, v2.8h
+    fmov    w0, s2
+WELS_ASM_AARCH64_FUNC_END
+
+#endif
+
+```
+
+### BSD 2-Clause "Simplified" License
+
+Used by:
+- openh264-sys2 0.9.8 (https://github.com/ralfbiedert/openh264-rs)
+
+```text
+/*!
+ * \copy
+ *     Copyright (c)  2013, Cisco Systems
+ *     All rights reserved.
+ *
+ *     Redistribution and use in source and binary forms, with or without
+ *     modification, are permitted provided that the following conditions
+ *     are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in
+ *          the documentation and/or other materials provided with the
+ *          distribution.
+ *
+ *     THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ *     "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ *     LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ *     FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ *     COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+ *     INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ *     BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ *     LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ *     CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ *     LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ *     ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ *     POSSIBILITY OF SUCH DAMAGE.
+ *
+ */
+
+#ifdef HAVE_NEON
+
+.syntax unified
+
+#ifdef __APPLE__
+
+.text
+
+.macro WELS_ASM_FUNC_BEGIN
+.align 2
+.arm
+.globl _$0
+_$0:
+.endm
+
+.macro WELS_ASM_FUNC_END
+mov pc, lr
+.endm
+#else
+
+#ifdef __ELF__
+.section .note.GNU-stack,"",%progbits // Mark stack as non-executable
+#endif
+.text
+#ifdef __ELF__
+.arch armv7-a
+.fpu neon
+#endif
+
+.macro WELS_ASM_FUNC_BEGIN funcName
+.align 2
+.arm
+.global \funcName
+#ifdef __ELF__
+.type \funcName, %function
+#endif
+#ifndef __clang__
+.func \funcName
+#endif
+\funcName:
+.endm
+
+.macro WELS_ASM_FUNC_END
+mov pc, lr
+#ifndef __clang__
+.endfunc
+#endif
+.endm
+#endif
+
+#endif
+
+```
+
+### BSD 2-Clause "Simplified" License
+
+Used by:
+- openh264-sys2 0.9.8 (https://github.com/ralfbiedert/openh264-rs)
+
+```text
+/*!
+ * \copy
+ *     Copyright (c)  2013, Cisco Systems
+ *     All rights reserved.
+ *
+ *     Redistribution and use in source and binary forms, with or without
+ *     modification, are permitted provided that the following conditions
+ *     are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in
+ *          the documentation and/or other materials provided with the
+ *          distribution.
+ *
+ *     THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ *     "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ *     LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ *     FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ *     COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+ *     INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ *     BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ *     LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ *     CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ *     LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ *     ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ *     POSSIBILITY OF SUCH DAMAGE.
+ *
+ */
+
+#ifdef HAVE_NEON
+#include "arm_arch_common_macro.S"
+
+
+WELS_ASM_FUNC_BEGIN WelsSetMemZero_neon
+    veor q0, q0
+    cmp r1, #32
+    beq mem_zero_32_neon_start
+    blt mem_zero_24_neon_start
+
+mem_zero_loop:
+    subs r1, r1, #64
+    vst1.64 {q0}, [r0]!
+    vst1.64 {q0}, [r0]!
+    vst1.64 {q0}, [r0]!
+    vst1.64 {q0}, [r0]!
+    bne mem_zero_loop
+    bx lr
+
+mem_zero_32_neon_start:
+    vst1.64 {q0}, [r0]!
+    vst1.64 {q0}, [r0]!
+    bx lr
+
+mem_zero_24_neon_start:
+    vst1.64 {q0}, [r0]!
+    vst1.64 {d0}, [r0]!
+WELS_ASM_FUNC_END
+
+#endif
+
+```
+
+### BSD 2-Clause "Simplified" License
+
+Used by:
+- openh264-sys2 0.9.8 (https://github.com/ralfbiedert/openh264-rs)
+
+```text
+/*!
+ * \copy
+ *     Copyright (c)  2013, Cisco Systems
+ *     All rights reserved.
+ *
+ *     Redistribution and use in source and binary forms, with or without
+ *     modification, are permitted provided that the following conditions
+ *     are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in
+ *          the documentation and/or other materials provided with the
+ *          distribution.
+ *
+ *     THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ *     "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ *     LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ *     FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ *     COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+ *     INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ *     BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ *     LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ *     CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ *     LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ *     ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ *     POSSIBILITY OF SUCH DAMAGE.
+ *
+ */
+
+#ifndef WELS_CODEC_TRACE
+#define WELS_CODEC_TRACE
+
+#include <stdarg.h>
+#include "typedefs.h"
+#include "utils.h"
+#include "codec_app_def.h"
+#include "codec_api.h"
+
+class welsCodecTrace {
+ public:
+  welsCodecTrace();
+  ~welsCodecTrace();
+
+  void SetCodecInstance (void* pCodecInstance);
+  void SetTraceLevel (const int32_t kiLevel);
+  void SetTraceCallback (WelsTraceCallback func);
+  void SetTraceCallbackContext (void* pCtx);
+
+ private:
+  static void StaticCodecTrace (void* pCtx, const int32_t kiLevel, const char* kpStrFormat, va_list vl);
+  void CodecTrace (const int32_t kiLevel, const char* kpStrFormat, va_list vl);
+
+  int32_t       m_iTraceLevel;
+  WelsTraceCallback m_fpTrace;
+  void*         m_pTraceCtx;
+ public:
+
+  SLogContext m_sLogCtx;
+};
+
+#endif //WELS_CODEC_TRACE
+
+```
+
+### BSD 2-Clause "Simplified" License
+
+Used by:
+- openh264-sys2 0.9.8 (https://github.com/ralfbiedert/openh264-rs)
+
+```text
+/*!
+ * \copy
+ *     Copyright (c)  2013, Cisco Systems
+ *     All rights reserved.
+ *
+ *     Redistribution and use in source and binary forms, with or without
+ *     modification, are permitted provided that the following conditions
+ *     are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in
+ *          the documentation and/or other materials provided with the
+ *          distribution.
+ *
+ *     THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ *     "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ *     LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ *     FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ *     COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+ *     INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ *     BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ *     LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ *     CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ *     LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ *     ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ *     POSSIBILITY OF SUCH DAMAGE.
+ *
+ */
+
+#include "SceneChangeDetection.h"
+#include "cpu.h"
+
+WELSVP_NAMESPACE_BEGIN
+
+IStrategy* BuildSceneChangeDetection (EMethods eMethod, int32_t iCpuFlag) {
+  switch (eMethod) {
+  case METHOD_SCENE_CHANGE_DETECTION_VIDEO:
+    return new CSceneChangeDetection<CSceneChangeDetectorVideo> (eMethod, iCpuFlag);
+    break;
+  case METHOD_SCENE_CHANGE_DETECTION_SCREEN:
+    return new CSceneChangeDetection<CSceneChangeDetectorScreen> (eMethod, iCpuFlag);
+    break;
+  default:
+    // not support yet
+    return NULL;
+  }
+}
+
+WELSVP_NAMESPACE_END
+
+
+```
+
+### BSD 2-Clause "Simplified" License
+
+Used by:
+- openh264-sys2 0.9.8 (https://github.com/ralfbiedert/openh264-rs)
+
+```text
+/*!
+ * \copy
+ *     Copyright (c)  2013, Cisco Systems
+ *     All rights reserved.
+ *
+ *     Redistribution and use in source and binary forms, with or without
+ *     modification, are permitted provided that the following conditions
+ *     are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in
+ *          the documentation and/or other materials provided with the
+ *          distribution.
+ *
+ *     THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ *     "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ *     LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ *     FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ *     COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+ *     INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ *     BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ *     LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ *     CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ *     LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ *     ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ *     POSSIBILITY OF SUCH DAMAGE.
+ *
+ */
+
+#include "arm_aarch64_common.h"
+
+#ifdef __APPLE__
+
+.text
+
+.macro WELS_ASM_AARCH64_FUNC_BEGIN
+.align 2
+.globl _$0
+_$0:
+.endm
+
+.macro WELS_ASM_AARCH64_FUNC_END
+ret
+.endm
+#else
+
+#ifdef __ELF__
+.section .note.GNU-stack,"",%progbits // Mark stack as non-executable
+#endif
+.text
+
+.macro WELS_ASM_AARCH64_FUNC_BEGIN funcName
+.align 2
+.global \funcName
+#ifdef __ELF__
+.type \funcName, %function
+#endif
+#ifndef __clang__
+.func \funcName
+#endif
+\funcName:
+    BTI_C
+.endm
+
+.macro WELS_ASM_AARCH64_FUNC_END
+ret
+#ifndef __clang__
+.endfunc
+#endif
+.endm
+
+#endif
+
+.macro SIGN_EXTENSION arg0, arg1
+  sxtw \arg0, \arg1
+.endm
+
+```
+
+### BSD 2-Clause "Simplified" License
+
+Used by:
+- openh264-sys2 0.9.8 (https://github.com/ralfbiedert/openh264-rs)
+
+```text
+/*!
+ * \copy
+ *     Copyright (c)  2013, Cisco Systems
+ *     All rights reserved.
+ *
+ *     Redistribution and use in source and binary forms, with or without
+ *     modification, are permitted provided that the following conditions
+ *     are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in
+ *          the documentation and/or other materials provided with the
+ *          distribution.
+ *
+ *     THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ *     "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ *     LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ *     FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ *     COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+ *     INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ *     BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ *     LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ *     CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ *     LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ *     ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ *     POSSIBILITY OF SUCH DAMAGE.
+ *
+ */
+
+#include <windows.h>
+
+/////////////////////////////////////////////////////////////////////////////
+// DLL Entry Point
+
+BOOL WINAPI DllEntryPoint (HINSTANCE hInstance, DWORD dwReason, LPVOID lpReserved) {
+  if (DLL_PROCESS_ATTACH == dwReason) {
+    DisableThreadLibraryCalls (hInstance);
+  }
+  return TRUE;
+}
+
+```
+
+### BSD 2-Clause "Simplified" License
+
+Used by:
+- openh264-sys2 0.9.8 (https://github.com/ralfbiedert/openh264-rs)
+
+```text
+/*!
+ * \copy
+ *     Copyright (c)  2013, Cisco Systems
+ *     All rights reserved.
+ *
+ *     Redistribution and use in source and binary forms, with or without
+ *     modification, are permitted provided that the following conditions
+ *     are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in
+ *          the documentation and/or other materials provided with the
+ *          distribution.
+ *
+ *     THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ *     "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ *     LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ *     FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ *     COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+ *     INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ *     BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ *     LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ *     CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ *     LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ *     ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ *     POSSIBILITY OF SUCH DAMAGE.
+ *
+ */
+
+//nal_prefix.h  -       definitions for NAL Unit Header(/Ext) and PrefixNALUnit
+#ifndef WELS_NAL_UNIT_PREFIX_H__
+#define WELS_NAL_UNIT_PREFIX_H__
+
+#include "typedefs.h"
+#include "wels_common_basis.h"
+#include "slice.h"
+
+namespace WelsDec {
+
+///////////////////////////////////NAL Unit prefix/headers///////////////////////////////////
+
+/* Prefix NAL Unix syntax, refer to Page 392 in JVT X201wcm */
+typedef struct TagPrefixNalUnit {
+  SRefBasePicMarking sRefPicBaseMarking;
+  bool               bStoreRefBasePicFlag;
+  bool               bPrefixNalUnitAdditionalExtFlag;
+  bool               bPrefixNalUnitExtFlag;
+  bool               bPrefixNalCorrectFlag;
+} SPrefixNalUnit, *PPrefixNalUnit;
+
+} // namespace WelsDec
+
+#endif//WELS_NAL_UNIT_PREFIX_H__
+
+```
+
+### BSD 2-Clause "Simplified" License
+
+Used by:
+- openh264-sys2 0.9.8 (https://github.com/ralfbiedert/openh264-rs)
+
+```text
+/*!
+ * \copy
+ *     Copyright (c)  2013, Cisco Systems
+ *     All rights reserved.
+ *
+ *     Redistribution and use in source and binary forms, with or without
+ *     modification, are permitted provided that the following conditions
+ *     are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in
+ *          the documentation and/or other materials provided with the
+ *          distribution.
+ *
+ *     THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ *     "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ *     LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ *     FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ *     COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+ *     INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ *     BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ *     LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ *     CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ *     LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ *     ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ *     POSSIBILITY OF SUCH DAMAGE.
+ *
+ */
+
+//pic_queue.h
+#ifndef WELS_PICTURE_QUEUE_H__
+#define WELS_PICTURE_QUEUE_H__
+
+
+#include "picture.h"
+
+namespace WelsDec {
+
+#define   PICTURE_RESOLUTION_ALIGNMENT      32
+
+
+typedef struct TagPicBuff {
+  PPicture*      ppPic;
+  int32_t        iCapacity;  // capacity size of queue
+  int32_t        iCurrentIdx;
+} SPicBuff, *PPicBuff;
+
+/*
+ *  Interfaces
+ */
+
+PPicture PrefetchPic (PPicBuff pPicBuff);  // To get current node applicable
+PPicture PrefetchPicForThread (PPicBuff pPicBuff); // To get current node applicable in the case of threaded mode
+PPicture PrefetchLastPicForThread (PPicBuff pPicBuff,
+                                   const int32_t& iLast); // To get last node applicable in the case of threaded mode
+
+} // namespace WelsDec
+
+#endif//WELS_PICTURE_QUEUE_H__
+
+```
+
+### BSD 2-Clause "Simplified" License
+
+Used by:
+- openh264-sys2 0.9.8 (https://github.com/ralfbiedert/openh264-rs)
+
+```text
+;*!
+;* \copy
+;*     Copyright (c)  2009-2013, Cisco Systems
+;*     All rights reserved.
+;*
+;*     Redistribution and use in source and binary forms, with or without
+;*     modification, are permitted provided that the following conditions
+;*     are met:
+;*
+;*        ?Redistributions of source code must retain the above copyright
+;*          notice, this list of conditions and the following disclaimer.
+;*
+;*        ?Redistributions in binary form must reproduce the above copyright
+;*          notice, this list of conditions and the following disclaimer in
+;*          the documentation and/or other materials provided with the
+;*          distribution.
+;*
+;*     THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+;*     "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+;*     LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+;*     FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+;*     COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+;*     INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+;*     BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+;*     LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+;*     CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+;*     LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+;*     ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+;*     POSSIBILITY OF SUCH DAMAGE.
+;*
+;*
+;*  dct.asm
+;*
+;*  Abstract
+;*      WelsDctFourT4_sse2
+;*
+;*  History
+;*      8/4/2009 Created
+;*
+;*
+;*************************************************************************/
+
+%include "asm_inc.asm"
+
+SECTION .text
+
+;void WelsBlockZero16x16_sse2(int16_t * block, int32_t stride);
+WELS_EXTERN WelsBlockZero16x16_sse2
+    %assign  push_num 0
+    LOAD_2_PARA
+    SIGN_EXTENSION r1, r1d
+    shl     r1, 1
+    pxor    xmm0, xmm0
+%rep 16
+    movdqa  [r0], xmm0
+    movdqa  [r0+16], xmm0
+    add     r0, r1
+%endrep
+    ret
+
+;void WelsBlockZero8x8_sse2(int16_t * block, int32_t stride);
+WELS_EXTERN WelsBlockZero8x8_sse2
+    %assign  push_num 0
+    LOAD_2_PARA
+    SIGN_EXTENSION r1, r1d
+    shl     r1, 1
+    pxor    xmm0, xmm0
+%rep 8
+    movdqa  [r0], xmm0
+    add     r0, r1
+%endrep
+    ret
+
+```
+
+### BSD 2-Clause "Simplified" License
+
+Used by:
+- openh264-sys2 0.9.8 (https://github.com/ralfbiedert/openh264-rs)
+
+```text
+;*!
+;* \copy
+;*     Copyright (c)  2011-2013, Cisco Systems
+;*     All rights reserved.
+;*
+;*     Redistribution and use in source and binary forms, with or without
+;*     modification, are permitted provided that the following conditions
+;*     are met:
+;*
+;*        * Redistributions of source code must retain the above copyright
+;*          notice, this list of conditions and the following disclaimer.
+;*
+;*        * Redistributions in binary form must reproduce the above copyright
+;*          notice, this list of conditions and the following disclaimer in
+;*          the documentation and/or other materials provided with the
+;*          distribution.
+;*
+;*     THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+;*     "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+;*     LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+;*     FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+;*     COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+;*     INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+;*     BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+;*     LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+;*     CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+;*     LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+;*     ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+;*     POSSIBILITY OF SUCH DAMAGE.
+;*
+;*
+
+LIBRARY         welsvp.dll
+EXPORTS
+                WelsCreateVpInterface
+                WelsDestroyVpInterface
+```
+
+### BSD 2-Clause "Simplified" License
+
+Used by:
+- openh264-sys2 0.9.8 (https://github.com/ralfbiedert/openh264-rs)
+
+```text
 Copyright (c) 2013, Cisco Systems
 All rights reserved.
 
@@ -9341,6 +10753,41 @@ Used by:
     LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
     SOFTWARE
+
+```
+
+### MIT License
+
+Used by:
+- cfg_aliases 0.2.2 (https://github.com/katharostech/cfg_aliases)
+
+```text
+# 3rd Party Notices
+
+The `cfg_aliases!` macro uses a lot of the code from [`tectonic_cfg_support::target_cfg!`] macro which is under the following license:
+
+[`tectonic_cfg_support::target_cfg!`]: https://github.com/tectonic-typesetting/tectonic/blob/f2439b936470ad27bdf92882064bc4702ee01899/cfg_support/src/lib.rs#L166
+
+    tectonic_cfg_support is licensed under the MIT License.
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the “Software”), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+---
 
 ```
 
@@ -9933,6 +11380,48 @@ THE SOFTWARE.
 ### MIT License
 
 Used by:
+- wayland-protocols 0.32.13 (https://github.com/smithay/wayland-rs)
+
+```text
+Copyright © 2008-2013 Kristian Høgsberg
+Copyright © 2010-2013 Intel Corporation
+Copyright © 2013      Rafael Antognolli
+Copyright © 2013      Jasper St. Pierre
+Copyright © 2014      Jonas Ådahl
+Copyright © 2014      Jason Ekstrand
+Copyright © 2014-2015 Collabora, Ltd.
+Copyright © 2015      Red Hat Inc.
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the "Software"),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice (including the next
+paragraph) shall be included in all copies or substantial portions of the
+Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+---
+
+The above is the version of the MIT "Expat" License used by X.org:
+
+    http://cgit.freedesktop.org/xorg/xserver/tree/COPYING
+
+```
+
+### MIT License
+
+Used by:
 - fs_extra 1.3.0 (https://github.com/webdesus/fs_extra)
 
 ```text
@@ -10054,6 +11543,36 @@ CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
+```
+
+### MIT License
+
+Used by:
+- rfd 0.17.2 (https://github.com/PolyMeilex/rfd)
+
+```text
+MIT License
+
+Copyright (c) 2020 Bilal Elmoussaoui
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
 ```
 
 ### MIT License
@@ -10295,6 +11814,34 @@ SOFTWARE.
 ### MIT License
 
 Used by:
+- wayland-protocols-plasma 0.3.12 (https://github.com/smithay/wayland-rs)
+
+```text
+MIT License Copyright (c) <year> <copyright holders>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is furnished
+to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice (including the next
+paragraph) shall be included in all copies or substantial portions of the
+Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
+OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF
+OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+```
+
+### MIT License
+
+Used by:
 - x11-dl 2.21.0 (https://github.com/AltF02/x11-rs.git)
 - zmij 1.0.23 (https://github.com/dtolnay/zmij)
 
@@ -10349,6 +11896,36 @@ NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
 LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+```
+
+### MIT License
+
+Used by:
+- tracing-core 0.1.36 (https://github.com/tokio-rs/tracing)
+
+```text
+The MIT License (MIT)
+
+Copyright (c) 2014 Mathijs van de Nes
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 ```
 
@@ -10604,6 +12181,7 @@ SOFTWARE.
 
 Used by:
 - harfrust 0.12.0 (https://github.com/harfbuzz/harfrust)
+- rustybuzz 0.20.1 (https://github.com/harfbuzz/rustybuzz)
 
 ```text
 The MIT License (MIT)

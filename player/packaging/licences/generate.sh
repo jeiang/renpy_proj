@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Regenerates RUST_DEPENDENCIES.md (licence texts of every Rust dependency) with cargo-about.
-# Run it after Cargo.lock changes. Config: player/about.toml. Template: player/about.hbs.
+# Run it after Cargo.lock changes. Use cargo-about 0.9.2, the version CI pins (other versions resolve targets differently). Config: player/about.toml. Template: player/about.hbs.
 #
 #   player/packaging/licences/generate.sh
 set -euo pipefail
