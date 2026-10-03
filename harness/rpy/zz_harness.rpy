@@ -15,6 +15,10 @@
 # "cmd-error LINE REPR" and "cmd-error-trace ...". start, load, jump, movie and quit do not return normally.
 # Events: boot | loaded | save-directory NAME | say N | text N HASH | label NAME | menu True|False | tags a b c | movie-channel NAME | cmd ... | video-result {json}
 init 999 python:
+    try:
+        import builtins as _hz_builtins
+    except ImportError:
+        import __builtin__ as _hz_builtins
     import os as _hz_os, io as _hz_io, time as _hz_time, json as _hz_json, hashlib as _hz_hashlib, collections as _hz_collections, sys as _hz_sys, types as _hz_types   # private aliases: a game variable named `time` or `random` must not hide a module
     _hz_D = _hz_sys.modules.get("_hz_deep")
     if _hz_D is None:
@@ -1355,7 +1359,7 @@ init 999 python:
             ns = {"__name__": "hz_driver"}
             with _hz_io.open(path, "r", encoding="utf-8") as f:
                 src = f.read()
-            exec(compile(src, path, "exec"), ns)
+            exec(_hz_builtins.compile(src, path, "exec"), ns)   # not the bare name: a game that defines `compile` hides the builtin
             self.ns = ns
             self.name = ns.get("NAME") or _hz_os.path.splitext(_hz_os.path.basename(path))[0]
             self.hubs = list(ns.get("HUBS", ()))
