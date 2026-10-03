@@ -172,6 +172,11 @@ printf '#!/bin/sh\nexec /usr/bin/gcc -fPIC "$@"\n' > "$CACHE/shim/cc"; chmod +x 
 export PATH=$CACHE/shim:$PATH
 rm -rf "$PLAYER/build-out/engine/stamp.txt"
 (cd "$PLAYER" && cargo build --release -p player)
+if [ "${PLAYER_CHECKS:-0}" = 1 ]; then
+  log "cargo clippy, cargo test"
+  rustup component add clippy >/dev/null
+  (cd "$PLAYER" && cargo clippy --workspace --all-targets --release -- -D warnings && cargo test --release --workspace)
+fi
 
 # ---- package: the steps of packaging/linux.sh, with the same host-provided set ----------------------------------------
 log "package"

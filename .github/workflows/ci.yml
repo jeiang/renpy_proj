@@ -1,0 +1,97 @@
+# Continuous integration: format, licence notices, clippy (no warnings), tests and release builds on macOS arm64,
+# Linux (manylinux_2_28) and Windows x64, then the synthetic integration corpus through the harness on Linux.
+# The gate on real games stays manual (docs/LOCAL-FILES.md).
+name: ci
+
+on:
+  push:
+    branches: [main, build/ci]
+  pull_request:
+  workflow_dispatch:
+
+# A new push to a pull request cancels the run it supersedes. Runs on main always finish.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  fmt:
+    name: rustfmt
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup component add rustfmt
+      - run: cargo fmt --all --check
+        working-directory: player
+
+  notices:
+    name: Licence notices are current
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-about
+      - name: Regenerate RUST_DEPENDENCIES.md and compare
+        run: |
+          (cd player && cargo fetch --locked)
+          player/packaging/licences/generate.sh
+          git diff --exit-code -- player/packaging/licences/RUST_DEPENDENCIES.md
+
+  build:
+    name: Build (${{ github.event_name }})
+    uses: ./.github/workflows/build.yml
+    with:
+      checks: true
+
+  synth:
+    name: Synthetic corpus (Xvfb + lavapipe)
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      HARNESS_DISPLAY: xvfb
+      # The media generator only makes test files and is never linked or shipped: the runner's ffmpeg is enough.
+      SYNTH_ALLOW_GPL: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install the display and Mesa packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends python3 git procps util-linux ca-certificates \
+            xvfb xkb-data x11-xkb-utils xdotool x11-utils x11-apps \
+            mesa-vulkan-drivers libvulkan1 libgl1-mesa-dri libglx-mesa0 libegl1 \
+            libasound2t64 libdrm2 libudev1 libxkbcommon0 libxkbcommon-x11-0 libx11-6 libxcursor1 libxrandr2 libxi6 \
+            libxinerama1 libxss1 libpulse0 ffmpeg
+      - uses: actions/cache@v6
+        with:
+          path: |
+            research/test-corpus/sdk
+            harness/testgames/fonts
+          key: synth-sdk-${{ hashFiles('harness/testgames/fetch.sh') }}
+      - run: harness/testgames/fetch.sh
+      - uses: actions/download-artifact@v8
+        with:
+          name: package-linux
+          path: ${{ runner.temp }}/package
+      - name: Unpack the player
+        run: tar -xzf "$RUNNER_TEMP/package/player-linux-x86_64.tar.gz" -C "$RUNNER_TEMP/package"
+      - name: Build the synthetic games
+        run: python3 harness/testgames/build.py
+      - name: Run stock and player on every game
+        run: |
+          python3 harness/testgames/run.py --no-build \
+            --player-bin "$RUNNER_TEMP/package/player-linux-x86_64/player" \
+            --gate-args "--diff-mean 0.01 --diff-pct 1.0"
+      - name: Keep the gate results of a failed run
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: synth-results
+          path: harness/out/synth
+          retention-days: 7

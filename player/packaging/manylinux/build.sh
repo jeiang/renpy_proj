@@ -4,6 +4,7 @@
 # Run it from a checkout of the repository on a Linux x86_64 host. Output (gitignored):
 #   player/build-out/manylinux/player-linux-x86_64/ and player-linux-x86_64.tar.gz
 # CACHE_DIR (default ~/.cache/renpy-manylinux) keeps downloads, static deps, FFmpeg and the Rust toolchain.
+# PLAYER_CHECKS=1 also runs `cargo clippy -- -D warnings` and `cargo test --release` in the container (CI does).
 # Needs `podman` (rootless: newuidmap, newgidmap, subuid and subgid entries). Without podman on PATH it uses
 # `nix shell nixpkgs#podman nixpkgs#fuse-overlayfs`. Without ~/.config/containers/{policy,registries,storage}.conf
 # the script writes minimal ones. PODMAN_GRAPHROOT puts the image store somewhere else (default: podman's own).
@@ -28,5 +29,6 @@ run=(podman)
 command -v podman >/dev/null || run=(nix shell nixpkgs#podman nixpkgs#fuse-overlayfs --command podman)
 # Container root maps to the calling user, so build outputs in the clone belong to the user.
 exec "${run[@]}" run --rm --name "renpy-manylinux-$$" \
+  -e PLAYER_CHECKS="${PLAYER_CHECKS:-0}" \
   -v "$REPO:/src" -v "$CACHE:/cache" \
   "$IMAGE" bash /src/player/packaging/manylinux/container-build.sh
