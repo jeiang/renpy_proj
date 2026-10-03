@@ -1,5 +1,7 @@
 # renpy_proj: a player for Ren'Py 7 and 8 games
 
+[![ci](https://github.com/jeiang/renpy_proj/actions/workflows/ci.yml/badge.svg)](https://github.com/jeiang/renpy_proj/actions/workflows/ci.yml)
+
 A single native player that runs existing Ren'Py 7 and 8 games from their `game/` folder, on macOS, Linux and Windows.
 It embeds Ren'Py 8.5.3's Python layer in a Rust host (wgpu renderer, FFmpeg video, winit/cpal/gilrs for window, audio and input).
 It never runs the game's own `lib/`, `renpy/` or launcher. It can also stream a game to a browser on the local network.
@@ -68,6 +70,30 @@ nix develop -c python3 harness/testgames/build.py
 ```
 
 The gate on real commercial games is a maintainer tool. It needs games that this repository does not include.
+
+## CI and releases
+
+`.github/workflows/ci.yml` runs on every push to `main` and on every pull request. A new push to a pull request cancels the run it replaces.
+
+| Job | What it does |
+|---|---|
+| `rustfmt` | `cargo fmt --all --check` |
+| `Licence notices are current` | Regenerates `player/packaging/licences/RUST_DEPENDENCIES.md` with `cargo about` and fails when it differs from the committed file. Run `player/packaging/licences/generate.sh` after a `Cargo.lock` change. |
+| `Build` (`build.yml`) | On macOS arm64, Linux (manylinux_2_28 container) and Windows x64: release build with the packaging script of the platform, `cargo clippy -- -D warnings` and `cargo test`. |
+| `Synthetic corpus` | On Linux under Xvfb and Mesa lavapipe: the synthetic games through `harness/testgames/run.py`, stock engine first, then the Linux package of the `Build` job (recipe and thresholds: [harness/testgames/README.md](harness/testgames/README.md), "CI on Linux"). |
+
+Fetched inputs (Ren'Py source, wheels, static CPython, FFmpeg, Ren'Py SDKs) are cached with `actions/cache`. The keys are the hashes of
+the fetch and build scripts, so a change to a pin rebuilds them. The real-game gate is not part of CI.
+
+`.github/workflows/release.yml` runs on a tag `v*`. It checks the licence notices, builds the three packages and creates a **draft**
+GitHub Release with the assets and a `SHA256SUMS` file. You publish the draft by hand.
+
+| Asset | Content |
+|---|---|
+| `renpy-player-<tag>-macos-arm64.zip` | `RenPyPlayer.app`, ad hoc signed (no Developer ID yet: macOS asks the user to allow it) |
+| `renpy-player-<tag>-linux-x86_64-manylinux_2_28.tar.gz` | Binary and LGPL FFmpeg libraries, glibc 2.28 or newer |
+| `renpy-player-<tag>-windows-x86_64.zip` | `player.exe` and the LGPL FFmpeg DLLs |
+| `renpy-player-<tag>-rust-dependency-licences.md`, `renpy-player-<tag>-THIRD_PARTY.md` | Licence notices (also inside each package) |
 
 ## Repository map
 
