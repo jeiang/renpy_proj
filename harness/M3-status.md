@@ -12,7 +12,7 @@
 | AstralLust | 7.8.2 | pass | AstralLust-player2 |
 | BlackRose | 7.7.3 | pass | BlackRose-player2 |
 | BloomWar | 7.4.11 | pass | BloomWar-player2 |
-| BraveheartAcademy | 7.4.8 | pass | BraveheartAcademy-player6 (route; other checks player5, baseline stock3) |
+| BraveheartAcademy | 7.4.8 | pass | BraveheartAcademy-player6 (route; other checks player5, baseline stock4) |
 | CabinByTheLake | 7.4.8 | pass (video skipped) | CabinByTheLake-player |
 | DFraction | 7.4.11 | pass (video skipped) | DFraction-player |
 | DTRemake | 7.4.11 | pass | DTRemake-player |
