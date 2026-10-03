@@ -10,4 +10,7 @@ cd "$player"
 run=(cargo about)
 command -v cargo-about >/dev/null || run=(nix shell nixpkgs#cargo-about nixpkgs#cargo nixpkgs#rustc -c cargo about)
 "${run[@]}" generate --offline --locked -c about.toml about.hbs -o "$here/RUST_DEPENDENCIES.md"
+# Some licence texts carry CRLF line endings; git stores them as LF, so the file is made LF-only here.
+tr -d '\r' < "$here/RUST_DEPENDENCIES.md" > "$here/RUST_DEPENDENCIES.md.tmp"
+mv "$here/RUST_DEPENDENCIES.md.tmp" "$here/RUST_DEPENDENCIES.md"
 echo "wrote $here/RUST_DEPENDENCIES.md"
