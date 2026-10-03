@@ -47,6 +47,10 @@ Which artemis encoder ran is not recorded: the gate did not save the server's `/
 
 Result: video connected (1738x978), menu seen, first say after the Start click, dialogue advanced by input (6 of 8 inputs; two clicks and one Enter did not advance a say, as in the Chromium runs), 4 of 5 checks pass. Latency after input p50 / p95 = 90 / 142 ms (168 samples); all frames 104 / 139 ms; 15.3 fps. The audio check failed: the analyser read RMS 0. Likely cause [INFERENCE, not tested]: the page's AudioContext stays suspended in Safari because it is created after the click, outside a user gesture, so the gate's probe cannot read the audio. Real audio output in Safari is therefore unproven. Evidence: `harness/out/stream46/safari/` (gitignored).
 
+## Latency remeasure (2026-10-03, Mac, Chromium, main 1c02b46)
+
+Run under `runlock.py` (no other game run during it; load average about 3 from CI builds, and no "Mac quiet" message arrived, so this is not a fully idle machine). 5 of 5 checks pass. After input p50 / p95 = 98 / 183 ms (148 samples); all frames 137 / 197 ms; 15.3 fps; server CPU 16.4% of one core. After-input p50 is under 130 ms and in line with the earlier 100 to 120 ms, so the 193 ms close-out figure came from a busy machine. No code change was needed. The all-frames p50 includes frames of an idle picture, so it is higher than the earlier 127 ms. Evidence: `harness/out/stream46/lat/`.
+
 ## Findings that changed the code
 
 1. **Audio clock.** The first gate run showed video latency growing from 25 ms to 1 s and, in another run, 4.5 s, while the audio and video network stats were clean. The browser held video back to line it up with audio, because the audio RTP timeline came from the count of mixed samples while the mixer thread ran slightly slower than 48 kHz under game load. Audio is now clock-locked in `stream`: exactly 48000 frames per wall second leave, short input is padded with silence after 40 ms, long input is trimmed to 100 ms. Latency is then flat.
