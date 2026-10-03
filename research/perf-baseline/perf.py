@@ -5,7 +5,7 @@
   perf.py run ENGINE MODE LABEL [--arg X] [--kind movie|cutscene] [--secs N] [--warm N] [--fps N] [--reps 3]
                                  [--cold] [--sample SECS] [--env K=V ...] [--timeout S]
 
-One run = one game process holding /tmp/renpy_proj.run.lock, scratch saves (RENPY_PATH_TO_SAVES), `/usr/bin/time -l`,
+One run = one game process holding the machine lock (harness/gatelib/machinelock.py), scratch saves (RENPY_PATH_TO_SAVES), `/usr/bin/time -l`,
 an ioreg GPU poller (no sudo), the injected zz_perf.rpy harness (events in events.jsonl), SIGKILL sweep by path afterwards.
 Raw output goes to out/ (gitignored: it may quote game data); one analysed row per run is appended to data/runs.jsonl.
 """
@@ -14,6 +14,9 @@ import argparse, json, os, re, shutil, statistics, subprocess, sys, tempfile, th
 HERE = os.path.dirname(os.path.abspath(__file__))
 WT = os.path.abspath(os.path.join(HERE, "..", ".."))
 CORPUS = os.path.join(WT, "corpus")
+sys.path.insert(0, os.path.join(WT, "harness", "gatelib"))
+import machinelock  # noqa: E402  (stdlib only; the same lock as the gate and tools/runlock.py)
+
 MAIN = "/Users/aidanp/Projects/renpy_proj/research"
 SDK = {
     "7.8.2": os.path.join(HERE, "sdk/renpy-7.8.2-sdk"),
@@ -32,7 +35,6 @@ ENGINES = {
     "astral-782": ([SDK["7.8.2"] + "/renpy.sh", CORPUS + "/astral-782"], "astral-782", "AstralLust on the 7.8.2 SDK (same version as bundled; arm64 slice of py2-mac-universal)"),
     "astral-853": ([SDK["8.5.3"] + "/renpy.sh", CORPUS + "/astral-853"], "astral-853", "AstralLust ported (renpy7-on-8/patches/astral.sh) on 8.5.3 (arm64)"),
 }
-LOCK = "/tmp/renpy_proj.run.lock"
 SWEEP_PAT = "/perf-baseline/corpus/"
 
 
@@ -44,19 +46,11 @@ def sweep():
 
 
 def take_lock():
-    while True:
-        try:
-            os.mkdir(LOCK)
-            return
-        except FileExistsError:
-            time.sleep(5)
+    machinelock.take(7200, "perf.py " + " ".join(sys.argv[1:]))
 
 
 def drop_lock():
-    try:
-        os.rmdir(LOCK)
-    except OSError:
-        pass
+    machinelock.release()
 
 
 def gpu_sample():
