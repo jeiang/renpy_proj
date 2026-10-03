@@ -41,6 +41,16 @@ Observed: 5 of 5 checks pass in all three runs. Dialogue advanced on clicks ever
 
 Which artemis encoder ran is not recorded: the gate did not save the server's `/stats`. The ladder tries `h264_vaapi` first on Linux, and M5Encode measured it passing `verify` on artemis at 3.6 ms per NV12 and 12.9 ms per RGBA 1080p frame; a fallback to openh264 would also stream, so treat the artemis CPU figure as unattributed.
 
+## Safari run (2026-10-03, real Safari 27.0 through safaridriver)
+
+`gate_m5.py --browser safari` drives Safari with `harness/m5/safari_driver.py` (plain W3C WebDriver). It needs "Allow remote automation" in Safari Settings > Developer. Mac server, LAN URL, main 1c02b46, other Mac runs active (busy machine, so not a latency baseline).
+
+Result: video connected (1738x978), menu seen, first say after the Start click, dialogue advanced by input (6 of 8 inputs; two clicks and one Enter did not advance a say, as in the Chromium runs), 4 of 5 checks pass. Latency after input p50 / p95 = 90 / 142 ms (168 samples); all frames 104 / 139 ms; 15.3 fps. The audio check failed: the analyser read RMS 0. Likely cause [INFERENCE, not tested]: the page's AudioContext stays suspended in Safari because it is created after the click, outside a user gesture, so the gate's probe cannot read the audio. Real audio output in Safari is therefore unproven. Evidence: `harness/out/stream46/safari/` (gitignored).
+
+## Latency remeasure (2026-10-03, Mac, Chromium, main 1c02b46)
+
+Run under `runlock.py` (no other game run during it; load average about 3 from CI builds, and no "Mac quiet" message arrived, so this is not a fully idle machine). 5 of 5 checks pass. After input p50 / p95 = 98 / 183 ms (148 samples); all frames 137 / 197 ms; 15.3 fps; server CPU 16.4% of one core. After-input p50 is under 130 ms and in line with the earlier 100 to 120 ms, so the 193 ms close-out figure came from a busy machine. No code change was needed. The all-frames p50 includes frames of an idle picture, so it is higher than the earlier 127 ms. Evidence: `harness/out/stream46/lat/`.
+
 ## Findings that changed the code
 
 1. **Audio clock.** The first gate run showed video latency growing from 25 ms to 1 s and, in another run, 4.5 s, while the audio and video network stats were clean. The browser held video back to line it up with audio, because the audio RTP timeline came from the count of mixed samples while the mixer thread ran slightly slower than 48 kHz under game load. Audio is now clock-locked in `stream`: exactly 48000 frames per wall second leave, short input is padded with silence after 40 ms, long input is trimmed to 100 ms. Latency is then flat.
@@ -55,7 +65,8 @@ Every newly built, ad hoc signed `player` binary triggers the macOS application 
 ## Not done or not covered
 
 - No readback-free path (above). The measured cost is small at 1080p: 0.04 to 0.2 ms on the game thread.
-- Safari proper (safaridriver) is blocked: session creation fails with "Allow remote automation" disabled (Safari Settings > Developer; `safaridriver --enable` needs an admin password). Not run; WebKit through Playwright, headed, passed. Headless WebKit does not gather ICE candidates on this Mac.
+- Real Safari ran (see Safari run below); WebKit through Playwright, headed, passed. Headless WebKit does not gather ICE candidates on this Mac.
+- GPU-to-encoder path and Windows encoders moved to issue #54.
 - Windows was not built (stream crate uses `wincrypto` there; untried).
 - NVENC and AMF/QSV/MF encoders are untested.
 - The library Stream button was not clicked (no OS-level input). A unit test (`launch::tests::spawn_serve_runs_the_serve_subcommand_and_collects_urls`) proves the button's spawn function starts `player serve <game> --data <data>`, the start of the gate command, and collects the `Stream URL:` lines. The click itself and the child's output in a real GUI session are unproven.
