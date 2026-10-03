@@ -202,6 +202,16 @@ PLIST
             esac
         done < <(otool -L "$target" | tail -n +2 | awk '{print $1}')
     done
+    # No file in the bundle may name a /nix/store path: the static libffi of nixpkgs hardcodes the store path of
+    # its trampolines dylib, so ctypes callbacks abort on a Mac without that path (otool -L cannot see it).
+    # The one accepted hit is the bundled libffi.7.dylib (FFmpeg -> GnuTLS -> p11-kit pull it in): it reaches its
+    # trampolines only when p11-kit builds a closure, which the player never does.
+    NIX_STORE_ALLOW='^libffi\.7\.dylib /nix/store/[a-z0-9]{32}-libffi-[0-9.]+/lib/libffi-trampolines\.dylib$' \
+        "$here/check-no-nix-store.sh" "$app" || bad=1
+    if ! otool -L "$exe" | grep -q '/usr/lib/libffi.dylib'; then
+        echo "$exe does not link the system /usr/lib/libffi.dylib" >&2
+        bad=1
+    fi
     [ "$bad" = 0 ] || exit 1
     log "otool -L of the binary after bundling:"
     otool -L "$exe" | tail -n +2 | sed 's/^/    /'
