@@ -4,6 +4,7 @@
 Run with the Playwright venv (see harness/stream_probe.py header):
   export PLAYWRIGHT_BROWSERS_PATH=$(nix build --no-link --print-out-paths nixpkgs#playwright-driver.browsers) PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=true
   python3 harness/tools/runlock.py -- /tmp/pwenv/bin/python harness/m5/gate_m5.py --host mac --out harness/out/m5-mac
+  python3 harness/tools/runlock.py -- /tmp/pwenv/bin/python harness/m5/gate_m5.py --host mac --browser safari --out harness/out/m5-mac-safari   # real Safari via safaridriver, needs Allow remote automation
   /tmp/pwenv/bin/python harness/m5/gate_m5.py --host artemis --out harness/out/m5-artemis
 
 --host mac: serve on this Mac; the browser opens the Mac's LAN URL. --host artemis: serve on artemis over ssh (the player
@@ -228,14 +229,20 @@ def main():
                                "On macOS check the application firewall: allow incoming connections for the player binary" % (url, e))
         res["opened"] = url
         with sync_playwright() as p:
-            if a.browser == "chromium":
+            if a.browser == "safari":
+                from safari_driver import SafariPage
+                page = b = SafariPage()
+                res["browser_version"] = "Safari " + str(page.version)
+                logs = []
+            elif a.browser == "chromium":
                 b = p.chromium.launch(headless=not a.headed, args=["--autoplay-policy=no-user-gesture-required",
                                                                     "--disable-features=WebRtcHideLocalIpsWithMdns"])
             else:
                 b = getattr(p, a.browser).launch(headless=not a.headed)
-            page = b.new_context(viewport={"width": 1280, "height": 720}).new_page()
-            logs = []
-            page.on("console", lambda m: logs.append(m.text))
+            if a.browser != "safari":
+                page = b.new_context(viewport={"width": 1280, "height": 720}).new_page()
+                logs = []
+                page.on("console", lambda m: logs.append(m.text))
             page.goto(url + ("&" if "?" in url else "?") + "probe=1")
             page.click("#connect")
             t0 = time.time()
@@ -244,7 +251,7 @@ def main():
             res["video_size"] = page.evaluate("[window.__stream.video.videoWidth, window.__stream.video.videoHeight]")
             res["checks"]["video_connected"] = res["video_size"][0] > 0
             page.evaluate("""async () => { const v = window.__stream.video; const ctx = new (window.AudioContext||window.webkitAudioContext)();
-              await ctx.resume(); const src = ctx.createMediaStreamSource(v.srcObject); const an = ctx.createAnalyser(); an.fftSize = 2048; src.connect(an);
+              await Promise.race([ctx.resume(), new Promise(r => setTimeout(r, 3000))]); const src = ctx.createMediaStreamSource(v.srcObject); const an = ctx.createAnalyser(); an.fftSize = 2048; src.connect(an);
               window.__rmsMax = 0; const buf = new Float32Array(an.fftSize);
               setInterval(() => { an.getFloatTimeDomainData(buf); let s = 0; for (const x of buf) s += x*x; const r = Math.sqrt(s/buf.length); if (r > window.__rmsMax) window.__rmsMax = r; }, 50); }""")
             clicks = []
