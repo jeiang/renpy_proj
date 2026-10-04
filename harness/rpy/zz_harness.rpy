@@ -1009,7 +1009,7 @@ screen _hz_deep_screen():
 #     comes back 3 times in a row ends the run: `deep-done stuck`. A loop is never an error record.
 #   Driver (HZ_DRIVER=<path of harness/drivers/<game>.py>, corpus.toml key `driver`): Python 2 and 3 source with optional
 #     NAME, HUBS (screen names or fnmatch patterns of the game's free-roam screens), DISMISS (modal popup screens to hide), hub(h) -> candidate, None (least pressed) or False (press nothing) and
-#     choice(h, captions) -> index or None, AVOID_CAPTIONS (menu captions never taken while another exists). h is a _HzHub: h.cands (clickable actions of the screen, with .key, .kind,
+#     choice(h, captions) -> index or None, AVOID_CAPTIONS (menu captions never taken while another exists). KEEP_CAPTIONS (caption prefixes the driver picks that the loop guard never replaces: the way out of a menu). h is a _HzHub: h.cands (clickable actions of the screen, with .key, .kind,
 #     .label, .args), h.expr("python expression", default), h.v("variable", default), h.visits(c), h.least(cands),
 #     h.rng, h.note(text). Without a driver answer the driver clicks the least visited candidate.
 # ======================================================================================================================
@@ -1486,6 +1486,12 @@ init 999 python:
         if k is None:
             k = 0
         if D.drv is not None:
+            keep = tuple(D.drv.ns.get("KEEP_CAPTIONS", ()))
+            if keep and caps[k].startswith(keep) and (not D.on or D.visits.get("C:" + caps[k], 0) < 200):   # a menu whose "Back" returns to itself still ends as a loop
+                if D.on:
+                    D.visits["C:" + caps[k]] = D.visits.get("C:" + caps[k], 0) + 1
+                    _hz_avoid_tick()
+                return k   # the way out of a menu: the loop guard's exclusions and episode draws must not take it away
             bad = tuple(D.drv.ns.get("AVOID_CAPTIONS", ()))
             if bad and caps[k].startswith(bad):
                 alt = [i for i in range(len(caps)) if not caps[i].startswith(bad)]
