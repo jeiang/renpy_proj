@@ -15,6 +15,10 @@
 # "cmd-error LINE REPR" and "cmd-error-trace ...". start, load, jump, movie and quit do not return normally.
 # Events: boot | loaded | save-directory NAME | say N | text N HASH | label NAME | menu True|False | tags a b c | movie-channel NAME | cmd ... | video-result {json}
 init 999 python:
+    try:
+        import builtins as _hz_builtins
+    except ImportError:
+        import __builtin__ as _hz_builtins
     import os as _hz_os, io as _hz_io, time as _hz_time, json as _hz_json, hashlib as _hz_hashlib, collections as _hz_collections, sys as _hz_sys, types as _hz_types   # private aliases: a game variable named `time` or `random` must not hide a module
     _hz_D = _hz_sys.modules.get("_hz_deep")
     if _hz_D is None:
@@ -1005,7 +1009,7 @@ screen _hz_deep_screen():
 #     comes back 3 times in a row ends the run: `deep-done stuck`. A loop is never an error record.
 #   Driver (HZ_DRIVER=<path of harness/drivers/<game>.py>, corpus.toml key `driver`): Python 2 and 3 source with optional
 #     NAME, HUBS (screen names or fnmatch patterns of the game's free-roam screens), DISMISS (modal popup screens to hide), hub(h) -> candidate, None (least pressed) or False (press nothing) and
-#     choice(h, captions) -> index or None, AVOID_CAPTIONS (menu captions never taken while another exists). h is a _HzHub: h.cands (clickable actions of the screen, with .key, .kind,
+#     choice(h, captions) -> index or None, AVOID_CAPTIONS (menu captions never taken while another exists). KEEP_CAPTIONS (caption prefixes the driver picks that the loop guard never replaces: the way out of a menu). h is a _HzHub: h.cands (clickable actions of the screen, with .key, .kind,
 #     .label, .args), h.expr("python expression", default), h.v("variable", default), h.visits(c), h.least(cands),
 #     h.rng, h.note(text). Without a driver answer the driver clicks the least visited candidate.
 # ======================================================================================================================
@@ -1355,7 +1359,7 @@ init 999 python:
             ns = {"__name__": "hz_driver"}
             with _hz_io.open(path, "r", encoding="utf-8") as f:
                 src = f.read()
-            exec(compile(src, path, "exec"), ns)
+            exec(_hz_builtins.compile(src, path, "exec"), ns)   # not the bare name: a game that defines `compile` hides the builtin
             self.ns = ns
             self.name = ns.get("NAME") or _hz_os.path.splitext(_hz_os.path.basename(path))[0]
             self.hubs = list(ns.get("HUBS", ()))
@@ -1482,6 +1486,12 @@ init 999 python:
         if k is None:
             k = 0
         if D.drv is not None:
+            keep = tuple(D.drv.ns.get("KEEP_CAPTIONS", ()))
+            if keep and caps[k].startswith(keep) and (not D.on or D.visits.get("C:" + caps[k], 0) < 200):   # a menu whose "Back" returns to itself still ends as a loop
+                if D.on:
+                    D.visits["C:" + caps[k]] = D.visits.get("C:" + caps[k], 0) + 1
+                    _hz_avoid_tick()
+                return k   # the way out of a menu: the loop guard's exclusions and episode draws must not take it away
             bad = tuple(D.drv.ns.get("AVOID_CAPTIONS", ()))
             if bad and caps[k].startswith(bad):
                 alt = [i for i in range(len(caps)) if not caps[i].startswith(bad)]
