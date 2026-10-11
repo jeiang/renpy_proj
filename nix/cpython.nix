@@ -6,7 +6,7 @@ let
   s = pkgs.pkgsStatic;
   script = if stdenv.hostPlatform.isDarwin then "build.sh" else "build_linux.sh";
 in
-stdenv.mkDerivation {
+stdenv.mkDerivation ({
   pname = "player-cpython";
   version = "3.12.8";
   src = lib.fileset.toSource {
@@ -41,4 +41,8 @@ stdenv.mkDerivation {
     cp -r work/player/build-out/cpython $out
     runHook postInstall
   '';
-}
+} // lib.optionalAttrs stdenv.hostPlatform.isDarwin {
+  # build.sh compiles _ctypes against the Apple libffi headers of the Xcode SDK (the nix SDK has none). The cc
+  # wrapper silently drops -I paths outside the store unless purity enforcement is off.
+  NIX_ENFORCE_PURITY = 0;
+})
