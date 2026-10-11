@@ -1,0 +1,51 @@
+# Builds the Nix player package on main and pushes its closure to garret (cache.jeiang.dev), so the
+# cornn-flaek hosts that install it substitute instead of building.
+# garret admits this push only while cornn-flaek's modules/garret/default.nix lists this repository id and
+# "jeiang/renpy_proj/.github/workflows/garret.yml@refs/heads/main".
+name: garret
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: garret-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  GARRET_SUBSTITUTER: https://cache.jeiang.dev
+  GARRET_PUBLIC_KEY: "cache.jeiang.dev-1:owXJK5/UX9NSf1lhmDDT3QTxMtbVk9YfHhjvOXyPhpA="
+  # The client rev cornn-flaek's flake.lock pins, which garret's own CI has pushed.
+  GARRET_CLIENT: github:jeiang/garret/c51d73fcff6eadf310fda510a29d3712ae4bf5d0#garret
+
+jobs:
+  push:
+    name: Push player (${{ matrix.system }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - system: x86_64-linux
+            runner: ubuntu-24.04
+          - system: aarch64-darwin
+            runner: macos-15
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+        with:
+          extra_nix_config: |
+            extra-substituters = ${{ env.GARRET_SUBSTITUTER }}
+            extra-trusted-public-keys = ${{ env.GARRET_PUBLIC_KEY }}
+      - name: Build the player
+        run: nix build .#packages.${{ matrix.system }}.player --print-build-logs
+      - name: Push the closure to garret
+        run: nix run "$GARRET_CLIENT" -- --config .ci/garret.toml push ./result
