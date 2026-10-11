@@ -116,6 +116,10 @@ request, so the cache of `main` is the one that every later run and every releas
 Fetched inputs (Ren'Py source, wheels, static CPython, FFmpeg, Ren'Py SDKs) are cached with `actions/cache`. The keys are the hashes of
 the fetch and build scripts, so a change to a pin rebuilds them. The real-game gate is not part of CI.
 
+`.github/workflows/garret.yml` runs on every push to `main`. It builds `nix build .#player` for `x86_64-linux` and `aarch64-darwin`
+and pushes the closures to the garret cache (`cache.jeiang.dev`) with a GitHub OIDC token, so the cornn-flaek hosts that install the
+player substitute it. garret accepts the push only while cornn-flaek's `modules/garret/default.nix` lists this repository and workflow.
+
 `.github/workflows/release.yml` runs on a tag `v*`. It checks the licence notices, builds the three packages and creates a **draft**
 GitHub Release with the assets and a `SHA256SUMS` file. You publish the draft by hand.
 
