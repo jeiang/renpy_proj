@@ -41,6 +41,9 @@ stdenv.mkDerivation ({
     cp -r work/player/build-out/cpython $out
     runHook postInstall
   '';
+} // lib.optionalAttrs stdenv.hostPlatform.isLinux {
+  PYHOST_FFI = s.libffi.out;
+  PYHOST_FFI_DEV = s.libffi.dev;
 } // lib.optionalAttrs stdenv.hostPlatform.isDarwin {
   # build.sh compiles _ctypes against the Apple libffi headers of the Xcode SDK (the nix SDK has none). The cc
   # wrapper silently drops -I paths outside the store unless purity enforcement is off.
