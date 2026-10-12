@@ -1,0 +1,44 @@
+# Reason: Ren'Py 8.3.4 wrote a game .rpyc with the digest md5(source). Ren'Py 8.5.3 expects md5(source + b"_2025-07-06") and treats every shipped .rpyc as stale, so an 8.3 game with loose .rpy files was recompiled on the first launch (138 s on Wartribe Academy). When the .rpy bytes are unchanged, the 8.3 .rpyc matches its source, so the game .rpyc is accepted with either digest. The player cache is written by urp and keeps the 8.5.3 digest only. A changed .rpy matches neither digest and is compiled again.
+
+diff --git a/renpy/script.py b/renpy/script.py
+--- a/renpy/script.py
++++ b/renpy/script.py
+@@ -1054,6 +1054,7 @@
+             rpycfn = dir + "/" + fn + compiled
+             rpyfn = None  # prevent the spurious warning.
+             rpydigest = None
++            rpylegacydigest = None
+ 
+             rpyfns = []
+ 
+@@ -1073,7 +1074,10 @@
+                 source, rpyfn = rpyfns[0]
+ 
+                 with renpy.vfs.open(rpyfn, "rb") as f:
+-                    rpydigest = hashlib.md5(f.read() + RPYC_MAGIC).digest()
++                    rpysource = f.read()
++
++                rpydigest = hashlib.md5(rpysource + RPYC_MAGIC).digest()
++                rpylegacydigest = hashlib.md5(rpysource).digest()
+             else:
+                 source = source_extensions[-1]
+                 rpyfn = dir + "/" + fn + source_extensions[-1]
+@@ -1096,11 +1100,14 @@
+                 data, stmts = None, None
+ 
+                 if not force_compile:
+-                    for candidate, candidate_digest, candidate_path in (
+-                        (cachefn, cachedigest, cachefn),
+-                        (rpycfn, rpycdigest, None),
++                    # Ren'Py 8.3 stored md5(source) without the magic. A game .rpyc with that digest still
++                    # matches its source, so it is used. The player cache is written by urp and always carries
++                    # the 8.5.3 digest.
++                    for candidate, candidate_digest, candidate_path, accepted in (
++                        (cachefn, cachedigest, cachefn, (rpydigest,)),
++                        (rpycfn, rpycdigest, None, (rpydigest, rpylegacydigest)),
+                     ):
+-                        if candidate_digest is None or candidate_digest != rpydigest:
++                        if candidate_digest is None or candidate_digest not in accepted:
+                             continue
+ 
+                         try:
