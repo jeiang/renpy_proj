@@ -28,6 +28,27 @@ def runtime_path():
     return os.path.join(reports_dir(), "runtime.jsonl")
 
 
+def begin():
+    """Empties runtime.jsonl now if this process has not written an event yet. A forked child appends to the file, so
+    the parent must have emptied it first."""
+
+    global _started
+
+    with _lock:
+        if _started:
+            return
+
+        try:
+            os.makedirs(os.path.dirname(runtime_path()), exist_ok=True)
+
+            with open(runtime_path(), "w", encoding="utf-8"):
+                pass
+        except OSError as e:
+            sys.stderr.write("player compat: cannot write the runtime report: %r\n" % (e,))
+
+        _started = True
+
+
 def event(kind, file=None, line=None, detail=""):
     """Append one event to runtime.jsonl. A failure to write goes to stderr, never into the game."""
 

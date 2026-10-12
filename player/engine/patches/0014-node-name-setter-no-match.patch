@@ -1,0 +1,33 @@
+# Reason: Node.name is set for every node that Python unpickles (CObject.__setstate__ calls the setter). The setter used a match statement with a sequence pattern, which was 1.2 s of the 5 s that a large Ren'Py 7 game needs to load its compiled scripts. Plain comparisons give the same result and are faster.
+
+diff --git a/renpy/ast.py b/renpy/ast.py
+--- a/renpy/ast.py
++++ b/renpy/ast.py
+@@ -362,13 +362,20 @@
+ 
+     @name.setter
+     def name(self, value: NodeName):
+-        match value:
+-            case (self.filename, int(version), int(serial)):
+-                self._name = None
+-                self.name_version = version
+-                self.name_serial = serial
+-            case _:
+-                self._name = value
++        # The same test as the match statement `case (self.filename, int(version), int(serial))`, which cost 1.2
++        # seconds of the 5 seconds that a large Ren'Py 7 game needs to unpickle its scripts.
++        if (
++            isinstance(value, (tuple, list))
++            and len(value) == 3
++            and value[0] == self.filename
++            and isinstance(value[1], int)
++            and isinstance(value[2], int)
++        ):
++            self._name = None
++            self.name_version = value[1]
++            self.name_serial = value[2]
++        else:
++            self._name = value
+ 
+     # An ast node is equal to its name, allowing it to be used as the key in renpy.script.Script.namemap.
+ 

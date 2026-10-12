@@ -1,0 +1,32 @@
+# Reason: Lexer.match_regexp called re.compile(regexp, re.DOTALL) for every match attempt. The lookup in the re module cache (a flag enum conversion and a dict probe) was 20 percent of the time to parse a large script. The compiled pattern is kept in a dict of the lexer module.
+
+diff --git a/renpy/lexer.py b/renpy/lexer.py
+--- a/renpy/lexer.py
++++ b/renpy/lexer.py
+@@ -718,6 +718,11 @@
+             return "<SubParse empty>"
+         else:
+             return "<SubParse {}:{}>".format(self.block[0].filename, self.block[0].linenumber)
++
++
++# The compiled regexps of Lexer.match_regexp, by pattern. re.compile looks its own cache up by pattern and flags,
++# and that lookup was the largest single cost of parsing a script.
++regexp_cache = {}
+ 
+ 
+ class Lexer(object):
+@@ -818,8 +823,13 @@
+         if self.pos == len(self.text):
+             return None
+ 
+-        m = re.compile(regexp, re.DOTALL).match(self.text, self.pos)
++        compiled = regexp_cache.get(regexp)
+ 
++        if compiled is None:
++            compiled = regexp_cache[regexp] = re.compile(regexp, re.DOTALL)
++
++        m = compiled.match(self.text, self.pos)
++
+         if not m:
+             return None
+ 

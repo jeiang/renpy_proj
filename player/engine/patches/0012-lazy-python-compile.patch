@@ -1,0 +1,388 @@
+# Reason: Ren'Py compiles every python statement and expression when it loads the script (update_bytecode). That was 43 percent of a cold load of a large game, and a Ren'Py 7 game also runs the Python 2 rewrite there. Python statements in label bodies and expressions are now compiled when first used: PyCode.bytecode is a property that compiles a deferred block, and a PyExpr is compiled by py_compile on its first evaluation. Init blocks, python early, define, default, screens and every other holder of a PyCode stay eager, so their syntax errors are still load time errors. A deferred syntax error raises the same ParseError message at the first execution. lint, compile, statements loaded after load_script, and RENPY_LAZY_COMPILE=0 compile everything at once. The blocks compiled after the save at the end of init are written to the bytecode cache when the game exits, and the cache entries of blocks that did not run are carried over, so a warm run stays warm.
+
+diff --git a/renpy/ast.py b/renpy/ast.py
+--- a/renpy/ast.py
++++ b/renpy/ast.py
+@@ -75,6 +75,18 @@
+ }
+ 
+ 
++class _Deferred:
++    """
++    The value of PyCode._bytecode while the Python block waits for its first use (see Script.update_bytecode).
++    """
++
++    def __repr__(self):
++        return "<deferred bytecode>"
++
++
++DEFERRED = _Deferred()
++
++
+ class PyCode(Object):
+     _cslot_linenumbers = True
+ 
+@@ -82,10 +94,27 @@
+     source: str
+     location: tuple[Any, ...]
+     mode: Literal["eval", "exec", "hide"] = "eval"
+-    bytecode: bytes | None
++    _bytecode: Any = None
+     py: int = 3
+     hashcode: int
+ 
++    @property
++    def bytecode(self):
++        """
++        The compiled code. A block that Script.update_bytecode deferred is compiled here, on first use.
++        """
++
++        rv = self._bytecode
++
++        if rv is DEFERRED:
++            rv = renpy.game.script.compile_deferred(self)
++
++        return rv
++
++    @bytecode.setter
++    def bytecode(self, value):
++        self._bytecode = value
++
+     def __getstate__(self):
+         return (1, self.source, (self.filename, self.linenumber), self.mode, self.py, self.hashcode, self.col_offset)
+ 
+diff --git a/renpy/main.py b/renpy/main.py
+--- a/renpy/main.py
++++ b/renpy/main.py
+@@ -607,6 +607,12 @@
+             finally:
+                 renpy.persistent.update(True)
+                 renpy.persistent.save_on_quit_MP()
++
++                # Player patch: the blocks compiled lazily since the save after init go into the bytecode cache.
++                try:
++                    game.script.save_bytecode()
++                except Exception:
++                    pass
+ 
+                 # Reset live2d if it exists.
+                 try:
+diff --git a/renpy/python.py b/renpy/python.py
+--- a/renpy/python.py
++++ b/renpy/python.py
+@@ -1261,8 +1261,33 @@
+             e.lineno += line_offset
+ 
+         raise e
++
++
++def py_compile_key(source, mode, filename="<none>", lineno=1, hashcode=None, column=0):
++    """
++    Returns the key under which py_compile stores the compiled `source` in the bytecode cache. The arguments
++    are those of py_compile.
++    """
+ 
++    if isinstance(source, renpy.ast.PyExpr):
++        filename = source.filename
++        lineno = source.linenumber
++        hashcode = source.hashcode
+ 
++    elif hashcode is None:
++        hashcode = hash32(source)
++
++    if source and (source[0] == " ") and (mode != "eval"):
++        lineno -= 1
++
++    flags = file_compiler_flags.get(filename, 0)
++
++    if renpy.config.future_annotations:
++        flags |= __future__.annotations.compiler_flag
++
++    return (hashcode, lineno, filename, mode, renpy.script.PYC_MAGIC, flags, column)
++
++
+ def py_exec_bytecode(bytecode, hide=False, globals=None, locals=None, store="store"):
+     if hide:
+         locals = {}
+diff --git a/renpy/script.py b/renpy/script.py
+--- a/renpy/script.py
++++ b/renpy/script.py
+@@ -209,7 +209,27 @@
+         self.bytecode_oldcache = {}
+         self.bytecode_newcache = {}
+         self.bytecode_dirty = False
++
++        # Player patch: lazy compilation. When true, update_bytecode does not compile the python statements of
++        # label bodies and the expressions. Each is compiled when first used. Commands that need every error up
++        # front (lint, compile) and RENPY_LAZY_COMPILE=0 compile everything at load, as stock Ren'Py does.
++        args = renpy.game.args
++        self.lazy_compile = (
++            args.command == "run"
++            and not args.compile_python
++            and os.environ.get("RENPY_LAZY_COMPILE", "1") != "0"
++        )
++
++        # True while load_script runs. Statements loaded later (renpy.load_string, modules) compile at once.
++        self.loading_script = False
+ 
++        # The PyCode objects of the file being finished that update_bytecode may defer, by id.
++        self.lazy_pycode_ids = set()
++
++        # The deferred PyCode and PyExpr objects. An entry stays after it was compiled: save_bytecode skips those.
++        self.deferred_pycode = []
++        self.deferred_pyexpr = []
++
+         self.translator = renpy.translation.ScriptTranslator()
+         self.init_bytecode()
+ 
+@@ -485,6 +505,8 @@
+     def load_script(self):
+         script_files = self.sort_script_files()
+ 
++        self.loading_script = True
++
+         initcode = []
+ 
+         count = 0
+@@ -520,6 +542,8 @@
+         if skipped:
+             renpy.display.log.write("{} script files skipped.".format(skipped))
+ 
++        self.loading_script = False
++
+         initcode.sort(key=lambda i: i[0])
+ 
+         self.initcode.extend(initcode)
+@@ -762,6 +786,9 @@
+                         )
+                     )
+ 
++        if self.lazy_compile and self.loading_script:
++            self.select_lazy_pycode(stmts, all_stmts)
++
+         self.update_bytecode()
+ 
+         for node in all_stmts:
+@@ -1184,21 +1211,108 @@
+ 
+         except Exception:
+             pass
++
++    def select_lazy_pycode(self, stmts, all_stmts):
++        """
++        Marks the python statements that update_bytecode may leave uncompiled: those in the bodies of labels.
++        Init blocks keep their eager compile (a syntax error stays a load time error), as does every other
++        statement that holds a PyCode.
++        """
++
++        init_ids = set()
++
++        for i in stmts:
++            if isinstance(i, renpy.ast.Init):
++                i.get_children(lambda node: init_ids.add(id(node)))
++
++        python_class = renpy.ast.Python
++
++        for node in all_stmts:
++            if type(node) is python_class and id(node) not in init_ids:
++                self.lazy_pycode_ids.add(id(node.code))
++
++    def compile_pycode(self, i):
++        """
++        Compiles the PyCode `i` and returns the bytecode. Raises SyntaxError.
++        """
++
++        return renpy.python.py_compile(
++            i.source,
++            i.mode,
++            filename=i.filename,
++            lineno=i.linenumber,
++            py=i.py,
++            hashcode=i.hashcode,
++            column=i.col_offset,
++        )
++
++    def pycode_parse_error(self, i, e):
++        """
++        The ParseError for the SyntaxError `e` of the PyCode `i`.
++        """
++
++        assert e.filename is not None
++        assert e.lineno is not None
++
++        return renpy.parser.ParseError(
++            e.msg,
++            e.filename,
++            e.lineno,
++            e.offset + i.col_offset,
++            e.text,
++            e.end_lineno,
++            e.end_offset + i.col_offset,
++        )
++
++    def compile_deferred(self, i):
++        """
++        Compiles a deferred PyCode on its first use. A syntax error is raised as the ParseError that load time
++        compilation reports in errors.txt, so the message is the same.
++        """
++
++        renpy.python.compile_warnings = []
++
++        old_ei = renpy.game.exception_info
++
++        try:
++            renpy.game.exception_info = "While compiling python block starting at line %d of %s." % (
++                i.linenumber,
++                i.filename,
++            )
++
++            try:
++                rv = self.compile_pycode(i)
++            except SyntaxError as e:
++                raise self.pycode_parse_error(i, e) from None
+ 
++        finally:
++            renpy.game.exception_info = old_ei
++
++        i.bytecode = rv
++
++        return rv
++
+     def update_bytecode(self):
+         """
+         Compiles the PyCode objects in self.all_pycode, updating the
+         cache. Clears out self.all_pycode.
++
++        With lazy compilation, the expressions and the python statements that select_lazy_pycode marked are not
++        compiled here. They are compiled on first use.
+         """
+ 
+         renpy.python.compile_warnings = []
+ 
+-        for i in self.all_pyexpr:
+-            try:
+-                renpy.python.py_compile(i, "eval")
+-            except Exception:
+-                pass
++        if self.lazy_compile:
++            self.deferred_pyexpr.extend(self.all_pyexpr)
+ 
++        else:
++            for i in self.all_pyexpr:
++                try:
++                    renpy.python.py_compile(i, "eval")
++                except Exception:
++                    pass
++
+         self.all_pyexpr = []
+ 
+         # Update all of the PyCode objects in the system with the loaded
+@@ -1206,54 +1320,88 @@
+ 
+         old_ei = renpy.game.exception_info
+ 
++        lazy_ids = self.lazy_pycode_ids
++
+         for i in self.all_pycode:
++            if lazy_ids and id(i) in lazy_ids:
++                i.bytecode = renpy.ast.DEFERRED
++                self.deferred_pycode.append(i)
++                continue
++
+             try:
+                 renpy.game.exception_info = "While compiling python block starting at line %d of %s." % (
+                     i.linenumber,
+                     i.filename,
+                 )
+ 
+-                i.bytecode = renpy.python.py_compile(
+-                    i.source,
+-                    i.mode,
+-                    filename=i.filename,
+-                    lineno=i.linenumber,
+-                    py=i.py,
+-                    hashcode=i.hashcode,
+-                    column=i.col_offset,
+-                )
++                i.bytecode = self.compile_pycode(i)
+ 
+             except SyntaxError as e:
+-                assert e.filename is not None
+-                assert e.lineno is not None
+-                pem = renpy.parser.ParseError(
+-                    e.msg,
+-                    e.filename,
+-                    e.lineno,
+-                    e.offset + i.col_offset,
+-                    e.text,
+-                    e.end_lineno,
+-                    e.end_offset + i.col_offset,
+-                )
++                pem = self.pycode_parse_error(i, e)
+ 
+                 renpy.parser.parse_errors.append(pem.message)
+ 
+             finally:
+                 renpy.game.exception_info = old_ei
+ 
++        lazy_ids.clear()
++
+         self.all_pycode = []
+ 
++    def carry_deferred_bytecode(self):
++        """
++        Copies the cache entries of the blocks that were never compiled in this run from the old cache to the new
++        one, so that writing the cache does not drop them.
++        """
++
++        old = self.bytecode_oldcache
++        new = self.bytecode_newcache
++
++        if not old:
++            return
++
++        key_of = renpy.python.py_compile_key
++
++        keys = []
++
++        for i in self.deferred_pycode:
++            if i._bytecode is renpy.ast.DEFERRED:
++                keys.append(key_of(i.source, i.mode, i.filename, i.linenumber, i.hashcode, i.col_offset))
++
++        for i in self.deferred_pyexpr:
++            keys.append(key_of(i, "eval"))
++
++        for key in keys:
++            if key in new:
++                continue
++
++            bytecode = old.get(key, None)
++
++            if bytecode is None:
++                continue
++
++            new[key] = bytecode
++
++            warnings_key = ("warnings", key)
++
++            if warnings_key in old:
++                new[warnings_key] = old[warnings_key]
++
+     def save_bytecode(self):
+         if renpy.macapp:
+             return
+ 
+         if self.bytecode_dirty:
+             try:
++                self.carry_deferred_bytecode()
++
+                 fn = renpy.loader.get_path(BYTECODE_FILE)
+ 
+                 with open(fn, "wb") as f:
+                     data = (BYTECODE_VERSION, self.bytecode_newcache)
+                     f.write(zlib.compress(dumps(data), 3))
++
++                self.bytecode_dirty = False
+             except Exception:
+                 pass
+ 
