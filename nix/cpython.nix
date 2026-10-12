@@ -13,7 +13,7 @@ stdenv.mkDerivation ({
     root = ../player/crates/pyhost;
     fileset = lib.fileset.unions [ ../player/crates/pyhost/cpython ../player/crates/pyhost/examples ];
   };
-  nativeBuildInputs = [ pkgs.xz pkgs.perl ]; # perl: shasum
+  nativeBuildInputs = [ pkgs.xz pkgs.perl pkgs.gnupatch ]; # perl: shasum; gnupatch: patches/*.patch
   PYHOST_CPYTHON_TARBALL = sources.cpythonTarball;
   PYHOST_ENV_CC = "1";
   PYHOST_BZ = s.bzip2.out;

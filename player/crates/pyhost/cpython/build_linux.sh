@@ -117,8 +117,14 @@ unicodedata $CORE unicodedata.c
 zlib $CORE $INC zlibmodule.c $ZL/lib/libz.a
 SETUP
 
-# ---- CPython: configure + make (rebuilt only when the recipe or Setup.local changes) ----
-RECIPE=$(cat "$B/Setup.local.new" "$0" | run sha256sum | cut -d' ' -f1)
+# ---- CPython source patches: patches/*.patch against the upstream tree; idempotent, so an existing tree gets them ----
+for p in "$HERE"/patches/*.patch; do
+  if run patch -d "$SRC" -p1 -R --dry-run -s -i "$p" >/dev/null 2>&1; then continue; fi
+  run patch -d "$SRC" -p1 --batch -i "$p" || { echo "pyhost: $p does not apply to CPython $PYVER" >&2; exit 1; }
+done
+
+# ---- CPython: configure + make (rebuilt only when the recipe, Setup.local, or a patch changes) ----
+RECIPE=$(cat "$B/Setup.local.new" "$0" "$HERE"/patches/*.patch | run sha256sum | cut -d' ' -f1)
 if [ ! -f "$B/libpython3.12.a" ] || [ "$(cat "$B/recipe" 2>/dev/null)" != "$RECIPE" ]; then
   echo "pyhost: building CPython $PYVER (about 3 minutes)"
   rm -rf "$B/obj" "$B/install"; mkdir -p "$B/obj"; cd "$B/obj"
