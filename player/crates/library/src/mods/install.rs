@@ -201,22 +201,25 @@ fn plan_with_limit(data: &Path, key: &str, source: &Path, limit: u64) -> Result<
     files.sort();
     files.dedup();
 
-    let mut plan = InstallPlan {
+    // The default name may be invalid (for example from `.zip`) or already taken. Planning still succeeds so the
+    // caller can rename: `set_name` and `install` reject a bad or existing name.
+    let name = if check_name(stem).is_ok() {
+        stem
+    } else {
+        "mod"
+    }
+    .to_string();
+    Ok(InstallPlan {
         data: data.to_path_buf(),
         key: key.to_string(),
-        name: String::new(),
+        name,
         source,
         layout,
         files,
         unpacked_bytes: total,
         format,
         limit,
-    };
-    // A source whose stem is not a valid name (for example `.zip`) needs `--name`.
-    check_name(stem)
-        .with_context(|| format!("cannot name the mod after {file_name}; give a name"))?;
-    plan.set_name(stem)?;
-    Ok(plan)
+    })
 }
 
 /// Writes the mod into `<data>/mods/<key>/<name>/` (a temporary folder next to it, renamed at the end;

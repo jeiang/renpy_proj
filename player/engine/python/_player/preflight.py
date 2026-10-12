@@ -505,7 +505,7 @@ def write_report(settings, report):
     d = settings["reports"]
     os.makedirs(d, exist_ok=True)
 
-    # game.txt lets `player report <game>` find this folder without the key algorithm.
+    # game.txt lets `urp report <game>` find this folder without the key algorithm.
     for name, text in (("preflight.json", json.dumps(report, indent=1) + "\n"), ("preflight.md", _markdown(report)), ("game.txt", settings["basedir"] + "\n" + settings["gamedir"] + "\n")):
         tmp = os.path.join(d, "." + name + ".tmp")
         with open(tmp, "w", encoding="utf-8") as f:

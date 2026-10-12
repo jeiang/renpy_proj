@@ -150,7 +150,11 @@ pub fn run(args: &[String], data: &Path, exe: &Path) -> Result<i32> {
         }
         "apply-test" => {
             let mut cmd = Command::new(exe);
-            cmd.arg(game).arg("--data").arg(data);
+            // Headless: without it Ren'Py's presplash opens a window before the patches are applied.
+            cmd.arg(game)
+                .arg("--data")
+                .arg(data)
+                .env("PLAYER_HEADLESS", "1");
             if json {
                 // The child prints the results as one JSON line; the engine may print other lines first.
                 let out = cmd
