@@ -1,5 +1,5 @@
 //! `urp <game | key | path> [--data <dir>] [--logdir <dir>] [--harness-script <file>] [ren'py args]`, plus the
-//! library subcommands `scan`, `import`, `list`, `library`, `settings`, `report`, `mods`, `serve`, and the library window (no arguments).
+//! library subcommands `scan`, `import`, `list`, `library`, `settings`, `report`, `mods`, `serve`, `warm`, and the library window (no arguments).
 //! Contract: player/CONTRACTS.md.
 
 mod library_cli;
@@ -9,7 +9,9 @@ mod serve_cli;
 mod upgrade_cli;
 mod vfs_cli;
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
 use library::Library;
@@ -29,7 +31,15 @@ fn py_path(p: &Path) -> String {
     s.strip_prefix(r"\\?\").unwrap_or(&s).to_string()
 }
 
-fn build_argv(args: Vec<String>) -> Result<Vec<String>> {
+/// What a play or a warm-up of one game runs: the boot argv, and the game's key and data folder, which name
+/// its lock.
+struct Launch {
+    argv: Vec<String>,
+    key: String,
+    data: PathBuf,
+}
+
+fn build_launch(args: Vec<String>) -> Result<Launch> {
     let mut game: Option<String> = None;
     let mut data: Option<String> = None;
     let mut renderer_given = false;
@@ -90,9 +100,14 @@ fn build_argv(args: Vec<String>) -> Result<Vec<String>> {
         }
     };
     boot.push("--game".into());
-    boot.push(py_path(&lib.game_ref(&game)?.path));
+    let game_ref = lib.game_ref(&game)?;
+    boot.push(py_path(&game_ref.path));
     boot.extend(rest);
-    Ok(boot)
+    Ok(Launch {
+        argv: boot,
+        key: game_ref.key,
+        data,
+    })
 }
 
 const SUBCOMMANDS: &str = "\
@@ -107,6 +122,8 @@ const SUBCOMMANDS: &str = "\
        urp mods <game> install <folder|archive> [--name <n>] [--yes]   install a mod (zip, tar.gz, tar.xz, tar.bz2, tar.zst, 7z, rar) and enable it
        urp library folders | remove <game|folder> [--data <dir>]   scanned folders; drop a game or folder from the library
        urp settings get [<key>] | set <key> <value> [--data <dir>]   renderer, stream.port|size|fps|kbps
+       urp warm <game>... [--data <dir>]   warm the caches of games in the background
+       urp warm-game <game> [--data <dir>]   warm one game's caches (the worker of urp warm)
        urp serve <game> [--bind <addr>] [--port <n>] [--size <WxH>] [--fps <n>] [--kbps <n>]
                   [--encoder <name>] [--latency-overlay]   stream the game to a browser (headless)";
 
@@ -140,12 +157,138 @@ fn print_games(lib: &Library) {
     }
 }
 
+/// The keys of the games in the library, to find which ones an add brought in.
+fn game_keys(lib: &Library) -> HashSet<String> {
+    lib.games.iter().map(|g| g.key.clone()).collect()
+}
+
+/// Starts one detached background warm-up of the games that an add brought in, when `warm.enabled` allows it.
+/// A warm-up that cannot start is reported and does not fail the command.
+fn warm_new_games(lib: &Library, before: &HashSet<String>, data: &Path) {
+    let added = lib
+        .games
+        .iter()
+        .filter(|g| !before.contains(&g.key))
+        .cloned()
+        .collect::<Vec<_>>();
+    let settings = match library::Settings::load(data) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("warning: warm-up skipped, the settings cannot be read: {e:#}");
+            return;
+        }
+    };
+    let targets = library::warm::warm_targets(&settings, &added);
+    if targets.is_empty() {
+        return;
+    }
+    let started = std::env::current_exe()
+        .map_err(anyhow::Error::from)
+        .and_then(|exe| library::warm::spawn(&exe, &targets, data));
+    if let Err(e) = started {
+        eprintln!("warning: warm-up not started: {e:#}");
+    }
+}
+
+/// `urp warm <game>... [--data <dir>]`: warms each game in turn, one worker process per game. A worker that
+/// fails or is skipped does not stop the rest.
+fn cmd_warm(args: Vec<String>) -> Result<i32> {
+    let (games, data) = take_data(args)?;
+    if games.is_empty() {
+        bail!("usage: urp warm <game>... [--data <dir>]");
+    }
+    let exe = std::env::current_exe().context("cannot find the player executable")?;
+    let mut stopped = Vec::new();
+    for game in &games {
+        let status = std::process::Command::new(&exe)
+            .arg("warm-game")
+            .arg(game)
+            .arg("--data")
+            .arg(&data)
+            .status();
+        match status {
+            Ok(st) if st.success() => {}
+            Ok(st) => {
+                eprintln!("warning: warm-up of {game} stopped ({st})");
+                stopped.push(game.clone());
+            }
+            Err(e) => {
+                eprintln!("warning: warm-up of {game} did not run: {e}");
+                stopped.push(game.clone());
+            }
+        }
+    }
+    // A stopped warm-up is reported once and not retried. The next launch loads the scripts itself.
+    Ok(if stopped.is_empty() { 0 } else { 1 })
+}
+
+/// `urp warm-game <game> [--data <dir>]`: the worker of one warm-up. It runs the same headless boot as a play, so
+/// Ren'Py writes the same caches. It stops once the bytecode caches are saved, the last cache write of a load.
+/// It does nothing when a play or another warm-up holds the lock.
+fn warm_game(args: Vec<String>) -> Result<i32> {
+    let mut launch = build_launch(args)?;
+    let Some(_warm) = library::WarmGuard::try_acquire(&launch.data, &launch.key)? else {
+        return Ok(0);
+    };
+    // A log directory of its own, wiped first: a log line left by an earlier play cannot end the warm-up early.
+    let logdir = launch.data.join("warm").join(&launch.key);
+    let _ = std::fs::remove_dir_all(&logdir);
+    std::fs::create_dir_all(&logdir)
+        .with_context(|| format!("cannot create {}", logdir.display()))?;
+    launch.argv.push("--logdir".into());
+    launch.argv.push(py_path(&logdir));
+    // No window and no audio device, as in `urp serve`.
+    platform::set_headless(WARM_WIDTH, WARM_HEIGHT);
+    media::set_virtual_output(true);
+    let marker = logdir.join(BYTECODE_SAVED_FILE);
+    // SAFETY: no thread has been started yet. The engine reads both variables when it boots in this process.
+    // The marker is written by _player/bytecode.py after the bytecode save. Eager compile makes the save cover every
+    // block, not only the init blocks (RENPY_LAZY_COMPILE is read by the engine's lazy-compile patch).
+    unsafe {
+        std::env::set_var("URP_WARM_MARKER", &marker);
+        std::env::set_var("RENPY_LAZY_COMPILE", "0");
+    }
+    watch_for_bytecode_save(marker.clone(), Instant::now() + WARM_DEADLINE);
+    let code = boot(launch.argv)?;
+    // The marker can appear just before boot returns, before the watcher's next poll. That still counts as saved.
+    if marker.exists() {
+        return Ok(0);
+    }
+    eprintln!("warning: warm-up ended before the bytecode save (game exit {code})");
+    Ok(1)
+}
+
+const WARM_WIDTH: u32 = 1280;
+const WARM_HEIGHT: u32 = 720;
+/// The file that `_player/bytecode.py` creates after the bytecode save, in the warm-up's log directory.
+const BYTECODE_SAVED_FILE: &str = "bytecode-saved";
+/// A warm-up that has not reached the save by this time gives up. This bounds a game that hangs before it.
+const WARM_DEADLINE: Duration = Duration::from_secs(900);
+
+/// Ends the worker once the marker exists. At the deadline it exits with 1: the warm-up did not finish.
+fn watch_for_bytecode_save(marker: PathBuf, deadline: Instant) {
+    std::thread::spawn(move || {
+        loop {
+            if marker.exists() {
+                std::process::exit(0);
+            }
+            if Instant::now() >= deadline {
+                eprintln!("warning: warm-up stopped at the deadline before the bytecode save");
+                std::process::exit(1);
+            }
+            std::thread::sleep(Duration::from_millis(200));
+        }
+    });
+}
+
 fn cmd_scan(args: Vec<String>) -> Result<i32> {
     let (folders, data) = take_data(args)?;
     let mut lib = Library::load(&data)?;
+    let before = game_keys(&lib);
     let folders: Vec<PathBuf> = folders.into_iter().map(PathBuf::from).collect();
     lib.add_folders(&folders)?;
     lib.save(&data)?;
+    warm_new_games(&lib, &before, &data);
     print_games(&lib);
     eprintln!(
         "{} games in {} folders ({})",
@@ -179,6 +322,7 @@ fn cmd_import(args: Vec<String>) -> Result<i32> {
     }
     let archive = archive.with_context(|| IMPORT_USAGE.to_string())?;
     let mut lib = Library::load(&data)?;
+    let before = game_keys(&lib);
     let folder = match folder {
         Some(f) => f,
         None => lib
@@ -192,6 +336,7 @@ fn cmd_import(args: Vec<String>) -> Result<i32> {
     // The new game's folder is in the library from now on, so `urp list` shows the game.
     lib.add_folders(std::slice::from_ref(&folder.canonicalize()?))?;
     lib.save(&data)?;
+    warm_new_games(&lib, &before, &data);
     if json {
         let out = serde_json::json!({
             "name": plan.name,
@@ -228,8 +373,15 @@ fn cmd_report(args: &[String], data: &Path) -> Result<i32> {
 }
 
 fn run_game(args: Vec<String>) -> Result<i32> {
-    let argv = build_argv(args)?;
+    let launch = build_launch(args)?;
+    // A play or a serve holds the game's lock shared. That stops a warm-up of this game, and none starts while
+    // the guard is held.
+    let _play = library::PlayGuard::acquire(&launch.data, &launch.key)?;
+    boot(launch.argv)
+}
 
+/// Runs the Ren'Py boot in this process. Ren'Py starts once per process.
+fn boot(argv: Vec<String>) -> Result<i32> {
     let mut inittab = Vec::new();
     inittab.extend(engine::inittab());
     inittab.extend(surface::inittab());
@@ -351,6 +503,8 @@ fn main() -> Result<()> {
                 }
             }
             "serve" => serve_cli::run(args.split_off(1), run_game)?,
+            "warm" => cmd_warm(args.split_off(1))?,
+            "warm-game" => warm_game(args.split_off(1))?,
             "help" | "-h" | "--help" => {
                 println!("{USAGE}\n{SUBCOMMANDS}");
                 0
@@ -372,7 +526,7 @@ mod tests {
             data.to_string_lossy().into_owned(),
         ];
         args.extend(extra.iter().map(|s| s.to_string()));
-        build_argv(args).unwrap()
+        build_launch(args).unwrap().argv
     }
 
     fn renderer(argv: &[String]) -> Vec<&str> {

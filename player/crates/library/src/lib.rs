@@ -10,6 +10,7 @@ pub mod mods;
 mod scan;
 pub mod settings;
 mod status;
+pub mod warm;
 
 pub use config::{Game, GameRef, Library, default_data_dir};
 pub use gui::run_window;
@@ -18,3 +19,4 @@ pub use launch::spawn_player;
 pub use scan::{detect, scan_folders};
 pub use settings::Settings;
 pub use status::{ModsInfo, Preflight, mods_info, preflight, preflight_path};
+pub use warm::{PlayGuard, WarmGuard};

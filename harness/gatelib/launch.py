@@ -576,6 +576,18 @@ def exit_info(rc, exited, output):
             "exited_by_itself": exited, "output_tail": output.splitlines()[-OUTPUT_TAIL_LINES:]}
 
 
+def stock_wrap(argv):
+    """HARNESS_STOCK_WRAPPER=steam-run (opt-in, Linux): run a stock engine inside steam-run's FHS sandbox. Only the stock
+    engine is wrapped; the player's launch path is unchanged. Any other value is an error."""
+    name = os.environ["HARNESS_STOCK_WRAPPER"]
+    if name != "steam-run":
+        raise ValueError("HARNESS_STOCK_WRAPPER must be steam-run (got %r)" % name)
+    sr = shutil.which("steam-run")
+    if not sr:
+        raise FileNotFoundError("steam-run not found on PATH: unset HARNESS_STOCK_WRAPPER or put steam-run on PATH")
+    return [sr] + list(argv)
+
+
 def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed_saves=None, keep_saves=False,
            inject=True, extra_files=None, exclusive=False):
     """Run one game process. `engine` is 'auto' (ctx.engine_name), 'stock' or 'player'. -> result dict.
@@ -668,7 +680,11 @@ def launch(ctx, name, engine="auto", plan=None, renpy_args=(), timeout=900, seed
         res["loadavg"] = plat.get().loadavg()
         stdout = open(out / "stdout.log", "w")
         t0 = time.time()
-        proc = subprocess.Popen(plat.get().wrap(argv), stdout=stdout, stderr=subprocess.STDOUT, env=env, cwd=str(clone))
+        cmd = plat.get().wrap(argv)
+        if engine == "stock" and os.environ.get("HARNESS_STOCK_WRAPPER"):
+            cmd = stock_wrap(cmd)
+            res["stock_wrapper"] = os.environ["HARNESS_STOCK_WRAPPER"]
+        proc = subprocess.Popen(cmd, stdout=stdout, stderr=subprocess.STDOUT, env=env, cwd=str(clone))
         run = Run(proc, hz, base, out / "shots", pattern, res["plan_log"], g.get("after_start", ()), ctx.opts.get("min_visible", 0.8), st_table, g.get("volatile_shots", ()))
         try:
             if plan:
