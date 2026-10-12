@@ -1,4 +1,4 @@
-//! `player mods <game> list|enable|disable|order [<mod>...]`: edits `<data>/mods/<game key>/order.txt`.
+//! `urp mods <game> list|enable|disable|order [<mod>...]`: edits `<data>/mods/<game key>/order.txt`.
 //! Contract: player/CONTRACTS.md, "Game file view (`vfs`)".
 //!
 //! A mod is a folder `<data>/mods/<game key>/<mod>/` with the layout of the game's base folder
@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
-const USAGE: &str = "usage: player mods <game> list\n       player mods <game> enable <mod>...   (appended: highest priority)\n       player mods <game> disable <mod>...\n       player mods <game> order <mod>...    (enabled mods, lowest priority first)";
+const USAGE: &str = "usage: urp mods <game> list\n       urp mods <game> enable <mod>...   (appended: highest priority)\n       urp mods <game> disable <mod>...\n       urp mods <game> order <mod>...    (enabled mods, lowest priority first)";
 
 /// The base and game folder of a user path, as `main.rs` resolves it (a `.app` bundle, then
 /// canonical), so the key equals the one the running player computes.

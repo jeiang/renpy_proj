@@ -81,13 +81,13 @@ jobs:
           name: package-linux
           path: ${{ runner.temp }}/package
       - name: Unpack the player
-        run: tar -xzf "$RUNNER_TEMP/package/player-linux-x86_64.tar.gz" -C "$RUNNER_TEMP/package"
+        run: tar -xzf "$RUNNER_TEMP/package/urp-linux-x86_64.tar.gz" -C "$RUNNER_TEMP/package"
       - name: Build the synthetic games
         run: python3 harness/testgames/build.py
       - name: Run stock and player on every game
         run: |
           python3 harness/testgames/run.py --no-build \
-            --player-bin "$RUNNER_TEMP/package/player-linux-x86_64/player" \
+            --player-bin "$RUNNER_TEMP/package/urp-linux-x86_64/urp" \
             --gate-args "--diff-mean 0.01 --diff-pct 1.0"
       - name: Keep the gate results of a failed run
         if: failure()

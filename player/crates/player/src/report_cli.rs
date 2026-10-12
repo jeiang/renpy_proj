@@ -1,4 +1,4 @@
-//! `player report <game> [--json] [--data <dir>]`: print the latest pre-flight report of a game.
+//! `urp report <game> [--json] [--data <dir>]`: print the latest pre-flight report of a game.
 //!
 //! The report is written by `_player.preflight` at `<data>/reports/<game key>/preflight.{json,md}` after
 //! script load. `game.txt` beside it holds the game's base folder and game folder, so this command finds
@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
-const USAGE: &str = "usage: player report <game-dir | game/ | .app> [--json] [--data <dir>]";
+const USAGE: &str = "usage: urp report <game-dir | game/ | .app> [--json] [--data <dir>]";
 
 /// The `game/` folder of what the user passed: a project folder, its `game/` subfolder, or a `.app`.
 fn game_folder(path: &Path) -> Result<PathBuf> {

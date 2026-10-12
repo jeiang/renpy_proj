@@ -1,5 +1,5 @@
 #!/bin/bash
-# M6 campaign on artemis: phase 1 deep runs (parallel workers, gamemoderun stops llm-server), phase 2 `player upgrade` (llm-server must be up).
+# M6 campaign on artemis: phase 1 deep runs (parallel workers, gamemoderun stops llm-server), phase 2 `urp upgrade` (llm-server must be up).
 #   harness/tools/m6_campaign.sh deep    [workers]     # all 23 games, 3 seeds x 30 min each
 #   harness/tools/m6_campaign.sh upgrade               # every game with patchable python2 errors, one after another
 # Env: PLAYER_BIN (absolute), OUT (default harness/out/m6), DATA (default harness/out/m6-data).

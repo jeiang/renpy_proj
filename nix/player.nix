@@ -9,7 +9,7 @@ let
     "${lib.makeLibraryPath linuxLibs}:/run/opengl-driver/lib";
 in
 pkgs.rustPlatform.buildRustPackage {
-  pname = "player";
+  pname = "urp";
   version = "0.1.0";
   src = lib.fileset.toSource {
     root = ../.;
@@ -39,7 +39,7 @@ pkgs.rustPlatform.buildRustPackage {
   PLAYER_DLOPEN_RPATH = dlopenRpath;
 
   postFixup = lib.optionalString pkgs.stdenv.hostPlatform.isLinux ''
-    patchelf --add-rpath "${dlopenRpath}" $out/bin/player
+    patchelf --add-rpath "${dlopenRpath}" $out/bin/urp
   '';
 
   preBuild = ''

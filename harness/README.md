@@ -36,7 +36,7 @@ evidence of each launch (`<launch>/stdout.log`, `progress.txt`, `plan.log`, `log
 ## Engines
 
 - `stock`: the game's own Ren'Py from `corpus.toml`: an SDK (`sdk-801`, `sdk-823`, `sdk-853`) run as `renpy.sh <base> ...`, or the game's bundled launcher inside the clone (Ripples). `--stock-engine` overrides it. When the SDK version differs from the game's own (`version` vs `renpy` in `corpus.toml`) the adapter deletes `game/cache` in the scratch clone and logs it (`stripped_game_cache`); the shipped `py3analysis.rpyb` and bytecode cache are stale on a newer engine and raise `ValueError: AST node line range ... is not valid` (SecretIsland on 8.5.3). `--strip-game-cache yes|no` forces it. The player ignores `game/cache` anyway. The probe `rpy/zz_harness.rpy` is copied into the clone's `game/`.
-- `player`: `player/target/release/player <base> --data <scratch> --logdir <scratch>/logs --harness-script rpy/zz_harness.rpy [renpy args]` (`--player-bin`, and `--player-game-arg game` to pass `<base>/game` instead of `<base>`). The player must not write into a game folder, so the driver cannot be copied in. **Required player flags and behavior** (a contract change to propose):
+- `player`: `player/target/release/urp <base> --data <scratch> --logdir <scratch>/logs --harness-script rpy/zz_harness.rpy [renpy args]` (`--player-bin`, and `--player-game-arg game` to pass `<base>/game` instead of `<base>`). The player must not write into a game folder, so the driver cannot be copied in. **Required player flags and behavior** (a contract change to propose):
   1. `--harness-script <file.rpy>`: compile and run this extra script as if it sat in `game/`, without writing to the game folder. It may appear only when the flag is given.
   2. Any arguments after the flags reach Ren'Py's argument parser unchanged, so `lint` works.
   3. `HARNESS_DIR`, `RENPY_PATH_TO_SAVES` are read from the environment (the driver uses the first one only). Saves live in `<data>/saves/<save_directory with [^A-Za-z0-9._ -] replaced by _>/`; `saveresume` seeds the stock saves there (flat) and, nested as stock wrote them, under `RENPY_PATH_TO_SAVES` for the player's first-open import (`--player-import-only` seeds only the second).
@@ -108,7 +108,7 @@ The gate also runs on the Linux GPU host (artemis, NixOS, Hyprland). `gatelib/pl
 ```sh
 # on artemis, in a checkout with the gitignored corpus links (see below); the Nix shell only provides python, grim and ffmpeg
 nix shell nixpkgs#python312 nixpkgs#grim nixpkgs#ffmpeg -c python3 harness/gate.py run --engine stock --game SecretIsland --tier full --out harness/out/si-stock
-nix shell nixpkgs#python312 nixpkgs#grim nixpkgs#ffmpeg -c python3 harness/gate.py run --engine player --player-bin <path>/player --game SecretIsland --tier full \
+nix shell nixpkgs#python312 nixpkgs#grim nixpkgs#ffmpeg -c python3 harness/gate.py run --engine player --player-bin <path>/urp --game SecretIsland --tier full \
     --baseline harness/out/si-stock --out harness/out/si-player
 ```
 
@@ -122,13 +122,13 @@ nix shell nixpkgs#python312 nixpkgs#grim nixpkgs#ffmpeg -c python3 harness/gate.
 
 ```sh
 nix develop .#player -c python3 harness/gate.py run --engine player --game DFraction --tier deep --out harness/out/m6/DFraction
-nix develop .#player -c python3 harness/deep_all.py --player-bin <player> --out harness/out/m6     # the whole corpus, 17 Ren'Py 7 games first
-nix develop .#player -c player upgrade DFraction --errors harness/out/m6/DFraction/errors --data <dir>
+nix develop .#player -c python3 harness/deep_all.py --player-bin <urp> --out harness/out/m6     # the whole corpus, 17 Ren'Py 7 games first
+nix develop .#player -c urp upgrade DFraction --errors harness/out/m6/DFraction/errors --data <dir>
 ```
 
-The `deep` tier plays each seed (default 1,2,3, 30 min each; `deep_seeds`, `deep_minutes` in corpus.toml) with the seeded driver of `rpy/zz_harness.rpy`, saves before each PyCode node, and writes coverage and error folders (`errors/<id>/error.json`). Errors are sorted `python2`, `game-bug` (stock replays the same seed and fails the same way) or `player-bug`. `player upgrade` turns each patchable `python2` error into a verified, inactive (`proposed`) patch; `player patches <game> accept <id>` activates it. Contract: player/CONTRACTS.md, "M6 contracts". Deep output holds game text and saves: `out/` is gitignored. The deep tier does not screenshot, but it launches a window like every other tier, so it holds the machine lock for each seed.
+The `deep` tier plays each seed (default 1,2,3, 30 min each; `deep_seeds`, `deep_minutes` in corpus.toml) with the seeded driver of `rpy/zz_harness.rpy`, saves before each PyCode node, and writes coverage and error folders (`errors/<id>/error.json`). Errors are sorted `python2`, `game-bug` (stock replays the same seed and fails the same way) or `player-bug`. `urp upgrade` turns each patchable `python2` error into a verified, inactive (`proposed`) patch; `urp patches <game> accept <id>` activates it. Contract: player/CONTRACTS.md, "M6 contracts". Deep output holds game text and saves: `out/` is gitignored. The deep tier does not screenshot, but it launches a window like every other tier, so it holds the machine lock for each seed.
 
-**Single job in a headless slot (artemis).** `python3 harness/tools/slotrun.py --slot 0 -- <command>` starts one headless sway and runs the command inside it (screenshots of the Ren'Py 7 stock engine, slot lock). Use it for `player upgrade`, whose gate children need screenshots; without it they run against the real session and the stock route check captures no window.
+**Single job in a headless slot (artemis).** `python3 harness/tools/slotrun.py --slot 0 -- <command>` starts one headless sway and runs the command inside it (screenshots of the Ren'Py 7 stock engine, slot lock). Use it for `urp upgrade`, whose gate children need screenshots; without it they run against the real session and the stock route check captures no window.
 
 **Parallel workers (artemis).** `deep_all.py --workers N` (and `tools/parrun.py --workers N --games A,B --tier full`) run N games at once. Each worker has its own headless sway (`WLR_BACKENDS=headless`), work dir (`<work>/slot<N>`) and lock slot (`HARNESS_SLOT`). `deep_all.py` skips the `Synth*` test games unless `--games` names them. Locks: workers hold the machine lock shared plus their slot; the `video` check, the serial gate and `runlock.py` hold it exclusively and wait for every slot (`gatelib/machinelock.py`, `runlock.py --slot N` for a shared ad-hoc command). Measurements, the video-under-load numbers and the campaign procedure: `M6-status.md` ("Parallel runs on artemis"). Run inside `nix shell nixpkgs#python312 nixpkgs#grim nixpkgs#ffmpeg nixpkgs#sway nixpkgs#xwayland`.
 

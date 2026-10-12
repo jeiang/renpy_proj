@@ -2,13 +2,13 @@
 # Runs INSIDE quay.io/pypa/manylinux_2_28_x86_64 (AlmaLinux 8, glibc 2.28, gcc-toolset 14). Started by build.sh.
 #   /src    the repository clone (read-write; build outputs go to gitignored player/target, player/upstream, player/build-out)
 #   /cache  persistent cache: downloads, static deps, FFmpeg, rustup, cargo, pip
-# Result: /src/player/build-out/manylinux/player-linux-x86_64/{player,lib/} and player-linux-x86_64.tar.gz
+# Result: /src/player/build-out/manylinux/urp-linux-x86_64/{urp,lib/} and urp-linux-x86_64.tar.gz
 set -euo pipefail
 export LC_ALL=C
 SRC=/src; PLAYER=$SRC/player; CACHE=/cache
 HERE=$PLAYER/packaging/manylinux
 DL=$CACHE/dl; DEPS=$CACHE/deps; FF=$CACHE/ffmpeg; WORK=$CACHE/work
-OUT=$PLAYER/build-out/manylinux; NAME=player-linux-x86_64
+OUT=$PLAYER/build-out/manylinux; NAME=urp-linux-x86_64
 JOBS=$(nproc)
 mkdir -p "$DL" "$DEPS" "$FF" "$WORK" "$OUT"
 log() { printf '== manylinux: %s\n' "$*"; }
@@ -182,7 +182,7 @@ fi
 log "package"
 PKG=$OUT/$NAME
 rm -rf "$PKG" "$OUT/$NAME.tar.gz"; mkdir -p "$PKG/lib"
-cp "$PLAYER/target/release/player" "$PKG/player"; chmod u+w "$PKG/player"
+cp "$PLAYER/target/release/urp" "$PKG/urp"; chmod u+w "$PKG/urp"
 SYSTEM='^(linux-vdso|ld-linux.*|libc|libm|libdl|libpthread|librt|libutil|libresolv|libmvec|libnsl|libanl|libnss_[a-z]*|libthread_db|libBrokenLocale|libgcc_s|libstdc\+\+|libdrm.*|libasound|libudev|libvulkan|libwayland-.*|libxkbcommon.*|libX.*|libxcb.*|libpipewire.*|libdrm.*|libGL.*|libEGL.*)\.so'
 needed() { objdump -p "$1" | awk '/NEEDED/{print $2}'; }   # direct dependencies only
 bundle() { # copy the non-host libraries that $1 needs directly, then recurse into the copies
@@ -197,13 +197,13 @@ bundle() { # copy the non-host libraries that $1 needs directly, then recurse in
     fi
   done
 }
-bundle "$PKG/player"
+bundle "$PKG/urp"
 for so in "$PKG"/lib/*.so*; do patchelf --set-rpath '$ORIGIN' "$so"; done
-patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 --set-rpath '$ORIGIN/lib' "$PKG/player"
-strip --strip-unneeded "$PKG/player" "$PKG"/lib/*.so* 2>/dev/null || true
+patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 --set-rpath '$ORIGIN/lib' "$PKG/urp"
+strip --strip-unneeded "$PKG/urp" "$PKG"/lib/*.so* 2>/dev/null || true
 echo "== direct dependencies (NEEDED) =="
 bad=""
-for f in "$PKG/player" "$PKG"/lib/*.so*; do
+for f in "$PKG/urp" "$PKG"/lib/*.so*; do
   for soname in $(needed "$f"); do
     echo "$(basename "$f"): $soname"
     if [ -e "$PKG/lib/$soname" ] || [[ "$soname" =~ $SYSTEM ]]; then continue; fi

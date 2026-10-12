@@ -1,5 +1,5 @@
 //! The library window: egui on winit and wgpu (Metal on macOS). No Python runs in this process. Playing a
-//! game starts `player <game> --data <data>` as a child process.
+//! game starts `urp <game> --data <data>` as a child process.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -247,7 +247,7 @@ impl App {
     fn draw(&mut self, ui: &mut egui::Ui) -> Vec<Action> {
         let mut actions = Vec::new();
         ui.horizontal(|ui| {
-            ui.heading("Ren'Py Player");
+            ui.heading("Universal Ren'Py Player");
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui.button("Rescan").clicked() {
                     actions.push(Action::Rescan);
@@ -386,7 +386,7 @@ impl App {
 
     fn init_gpu(&mut self, el: &ActiveEventLoop) -> Result<()> {
         let attrs = Window::default_attributes()
-            .with_title("Ren'Py Player Library")
+            .with_title("Universal Ren'Py Player")
             .with_inner_size(winit::dpi::LogicalSize::new(1000.0, 640.0));
         let window = Arc::new(
             el.create_window(attrs)

@@ -1,9 +1,9 @@
-# Windows x64 package: player.exe (static CPython, /MT) plus the LGPL FFmpeg DLLs beside it.
+# Windows x64 package: urp.exe (static CPython, /MT) plus the LGPL FFmpeg DLLs beside it.
 #
 #   powershell -NoProfile -File packaging\windows.ps1 [-NoBuild]
 #
-# Output (gitignored): player\build-out\windows\player-windows-x86_64\{player.exe, avcodec-*.dll, ...}
-# and player-windows-x86_64.zip next to it.
+# Output (gitignored): player\build-out\windows\urp-windows-x86_64\{urp.exe, avcodec-*.dll, ...}
+# and urp-windows-x86_64.zip next to it.
 #
 # Steps
 #   1. fetch_ffmpeg_windows.ps1: the BtbN LGPL 7.1 shared build (SHA-256 pinned, `ffmpeg -L` checked).
@@ -12,7 +12,7 @@
 #      rustup (stable-x86_64-pc-windows-msvc) and, for the static libffi and OpenSSL, vcpkg
 #      ($env:PLAYER_VCPKG, default C:\spike\vcpkg). bindgen (ffmpeg-sys-next) needs libclang.dll:
 #      $env:LIBCLANG_PATH, or the `libclang` pip wheel in the Python above.
-#   3. Copies player.exe and the FFmpeg DLLs. Checks with dumpbin /dependents that the exe imports only
+#   3. Copies urp.exe and the FFmpeg DLLs. Checks with dumpbin /dependents that the exe imports only
 #      Windows system DLLs and the FFmpeg DLLs (no VCRUNTIME140.dll, no api-ms-win-crt-*).
 #   4. Signing is the last step and is not done here (needs a real certificate): do not append data to the
 #      signed exe. See research/win-spike section 5.2.
@@ -22,7 +22,7 @@ $ErrorActionPreference = 'Stop'
 $player = Split-Path -Parent $PSScriptRoot
 $ff     = Join-Path $player 'upstream\ffmpeg-win'
 $out    = Join-Path $player 'build-out\windows'
-$pkg    = Join-Path $out 'player-windows-x86_64'
+$pkg    = Join-Path $out 'urp-windows-x86_64'
 
 & powershell -NoProfile -File (Join-Path $PSScriptRoot 'fetch_ffmpeg_windows.ps1')
 if ($LASTEXITCODE) { throw 'fetch_ffmpeg_windows.ps1 failed' }
@@ -54,7 +54,7 @@ if (-not $NoBuild) {
     } finally { Pop-Location }
 }
 
-$exe = Join-Path $player 'target\release\player.exe'
+$exe = Join-Path $player 'target\release\urp.exe'
 if (-not (Test-Path $exe)) { throw "missing $exe" }
 if (Test-Path $pkg) { Remove-Item -Recurse -Force $pkg }
 New-Item -ItemType Directory -Force $pkg | Out-Null
@@ -77,17 +77,17 @@ $ffLic = Join-Path $ff 'LICENSE.txt'
 if (Test-Path $ffLic) { Copy-Item $ffLic (Join-Path $lic 'FFmpeg-BtbN-LICENSE.txt') }
 
 # Imports: system DLLs and FFmpeg only.
-$deps = (cmd /c "dumpbin /dependents `"$pkg\player.exe`"") | Where-Object { $_ -match '^\s+\S+\.dll\s*$' } | ForEach-Object { $_.Trim() }
+$deps = (cmd /c "dumpbin /dependents `"$pkg\urp.exe`"") | Where-Object { $_ -match '^\s+\S+\.dll\s*$' } | ForEach-Object { $_.Trim() }
 $bad = $deps | Where-Object { $_ -match '^(vcruntime|msvcp|api-ms-win-crt|ucrtbase)' }
-Write-Host "player.exe imports: $($deps -join ' ')"
-if ($bad) { throw "player.exe depends on the dynamic CRT: $($bad -join ' ')" }
-Write-Host ("player.exe size: {0:n1} MB" -f ((Get-Item "$pkg\player.exe").Length / 1MB))
+Write-Host "urp.exe imports: $($deps -join ' ')"
+if ($bad) { throw "urp.exe depends on the dynamic CRT: $($bad -join ' ')" }
+Write-Host ("urp.exe size: {0:n1} MB" -f ((Get-Item "$pkg\urp.exe").Length / 1MB))
 
 # No Nix store path may reach the package (same rule as packaging/check-no-nix-store.sh; licenses is skipped).
 Add-Type -TypeDefinition 'public static class NixScan { public static bool Has(string p) { var b = System.IO.File.ReadAllBytes(p); return System.MemoryExtensions.IndexOf(new System.ReadOnlySpan<byte>(b), new System.ReadOnlySpan<byte>(System.Text.Encoding.ASCII.GetBytes("/nix/store"))) >= 0; } }'
 $bad = Get-ChildItem $pkg -Recurse -File | Where-Object { $_.FullName -notmatch '[\\/]licenses[\\/]' -and [NixScan]::Has($_.FullName) }
 if ($bad) { throw "package contains /nix/store paths: $($bad.FullName -join ', ')" }
-$zip = Join-Path $out 'player-windows-x86_64.zip'
+$zip = Join-Path $out 'urp-windows-x86_64.zip'
 if (Test-Path $zip) { Remove-Item $zip }
 Compress-Archive -Path $pkg -DestinationPath $zip
 Write-Host "package: $pkg and $zip"

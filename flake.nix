@@ -44,13 +44,13 @@
         in
         {
           player-cpython = cpython;
-          player = import ./nix/player.nix {
+          urp = import ./nix/player.nix {
             inherit pkgs sources cpython;
             ffmpegLgpl = ffmpegLgpl pkgs;
             renpySrc = renpy-src;
             renpyRev = renpy-src.rev;
           };
-          default = (playerPackages system).player;
+          default = (playerPackages system).urp;
         };
     in
     {
@@ -64,7 +64,7 @@
       checks = nixpkgs.lib.genAttrs playerSystems (system:
         let pkgs = nixpkgs.legacyPackages.${system}; in
         {
-          player-smoke = import ./nix/smoke.nix { inherit pkgs; player = (playerPackages system).player; };
+          urp-smoke = import ./nix/smoke.nix { inherit pkgs; urp = (playerPackages system).urp; };
         });
 
       devShells = forAllSystems (system:

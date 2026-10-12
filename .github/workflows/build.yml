@@ -54,7 +54,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: package-linux
-          path: player/build-out/manylinux/player-linux-x86_64.tar.gz
+          path: player/build-out/manylinux/urp-linux-x86_64.tar.gz
           if-no-files-found: error
           retention-days: 7
 
@@ -97,12 +97,12 @@ jobs:
             cargo test --release --workspace'
       - name: Zip the app
         run: |
-          ditto -c -k --keepParent player/build-out/macos/RenPyPlayer.app player-macos-arm64.zip
-          ls -l player-macos-arm64.zip
+          ditto -c -k --keepParent player/build-out/macos/Universal Ren'Py Player.app urp-macos-arm64.zip
+          ls -l urp-macos-arm64.zip
       - uses: actions/upload-artifact@v7
         with:
           name: package-macos
-          path: player-macos-arm64.zip
+          path: urp-macos-arm64.zip
           if-no-files-found: error
           retention-days: 7
 
@@ -170,6 +170,6 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: package-windows
-          path: player/build-out/windows/player-windows-x86_64.zip
+          path: player/build-out/windows/urp-windows-x86_64.zip
           if-no-files-found: error
           retention-days: 7

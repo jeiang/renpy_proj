@@ -21,8 +21,8 @@ This project is not affiliated with the Ren'Py project.
 | M2 | macOS parity for Ren'Py 8 games (images, text, audio, saves, library, packaging) | Done: [harness/M2-status.md](harness/M2-status.md) |
 | M3 | Ren'Py 7 support (Python 2 compatibility module, patch library) | Done: [harness/M3-status.md](harness/M3-status.md) |
 | M4 | Linux and Windows | Linux measured on a real GPU ([harness/M4-status.md](harness/M4-status.md)). Windows on a real GPU is not measured yet. |
-| M5 | LAN streaming to a browser (`player serve`) | Done: [harness/M5-status.md](harness/M5-status.md) |
-| M6 | AI upgrade pass (`player upgrade`, maintainers) | Implemented: [harness/M6-status.md](harness/M6-status.md) |
+| M5 | LAN streaming to a browser (`urp serve`) | Done: [harness/M5-status.md](harness/M5-status.md) |
+| M6 | AI upgrade pass (`urp upgrade`, maintainers) | Implemented: [harness/M6-status.md](harness/M6-status.md) |
 
 Known gaps are listed in ARCHITECTURE.md. Treat the player as pre-release software.
 
@@ -41,7 +41,7 @@ You need [Nix](https://nixos.org/download) with flakes.
 ```sh
 nix develop .#player        # shell with Rust, FFmpeg (LGPL) and the other build inputs
 cd player && cargo build --release -p player
-nix build .#player          # the same player as a Nix package: result/bin/player
+nix build .#urp          # the same player as a Nix package: result/bin/urp
 ```
 
 The first build downloads Ren'Py 8.5.3 and pinned Python wheels (`player/engine/fetch.sh`) and builds a static CPython 3.12.
@@ -50,14 +50,27 @@ Gitignored inputs and how to get them are in [docs/LOCAL-FILES.md](docs/LOCAL-FI
 ## Run
 
 ```sh
-player <game>                 # run a game: <game> is a folder with game/ inside, or the game/ folder
-player                        # open the library window
-player scan <folder>...       # add folders to the library
-player serve <game>           # run headless and stream to a browser on the LAN (prints a URL)
+urp <game>                 # run a game: <game> is a folder with game/ inside, or the game/ folder
+urp                        # open the library window
+urp scan <folder>...       # add folders to the library
+urp serve <game>           # run headless and stream to a browser on the LAN (prints a URL)
 ```
 
-`player --help` lists all commands (`list`, `report`, `patches`, `mods`, `upgrade`). Your save data and caches go to the player's
+`urp --help` lists all commands (`list`, `report`, `patches`, `mods`, `upgrade`). Your save data and caches go to the player's
 own data folder. The player never writes into the game folder.
+
+## Moving from renpy-player
+
+The data folder is now `universal-renpy-player`. Nothing is migrated automatically. To keep your library, saves and reports, move the old folder once:
+
+```sh
+# macOS
+mv ~/Library/Application\ Support/renpy-player ~/Library/Application\ Support/universal-renpy-player
+# Linux
+mv "${XDG_DATA_HOME:-$HOME/.local/share}/renpy-player" "${XDG_DATA_HOME:-$HOME/.local/share}/universal-renpy-player"
+# Windows (PowerShell)
+Rename-Item "$env:APPDATA\renpy-player" universal-renpy-player
+```
 
 ## Test
 
@@ -116,7 +129,7 @@ request, so the cache of `main` is the one that every later run and every releas
 Fetched inputs (Ren'Py source, wheels, static CPython, FFmpeg, Ren'Py SDKs) are cached with `actions/cache`. The keys are the hashes of
 the fetch and build scripts, so a change to a pin rebuilds them. The real-game gate is not part of CI.
 
-`.github/workflows/garret.yml` runs on every push to `main`. It builds `nix build .#player` for `x86_64-linux` and `aarch64-darwin`
+`.github/workflows/garret.yml` runs on every push to `main`. It builds `nix build .#urp` for `x86_64-linux` and `aarch64-darwin`
 and pushes the closures to the garret cache (`cache.jeiang.dev`) with a GitHub OIDC token, so the cornn-flaek hosts that install the
 player substitute it. garret accepts the push only while cornn-flaek's `modules/garret/default.nix` lists this repository and workflow.
 
@@ -125,10 +138,10 @@ GitHub Release with the assets and a `SHA256SUMS` file. You publish the draft by
 
 | Asset | Content |
 |---|---|
-| `renpy-player-<tag>-macos-arm64.zip` | `RenPyPlayer.app`, ad hoc signed (no Developer ID yet: macOS asks the user to allow it) |
-| `renpy-player-<tag>-linux-x86_64-manylinux_2_28.tar.gz` | Binary and LGPL FFmpeg libraries, glibc 2.28 or newer |
-| `renpy-player-<tag>-windows-x86_64.zip` | `player.exe` and the LGPL FFmpeg DLLs |
-| `renpy-player-<tag>-rust-dependency-licences.md`, `renpy-player-<tag>-THIRD_PARTY.md` | Licence notices (also inside each package) |
+| `urp-<tag>-macos-arm64.zip` | `Universal Ren'Py Player.app`, ad hoc signed (no Developer ID yet: macOS asks the user to allow it) |
+| `urp-<tag>-linux-x86_64-manylinux_2_28.tar.gz` | Binary and LGPL FFmpeg libraries, glibc 2.28 or newer |
+| `urp-<tag>-windows-x86_64.zip` | `urp.exe` and the LGPL FFmpeg DLLs |
+| `urp-<tag>-rust-dependency-licences.md`, `urp-<tag>-THIRD_PARTY.md` | Licence notices (also inside each package) |
 
 ## Repository map
 

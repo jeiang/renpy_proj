@@ -1,4 +1,4 @@
-//! `player patches <game> list|validate|apply-test [--data <dir>]`.
+//! `urp patches <game> list|validate|apply-test [--data <dir>]`.
 //! Contract: player/CONTRACTS.md, "Patch library (`patches`)".
 //!
 //! Patch files live in `<data>/patches/<fingerprint>/*.toml` and `<data>/patches/<game key>/*.toml`.
@@ -12,8 +12,7 @@ use std::process::Command;
 
 use anyhow::{Context, Result, bail};
 
-const USAGE: &str =
-    "usage: player patches <game> list|validate|apply-test|accept <id> [--data <dir>]";
+const USAGE: &str = "usage: urp patches <game> list|validate|apply-test|accept <id> [--data <dir>]";
 
 fn game_key_of(game: &str) -> Result<String> {
     let path = Path::new(game)

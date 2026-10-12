@@ -64,11 +64,11 @@ jobs:
         run: |
           set -euo pipefail
           mkdir dist
-          cp artifacts/package-linux/player-linux-x86_64.tar.gz "dist/renpy-player-$TAG-linux-x86_64-manylinux_2_28.tar.gz"
-          cp artifacts/package-macos/player-macos-arm64.zip "dist/renpy-player-$TAG-macos-arm64.zip"
-          cp artifacts/package-windows/player-windows-x86_64.zip "dist/renpy-player-$TAG-windows-x86_64.zip"
-          cp artifacts/notices/RUST_DEPENDENCIES.md "dist/renpy-player-$TAG-rust-dependency-licences.md"
-          cp THIRD_PARTY.md "dist/renpy-player-$TAG-THIRD_PARTY.md"
+          cp artifacts/package-linux/urp-linux-x86_64.tar.gz "dist/urp-$TAG-linux-x86_64-manylinux_2_28.tar.gz"
+          cp artifacts/package-macos/urp-macos-arm64.zip "dist/urp-$TAG-macos-arm64.zip"
+          cp artifacts/package-windows/urp-windows-x86_64.zip "dist/urp-$TAG-windows-x86_64.zip"
+          cp artifacts/notices/RUST_DEPENDENCIES.md "dist/urp-$TAG-rust-dependency-licences.md"
+          cp THIRD_PARTY.md "dist/urp-$TAG-THIRD_PARTY.md"
           (cd dist && sha256sum * > SHA256SUMS && cat SHA256SUMS)
       - name: Create the draft release
         env:

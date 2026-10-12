@@ -12,7 +12,7 @@ use crate::scan::scan_folders;
 pub struct Game {
     /// Folder or `.app` name.
     pub name: String,
-    /// What `player <game>` takes: the project folder or the `.app` bundle.
+    /// What `urp <game>` takes: the project folder or the `.app` bundle.
     pub path: PathBuf,
     /// Game key (see `game_key`).
     pub key: String,
@@ -40,17 +40,17 @@ pub fn default_data_dir() -> PathBuf {
         .map(PathBuf::from)
         .unwrap_or_default();
     if cfg!(target_os = "macos") {
-        home.join("Library/Application Support/renpy-player")
+        home.join("Library/Application Support/universal-renpy-player")
     } else if cfg!(windows) {
         std::env::var_os("APPDATA")
             .map(PathBuf::from)
             .unwrap_or(home)
-            .join("renpy-player")
+            .join("universal-renpy-player")
     } else {
         std::env::var_os("XDG_DATA_HOME")
             .map(PathBuf::from)
             .unwrap_or_else(|| home.join(".local/share"))
-            .join("renpy-player")
+            .join("universal-renpy-player")
     }
 }
 

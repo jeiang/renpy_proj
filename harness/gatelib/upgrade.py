@@ -9,7 +9,7 @@ Design: issue #20 (resolution comment) and player/CONTRACTS.md "M6 contracts". O
    failing node runs with no traceback; the full M3 gate passes; stock Ren'Py 7 saves still resume;
 4. on a failure, send the failure back (up to `tries` attempts); then `needs-human`;
 5. a verified patch is written to `<data>/patches/<fingerprint>/<error id>.toml` with the sidecar `<error id>.json`
-   (state `proposed`). `player patches <game> accept <id>` makes it active. The loader ignores everything but `accepted`.
+   (state `proposed`). `urp patches <game> accept <id>` makes it active. The loader ignores everything but `accepted`.
 
 Nothing here writes into the repository. The API key comes from the environment or `<data>/upgrade.toml` and is never
 logged: prompts and responses are stored, headers are not.
@@ -66,10 +66,10 @@ def est_tokens(text):
 def default_data_dir():
     home = pathlib.Path.home()
     if sys.platform == "darwin":
-        return home / "Library/Application Support/renpy-player"
+        return home / "Library/Application Support/universal-renpy-player"
     if sys.platform.startswith("win"):
-        return pathlib.Path(os.environ.get("APPDATA", home)) / "renpy-player"
-    return pathlib.Path(os.environ.get("XDG_DATA_HOME") or home / ".local/share") / "renpy-player"
+        return pathlib.Path(os.environ.get("APPDATA", home)) / "universal-renpy-player"
+    return pathlib.Path(os.environ.get("XDG_DATA_HOME") or home / ".local/share") / "universal-renpy-player"
 
 
 def load_config(data, args):

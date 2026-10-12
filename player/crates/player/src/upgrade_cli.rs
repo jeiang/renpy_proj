@@ -1,4 +1,4 @@
-//! `player upgrade <game> [options]`: the maintainer's AI upgrade pass (M6). Contract: player/CONTRACTS.md, "M6 contracts".
+//! `urp upgrade <game> [options]`: the maintainer's AI upgrade pass (M6). Contract: player/CONTRACTS.md, "M6 contracts".
 //!
 //! The pass needs the compatibility gate (machine lock, scratch clones, stock baselines, plans), which lives in
 //! `harness/` as Python 3 standard library code. This command finds the repository's `harness/upgrade.py` and runs it
@@ -10,7 +10,7 @@ use std::process::Command;
 
 use anyhow::{Context, Result, bail};
 
-pub const USAGE: &str = "usage: player upgrade <game> [--errors <dir>] [--error <id>] [--data <dir>] [--endpoint <url>] [--model <name>] [--tries <n>] [--token-cap <n>] [--no-gate] [--dry-run]\n\
+pub const USAGE: &str = "usage: urp upgrade <game> [--errors <dir>] [--error <id>] [--data <dir>] [--endpoint <url>] [--model <name>] [--tries <n>] [--token-cap <n>] [--no-gate] [--dry-run]\n\
   environment: PLAYER_UPGRADE_BASE_URL, PLAYER_UPGRADE_MODEL, PLAYER_UPGRADE_API_KEY (or the flags / harness config), PLAYER_HARNESS_DIR, PLAYER_PYTHON";
 
 /// `harness/` of the repository this executable was built in: `PLAYER_HARNESS_DIR`, else the first parent of the

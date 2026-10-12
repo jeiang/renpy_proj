@@ -1,4 +1,4 @@
-//! `player <game-dir> [--data <dir>] [--logdir <dir>] [--harness-script <file>] [ren'py args]`, plus the
+//! `urp <game-dir> [--data <dir>] [--logdir <dir>] [--harness-script <file>] [ren'py args]`, plus the
 //! library subcommands `scan`, `list`, `report`, `mods`, `serve`, and the library window (no arguments).
 //! Contract: player/CONTRACTS.md.
 
@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 use library::{Library, resolve_game};
 
-const USAGE: &str = "usage: player <game-dir | game/ | .app> [--data <dir>] [--logdir <dir>] \
+const USAGE: &str = "usage: urp <game-dir | game/ | .app> [--data <dir>] [--logdir <dir>] \
 [--harness-script <file>] [--renderer <name>] [ren'py args, for example lint]";
 
 /// Absolute form of a user path that may not exist yet (`--data`, `--logdir`).
@@ -30,7 +30,7 @@ fn py_path(p: &Path) -> String {
 
 fn build_argv(args: Vec<String>) -> Result<Vec<String>> {
     let mut game: Option<PathBuf> = None;
-    let mut boot = vec!["player".to_string()];
+    let mut boot = vec!["urp".to_string()];
     let mut rest = Vec::new();
     let mut it = args.into_iter();
     while let Some(a) = it.next() {
@@ -66,14 +66,14 @@ fn build_argv(args: Vec<String>) -> Result<Vec<String>> {
 }
 
 const SUBCOMMANDS: &str = "\
-       player                                open the library window
-       player scan [<folder>...] [--data <dir>]   add folders to the library and rescan
-       player list [--data <dir>]            list the games in the library
-       player report <game> [--data <dir>]   pre-flight report of a game
-       player patches <game> list|validate|apply-test|accept <id>   port patches of a game
-       player upgrade <game> [--errors <dir>] [--data <dir>] ...   AI upgrade pass (maintainers; see player/CONTRACTS.md, M6)
-       player mods <game> list|enable|disable|order ... [--data <dir>]
-       player serve <game> [--bind <addr>] [--port <n>] [--size <WxH>] [--fps <n>] [--kbps <n>]
+       urp                                   open the library window
+       urp scan [<folder>...] [--data <dir>]   add folders to the library and rescan
+       urp list [--data <dir>]            list the games in the library
+       urp report <game> [--data <dir>]   pre-flight report of a game
+       urp patches <game> list|validate|apply-test|accept <id>   port patches of a game
+       urp upgrade <game> [--errors <dir>] [--data <dir>] ...   AI upgrade pass (maintainers; see player/CONTRACTS.md, M6)
+       urp mods <game> list|enable|disable|order ... [--data <dir>]
+       urp serve <game> [--bind <addr>] [--port <n>] [--size <WxH>] [--fps <n>] [--kbps <n>]
                   [--encoder <name>] [--latency-overlay]   stream the game to a browser (headless)";
 
 /// Splits `--data <dir>` out of `args`. The data folder defaults like `_player.boot.default_data_dir`.
@@ -125,7 +125,7 @@ fn cmd_scan(args: Vec<String>) -> Result<i32> {
 fn cmd_list(args: Vec<String>) -> Result<i32> {
     let (rest, data) = take_data(args)?;
     if let Some(a) = rest.first() {
-        bail!("player list takes no argument, got {a}");
+        bail!("urp list takes no argument, got {a}");
     }
     print_games(&Library::load(&data)?);
     Ok(0)

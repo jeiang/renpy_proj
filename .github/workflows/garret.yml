@@ -46,6 +46,6 @@ jobs:
             extra-substituters = ${{ env.GARRET_SUBSTITUTER }}
             extra-trusted-public-keys = ${{ env.GARRET_PUBLIC_KEY }}
       - name: Build the player
-        run: nix build .#packages.${{ matrix.system }}.player --print-build-logs
+        run: nix build .#packages.${{ matrix.system }}.urp --print-build-logs
       - name: Push the closure to garret
         run: nix run "$GARRET_CLIENT" -- --config .ci/garret.toml push ./result

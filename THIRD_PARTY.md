@@ -60,8 +60,8 @@ How to relink (replace the library): FFmpeg is dynamic. Build your own FFmpeg 7.
 the same major soname versions, then:
 
 - Linux: replace the files in the package `lib/` folder. The player finds them through its rpath `$ORIGIN/lib`.
-- Windows: replace the `avcodec-*.dll`, `avformat-*.dll`, `avutil-*.dll`, `swresample-*.dll` and `swscale-*.dll` files next to `player.exe`.
-- macOS: replace the `libav*.dylib` files in `RenPyPlayer.app/Contents/Frameworks/`. Then sign the app again
+- Windows: replace the `avcodec-*.dll`, `avformat-*.dll`, `avutil-*.dll`, `swresample-*.dll` and `swscale-*.dll` files next to `urp.exe`.
+- macOS: replace the `libav*.dylib` files in `Universal Ren'Py Player.app/Contents/Frameworks/`. Then sign the app again
   (`codesign --force -s - -o runtime`).
 
 The player does not forbid modification of these libraries or reverse engineering for debugging them.

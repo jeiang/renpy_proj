@@ -1,4 +1,4 @@
-//! `player serve <game> [--bind <addr>] [--port <n>] [--size <WxH>] [--fps <n>] [--kbps <n>] [--encoder <name>]
+//! `urp serve <game> [--bind <addr>] [--port <n>] [--size <WxH>] [--fps <n>] [--kbps <n>] [--encoder <name>]
 //! [--latency-overlay] [game args]`: runs the game headless and streams it to a browser (M5).
 //! The game renders offscreen (`gfx`), its mixer feeds a virtual audio output (`media`), `stream` encodes both and
 //! serves them over WebRTC, and the browser's input events are injected into the pygame queue (`platform::inject`).
@@ -92,7 +92,7 @@ pub fn run(args: Vec<String>, run_game: impl FnOnce(Vec<String>) -> Result<i32>)
             fps: o.fps,
             kbps: o.kbps,
             latency_overlay: o.latency_overlay,
-            title: "Ren'Py Player".into(),
+            title: "Universal Ren'Py Player".into(),
             encoder: o.encoder,
         },
         Box::new(inject),

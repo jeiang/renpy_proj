@@ -55,7 +55,7 @@ kind = "bundled"
 
 # Player adapter. Built by `cargo build --release -p player` in player/.
 [player]
-binary = "player/target/release/player"
+binary = "player/target/release/urp"
 
 # `version` of an sdk engine is compared with the game's `renpy`: when they differ the gate removes game/cache from the
 # scratch clone (the shipped py3analysis.rpyb and bytecode cache are stale on a newer engine; the player ignores game/cache).
