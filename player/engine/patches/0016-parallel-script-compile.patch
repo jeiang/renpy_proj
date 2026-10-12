@@ -1,0 +1,485 @@
+# Reason: A game that was just added has loose .rpy files with no valid .rpyc. Script.load_file parses them one after the other on one core: 76 percent of a cold load of a large script after lazy compilation. Forked workers now compile the files first (renpy/parallelcompile.py), in waves that end at every file with a python early block or an early config value (renpy/scriptscan.py reads the text for them), and write the same .rpyc files into the cache. Script.load_script then loads every file in the same order as before and finds a valid .rpyc for each, so node order, init priorities, the namemap, the duplicate label check and the early blocks are those of a serial load. At most 4 workers and two cores stay free; they are reaped when the load ends or stops early. Where fork is missing (Windows), with fewer than two workers or for little source the load stays serial. RENPY_PARALLEL_COMPILE=N sets the number of workers (0 turns it off).
+
+diff --git a/renpy/parallelcompile.py b/renpy/parallelcompile.py
+new file mode 100644
+--- /dev/null
++++ b/renpy/parallelcompile.py
+@@ -0,0 +1,353 @@
++# Player patch: compile the loose script files of a game in parallel.
++#
++# A script file with no valid compiled file (a game that was just added, or an edited .rpy) is parsed, and its
++# .rpyc is written, by Script.load_file. That takes seconds for a large game and uses one core. Here the files
++# are compiled by forked worker processes first. They write the same .rpyc files into the same cache, and
++# Script.load_script then loads the files in the same order as before. The loading finds a valid .rpyc for
++# each file (what it finds on every later launch). So the order of the nodes, the init priorities, the duplicate
++# label check and the early blocks are those of a serial load.
++#
++# A worker parses a file with the state that the parent had when it forked. Ren'Py runs python early blocks (and
++# some early config values) while it loads a file, and they can change how later files parse (a statement that
++# renpy.register_statement added, for example). So the files are compiled in waves. A wave ends with a file that
++# has such a block (renpy.scriptscan.scan_early), or whose text is not known, and the next wave is forked when the
++# parent has loaded that file.
++#
++# Where there is no fork (Windows), with fewer than two workers or with little to compile, nothing is done and the
++# load is serial.
++
++import hashlib
++import os
++import select
++import signal
++import sys
++
++import renpy
++import renpy.script
++import renpy.scriptscan
++
++# The number of worker processes: RENPY_PARALLEL_COMPILE=N (0 or 1: none), else two less than the CPU count, at most 4.
++MAX_WORKERS = 4
++
++# A wave with less source than this (bytes) is not worth a fork.
++MIN_WAVE_BYTES = 96 * 1024
++
++# Names that a worker makes for the nodes of file number `index` start at (index % 1000 + 1) * SERIAL_STRIDE. So they
++# are unique in a script, and the same for every run.
++SERIAL_STRIDE = 4000000
++
++
++def worker_count():
++    value = os.environ.get("RENPY_PARALLEL_COMPILE")
++
++    if value is not None:
++        try:
++            return max(0, min(int(value), 64))
++        except ValueError:
++            return 0
++
++    return max(0, min((os.cpu_count() or 1) - 2, MAX_WORKERS))
++
++
++class Wave:
++    """
++    A group of files that workers compile together.
++
++    `start`
++        The index (in the list of script files) of the first file after the barrier before this wave. The workers
++        are forked when the load reaches it.
++
++    `items`
++        A list of (index, fn, dir, source extension, size).
++    """
++
++    def __init__(self, start, items):
++        self.start = start
++        self.items = items
++        self.pending = {i[0] for i in items}
++        self.pids = {}  # pid -> set of the indexes it still owes
++        self.fd = None
++        self.buffer = b""
++        self.started = False
++
++    def workers(self, count):
++        """
++        Splits the items into at most `count` lists with about the same total size (the largest file goes to the
++        list with the least work). Each list is in load order, so the files that the load needs first come first.
++        """
++
++        count = max(1, min(count, len(self.items)))
++        lists = [[] for _ in range(count)]
++        load = [0] * count
++
++        for item in sorted(self.items, key=lambda i: -i[4]):
++            n = load.index(min(load))
++            lists[n].append(item)
++            load[n] += item[4]
++
++        for items in lists:
++            items.sort()
++
++        return [i for i in lists if i]
++
++    def start_workers(self, script, count):
++        self.started = True
++        read_fd, write_fd = os.pipe()
++
++        for items in self.workers(count):
++            try:
++                pid = os.fork()
++            except OSError:
++                break
++
++            if pid == 0:
++                code = 1
++
++                try:
++                    os.close(read_fd)
++                    self.run_worker(script, items, write_fd)
++                    code = 0
++                finally:
++                    os._exit(code)
++
++            self.pids[pid] = {i[0] for i in items}
++
++        os.close(write_fd)
++        self.fd = read_fd
++
++        if not self.pids:
++            self.pending.clear()
++
++    @staticmethod
++    def run_worker(script, items, write_fd):
++        """
++        The worker process: compiles each file as the load would, which writes its .rpyc. Whatever else the
++        compile does stays in this process.
++        """
++
++        for index, fn, dir, source, _size in items:
++            script.serial = (index % 1000 + 1) * SERIAL_STRIDE
++
++            try:
++                script.load_file(dir, fn + source)
++            except BaseException:
++                pass
++
++            # The file is done, compiled or not. If it did not compile, the load compiles it and shows the error.
++            os.write(write_fd, b"%d\n" % index)
++
++    def reap(self):
++        """
++        Notes the workers that ended. What they still owed is given up: the load compiles it.
++        """
++
++        for pid in list(self.pids):
++            try:
++                done, _status = os.waitpid(pid, os.WNOHANG)
++            except ChildProcessError:
++                done = pid
++
++            if done:
++                self.pending -= self.pids.pop(pid)
++
++    def wait(self, index):
++        """
++        Returns when the file `index` is compiled, or when it will not be.
++        """
++
++        while index in self.pending:
++            ready, _, _ = select.select([self.fd], [], [], 0.25)
++
++            if not ready:
++                self.reap()
++                continue
++
++            data = os.read(self.fd, 65536)
++
++            if not data:
++                # Every worker closed the pipe: nothing more comes.
++                self.reap()
++                self.pending.clear()
++                break
++
++            self.buffer += data
++            *lines, self.buffer = self.buffer.split(b"\n")
++
++            for line in lines:
++                if not line:
++                    continue
++
++                done = int(line)
++                self.pending.discard(done)
++
++                for owed in self.pids.values():
++                    owed.discard(done)
++
++    def stop(self):
++        """
++        Ends the workers that still run (the load stopped early) and reaps them. Closes the pipe.
++        """
++
++        for pid in self.pids:
++            try:
++                os.kill(pid, signal.SIGTERM)
++            except OSError:
++                pass
++
++            try:
++                os.waitpid(pid, 0)
++            except OSError:
++                pass
++
++        self.pids.clear()
++        self.pending.clear()
++
++        if self.fd is not None:
++            os.close(self.fd)
++            self.fd = None
++
++
++class Plan:
++    """
++    The waves for one call of Script.load_script.
++    """
++
++    def __init__(self, script, waves, count):
++        self.script = script
++        self.waves = waves
++        self.count = count
++        self.next = 0  # The index in self.waves of the next wave to start.
++        self.by_file = {}
++
++        for wave in waves:
++            for item in wave.items:
++                self.by_file[item[0]] = wave
++
++    def before(self, index):
++        """
++        Called before the load looks at the file `index`: starts the wave that the load has reached.
++        """
++
++        while self.next < len(self.waves) and self.waves[self.next].start <= index:
++            self.waves[self.next].start_workers(self.script, self.count)
++            self.next += 1
++
++    def wait(self, index):
++        """
++        Called before the load reads the file `index`: waits until its worker is done with it.
++        """
++
++        wave = self.by_file.get(index)
++
++        if wave is not None and wave.started:
++            wave.wait(index)
++
++    def finish(self):
++        for wave in self.waves:
++            if wave.started:
++                wave.stop()
++
++
++def source_of(script, dir, fn, source_extensions):
++    """
++    Returns (source extension, path, bytes) of the source file of a script, or None if it has none.
++    """
++
++    found = []
++
++    for source in source_extensions:
++        rpyfn = dir + "/" + fn + source
++
++        if renpy.vfs.exists(rpyfn):
++            found.append((source, rpyfn))
++
++    if len(found) != 1:
++        return None
++
++    source, rpyfn = found[0]
++
++    try:
++        with renpy.vfs.open(rpyfn, "rb") as f:
++            return source, rpyfn, f.read()
++    except Exception:
++        return None
++
++
++def plan(script, script_files):
++    """
++    Returns a Plan for `script_files` (the list that Script.load_script loads), or None when the load should
++    be serial. This only reads files. The script is not changed.
++    """
++
++    count = worker_count()
++
++    # No fork on macOS: a child of a process with Cocoa or Metal threads can crash in the ObjC runtime.
++    if count < 2 or not hasattr(os, "fork") or sys.platform == "darwin" or not renpy.config.player_cache_dir:
++        return None
++
++    force = renpy.game.args.compile  # type: ignore
++    legacy = renpy.script.renpy_8_game()
++    waves = []
++    items = []
++    start = None  # The first index of the wave that is being built.
++    size = 0
++
++    def close(next_start):
++        nonlocal items, start, size
++
++        if items and size >= MIN_WAVE_BYTES:
++            waves.append(Wave(start, items))
++
++        items = []
++        size = 0
++        start = next_start
++
++    for index, (_priority, fn, dir) in enumerate(script_files):
++        if dir == renpy.config.commondir:
++            continue
++
++        if (fn, dir) in script.loaded_scripts or not script.script_filter(fn, dir):
++            continue
++
++        if start is None:
++            start = index
++
++        if dir is None:
++            # A compiled file in an archive: its early blocks are not known.
++            close(index + 1)
++            continue
++
++        found = source_of(script, dir, fn, ["_ren.py", ".rpy"])
++
++        if found is None:
++            # A compiled file with no source, or a conflict that load_script reports.
++            close(index + 1)
++            continue
++
++        source, rpyfn, data = found
++
++        rpydigest = hashlib.md5(data + renpy.script.RPYC_MAGIC).digest()
++        legacydigest = hashlib.md5(data).digest() if legacy else None
++
++        # The test of Script.load_appropriate_file: a compiled file in the player cache or next to the source.
++        cachedigest = renpy.script.read_rpyc_digest(renpy.script.player_rpyc_path(dir, fn + ".rpyc"))
++        gamedigest = renpy.script.read_rpyc_digest(dir + "/" + fn + ".rpyc")
++
++        valid = not force and (
++            (cachedigest is not None and cachedigest == rpydigest)
++            or (gamedigest is not None and gamedigest in (rpydigest, legacydigest))
++        )
++
++        if not valid:
++            items.append((index, fn, dir, source, len(data)))
++            size += len(data)
++
++        if source == "_ren.py" or renpy.scriptscan.scan_early(data.decode("utf-8", "replace")):
++            close(index + 1)
++
++    close(None)
++
++    if not waves:
++        return None
++
++    return Plan(script, waves, count)
+diff --git a/renpy/script.py b/renpy/script.py
+--- a/renpy/script.py
++++ b/renpy/script.py
+@@ -514,7 +514,15 @@
+ 
+         last_priority = 0
+ 
+-        for priority, fn, dir in script_files:
++        # Player patch: workers compile the files that need it, in waves, while this loop loads the files in order.
++        import renpy.parallelcompile
++
++        parallel = renpy.parallelcompile.plan(self, script_files)
++
++        for index, (priority, fn, dir) in enumerate(script_files):
++
++            if parallel is not None:
++                parallel.before(index)
+ 
+             if priority != last_priority:
+                 if renpy.parser.has_parse_errors():
+@@ -537,8 +545,14 @@
+ 
+             self.loaded_scripts.add((fn, dir))
+ 
++            if parallel is not None:
++                parallel.wait(index)
++
+             self.load_appropriate_file(".rpyc", ["_ren.py", ".rpy"], dir, fn, initcode)
+ 
++        if parallel is not None:
++            parallel.finish()
++
+         if skipped:
+             renpy.display.log.write("{} script files skipped.".format(skipped))
+ 
+diff --git a/renpy/scriptscan.py b/renpy/scriptscan.py
+new file mode 100644
+--- /dev/null
++++ b/renpy/scriptscan.py
+@@ -0,0 +1,85 @@
++# Player patch: a fast scan of the text of a script file, without the lexer.
++#
++# The scan finds the labels of the file and whether the file can change how later files are parsed, which is what the
++# parallel compile of renpy.parallelcompile needs to know. It reads lines, not tokens, so it is only a hint:
++# the labels it finds are the names a reader sees in the text, and the parser stays the authority for the script.
++
++import re
++
++# Ren'Py runs `python early` blocks (and a few `define config.` statements) while it loads a file, before it parses
++# the next one. They can register statements and set the options that the parser reads. A file that has one is a
++# barrier: the files after it are parsed only when it has been loaded. These are the config names that the parser
++# reads and that Ren'Py sets early (renpy.ast.EARLY_CONFIG, read in renpy.parser, renpy.lexer, renpy.sl2.slparser).
++EARLY_RE = re.compile(
++    r"\bpython[ \t]+early\b|\bconfig\.(?:keyword_after_python|check_conflicting_properties|check_translate_none|munge_in_strings)\b"
++)
++
++LABEL_RE = re.compile(r"[ \t]*label[ \t]+(\.?[A-Za-z_\u0080-\uffff][\w\u0080-\uffff]*)")
++
++
++class ScanResult:
++    """
++    `labels`
++        A list of (name, line number) in file order. A label that starts with a dot is joined to the global label
++        before it, as Ren'Py does.
++
++    `early`
++        True if the file has a python early block or sets a config value that the parser reads.
++    """
++
++    __slots__ = ("labels", "early")
++
++    def __init__(self, labels, early):
++        self.labels = labels
++        self.early = early
++
++
++def scan_early(text):
++    """
++    Returns True if `text` has a python early block or sets a config value that the parser reads.
++    """
++
++    return EARLY_RE.search(text) is not None
++
++
++def scan_labels(text):
++    """
++    Returns the list of (name, line number) of the label statements in `text`.
++    """
++
++    rv = []
++    quote = None  # The open triple quote, if the line is inside a string.
++    parent = None
++
++    for number, line in enumerate(text.splitlines(), 1):
++        if quote is None:
++            m = LABEL_RE.match(line)
++
++            if m is not None:
++                name = m.group(1)
++
++                if name[0] == ".":
++                    name = (parent + name) if parent else name
++                else:
++                    parent = name
++
++                rv.append((name, number))
++
++        # Track triple quoted strings, which can hold lines that look like statements.
++        for m in re.finditer(r'"""|\'\'\'', line):
++            token = m.group(0)
++
++            if quote is None:
++                quote = token
++            elif quote == token:
++                quote = None
++
++    return rv
++
++
++def scan(text):
++    """
++    Scans `text`, the source of a script file, and returns a ScanResult.
++    """
++
++    return ScanResult(scan_labels(text), scan_early(text))
