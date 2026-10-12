@@ -23,14 +23,16 @@ ANALYSER = """
 async () => {
   const v = window.__stream.video;
   const ctx = new (window.AudioContext || window.webkitAudioContext)();
-  await ctx.resume();
+  window.__ctx = ctx;
+  await Promise.race([ctx.resume(), new Promise(r => setTimeout(r, 3000))]);
   const src = ctx.createMediaStreamSource(v.srcObject);
   const an = ctx.createAnalyser(); an.fftSize = 2048; src.connect(an);
   window.__rms = 0; window.__rmsMax = 0;
   const buf = new Float32Array(an.fftSize);
   setInterval(() => { an.getFloatTimeDomainData(buf); let s = 0; for (const x of buf) s += x * x;
     const r = Math.sqrt(s / buf.length); window.__rms = r; if (r > window.__rmsMax) window.__rmsMax = r; }, 50);
-  return ctx.state;
+  return { ctx: ctx.state,
+    tracks: v.srcObject.getTracks().map(t => ({ kind: t.kind, readyState: t.readyState, muted: t.muted, enabled: t.enabled })) };
 }
 """
 
@@ -114,6 +116,7 @@ def main():
         out["fps"] = round((f1 - f0) / (t1 - t0), 1)
         out["audio_rms_max"] = page.evaluate("window.__rmsMax")
         out["audio_rms_now"] = page.evaluate("window.__rms")
+        out["audio_rtp"] = page.evaluate("window.__stream.stats()").get("rtp", {}).get("audio")
         lat = page.evaluate("window.__stream.latency()")
         out["latency_ms"] = {"n": len(lat), "p50": pct(lat, .5), "p95": pct(lat, .95), "max": max(lat) if lat else None}
         out["stream_stats"] = page.evaluate("window.__stream.stats()")

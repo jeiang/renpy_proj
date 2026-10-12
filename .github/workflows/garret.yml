@@ -24,7 +24,7 @@ env:
 
 jobs:
   push:
-    name: Push player (${{ matrix.system }})
+    name: Push urp (${{ matrix.system }})
     strategy:
       fail-fast: false
       matrix:

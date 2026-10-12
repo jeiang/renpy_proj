@@ -28,6 +28,8 @@ use crate::status::{ModsInfo, Preflight, mods_info, preflight};
 mod dialogs;
 mod patches;
 mod tabs;
+#[cfg(test)]
+mod tests;
 
 use patches::Report;
 
@@ -52,6 +54,7 @@ enum Action {
     Report(usize),
     OpenFolder(usize),
     AddFolder,
+    ImportArchive,
     Rescan,
     Select(String),
     RemoveGame(String),
@@ -63,6 +66,7 @@ enum Action {
     /// Opens the picker for a folder (true) or an archive file (false).
     PickMod(bool),
     PlanInstall(PathBuf),
+    ImportFrom(PathBuf),
     CommitInstall,
     Patches(&'static str),
     AcceptPatch(String),
@@ -165,6 +169,7 @@ struct PatchView {
 enum Msg {
     Plan(Result<InstallPlan, String>),
     Installed(Result<(), String>),
+    Imported(Result<(String, PathBuf), String>),
     Patches {
         key: String,
         sub: &'static str,
@@ -367,6 +372,23 @@ impl App {
                     self.refresh_mods();
                     self.refresh_status();
                 }
+                Msg::Imported(result) => {
+                    self.message = match result {
+                        Ok((name, folder)) => match self
+                            .library
+                            .add_folders(&[folder])
+                            .and_then(|()| self.library.save(&self.data))
+                        {
+                            Ok(()) => format!(
+                                "imported {name}: {} games in the library",
+                                self.library.games.len()
+                            ),
+                            Err(e) => format!("{e:#}"),
+                        },
+                        Err(e) => e,
+                    };
+                    self.refresh_status();
+                }
                 Msg::Patches { key, sub, result } => {
                     let view = self.patches.entry(key).or_default();
                     view.busy = None;
@@ -528,6 +550,43 @@ impl App {
                     };
                     self.refresh_status();
                 }
+            }
+            Action::ImportArchive => {
+                let exts: Vec<&str> = mods::archive_formats()
+                    .iter()
+                    .copied()
+                    .map(|s| s.trim_start_matches('.'))
+                    .collect();
+                if let Some(archive) = rfd::FileDialog::new()
+                    .set_title("Import a game archive")
+                    .add_filter("Game archives", exts.as_slice())
+                    .pick_file()
+                {
+                    self.perform(Action::ImportFrom(archive));
+                }
+            }
+            Action::ImportFrom(archive) => {
+                let folder = match self.library.folders.first().cloned() {
+                    Some(f) => f,
+                    None => match rfd::FileDialog::new()
+                        .set_title("Choose a folder for the imported game")
+                        .pick_folder()
+                    {
+                        Some(f) => f,
+                        None => return,
+                    },
+                };
+                self.message = format!("importing {}...", archive.display());
+                self.spawn(move || {
+                    let imported = crate::import::plan_import(&folder, &archive)
+                        .and_then(|plan| {
+                            let name = plan.name.clone();
+                            crate::import::import(&plan).map(|_| name)
+                        })
+                        .map(|name| (name, folder))
+                        .map_err(|e| format!("{e:#}"));
+                    Msg::Imported(imported)
+                });
             }
             Action::Rescan => {
                 self.library.rescan();

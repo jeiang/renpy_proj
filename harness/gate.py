@@ -128,15 +128,21 @@ def run_checks(a, ctx, key, out, names):
         res["seconds"] = round(time.time() - t, 1)
         (out / "checks" / (n + ".json")).write_text(json.dumps(res, indent=1))
         results[n] = res
-        print("[gate]   -> %s%s" % (res["status"], "  " + "; ".join(res.get("problems") or [res.get("error", "")]) if res["status"] != "pass" else ""), flush=True)
+        note = "; ".join(res.get("problems") or [res.get("error", "")] if res["status"] != "pass" else [])
+        print("[gate]   -> %s%s" % (res["status"], "  " + note if note else ""), flush=True)
+        for w in res.get("warnings") or []:
+            print("[gate]   warning: %s" % w, flush=True)
+    statuses = [r["status"] for r in results.values()]
+    status = "fail" if any(s not in ("pass", "skipped", "warn") for s in statuses) else "warn" if "warn" in statuses else "pass"
     summary = {"game": key, "engine": a.engine, "stock_engine": None if a.engine == "player" else ctx.stock_engine_id(),
                "tier": a.tier, "seconds": round(time.time() - t0, 1),
-               "status": "pass" if all(r["status"] in ("pass", "skipped") for r in results.values()) else "fail",
-               "checks": {n: r["status"] for n, r in results.items()}}
+               "status": status,
+               "checks": {n: r["status"] for n, r in results.items()},
+               "warnings": ["%s: %s" % (n, w) for n, r in results.items() for w in r.get("warnings") or []]}
     (out / "result.json").write_text(json.dumps(summary, indent=1))
     (out / "summary.md").write_text(report.markdown(summary, results))
     print((out / "summary.md").read_text())
-    return 0 if summary["status"] == "pass" else 1
+    return 0 if summary["status"] in ("pass", "warn") else 1
 
 
 def cmd_diff(a):

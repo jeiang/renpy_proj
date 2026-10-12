@@ -2,22 +2,40 @@
 //! pixels to a sink on a background thread. At most two buffers exist (one being read, one
 //! pending); a flip that finds the pending one unread replaces it, so the newest frame wins
 //! and the game thread never waits.
+//!
+//! The sink picks the format. NV12 is converted on the GPU (see `nv12.rs`), so only 1.5 bytes
+//! per pixel cross to the CPU. NV12 needs a texture the GPU can sample. A window surface
+//! cannot be sampled, so such frames fall back to RGBA. Each frame states its format.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
-use std::sync::{Arc, LazyLock};
+use std::sync::{Arc, LazyLock, Once};
 use std::thread::JoinHandle;
 use std::time::Instant;
 
 use parking_lot::{Condvar, Mutex};
 use wgpu::*;
 
+use crate::nv12::{self, Nv12};
+
+/// Pixel layout of a captured frame.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum CaptureFormat {
+    /// Straight RGBA8, row 0 at the top. Any screen size.
+    Rgba,
+    /// BT.709 limited-range NV12: a Y plane, then interleaved U and V at half resolution.
+    /// Width and height are even. An odd last column or row is cropped.
+    Nv12,
+}
+
 /// One captured screen.
 pub struct CapturedFrame {
     pub width: u32,
     pub height: u32,
-    /// Tight rows, straight (non-premultiplied) RGBA8, row 0 at the top.
-    pub rgba: Vec<u8>,
+    pub format: CaptureFormat,
+    /// Tight rows in `format`. RGBA: `width * height * 4` bytes. NV12: `width * height * 3 / 2`
+    /// bytes, the Y plane first.
+    pub data: Vec<u8>,
     /// Counts flips from 1.
     pub seq: u64,
 }
@@ -48,13 +66,22 @@ pub fn capture_stats() -> (u64, f64, u64, f64, u64) {
 
 type Sink = Box<dyn FnMut(CapturedFrame) + Send + 'static>;
 
-/// Size, channel order and device of the buffers in use.
+/// Size, format, channel order and device of the buffers in use.
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct Dims {
     w: u32,
     h: u32,
+    format: CaptureFormat,
     bgra: bool,
     device: usize,
+}
+
+/// Bytes per row and rows in the staging layout of `d`.
+fn layout(d: Dims) -> (u32, u32) {
+    match d.format {
+        CaptureFormat::Rgba => (d.w * 4, d.h),
+        CaptureFormat::Nv12 => (d.w, nv12::nv12_rows(d.h)),
+    }
 }
 
 struct Staging {
@@ -88,14 +115,18 @@ struct Shared {
 struct Active {
     shared: Arc<Shared>,
     thread: Option<JoinHandle<()>>,
+    format: CaptureFormat,
 }
 
 static ACTIVE: LazyLock<Mutex<Option<Active>>> = LazyLock::new(|| Mutex::new(None));
 
+/// The NV12 converter, for the device that last captured NV12.
+static NV12: LazyLock<Mutex<Option<Nv12>>> = LazyLock::new(|| Mutex::new(None));
+
 /// Installs the frame sink, or removes it with `None`. While a sink is set, every
 /// `Gpu.present()` copies the screen and passes it to the sink from a background thread,
-/// in order, with at most 2 frames in flight.
-pub fn set_frame_sink(sink: Option<Sink>) {
+/// in order, with at most 2 frames in flight. `format` is the format the sink asks for.
+pub fn set_frame_sink(format: CaptureFormat, sink: Option<Sink>) {
     let mut active = ACTIVE.lock();
     if let Some(mut old) = active.take() {
         old.shared.state.lock().stop = true;
@@ -114,12 +145,33 @@ pub fn set_frame_sink(sink: Option<Sink>) {
             .name("frame-sink".into())
             .spawn(move || run(worker, sink))
             .ok();
-        *active = Some(Active { shared, thread });
+        *active = Some(Active {
+            shared,
+            thread,
+            format,
+        });
     }
 }
 
 pub(crate) fn sink_active() -> bool {
     ACTIVE.lock().is_some()
+}
+
+/// The format a frame of `tex` uses, given the sink's request. NV12 needs a sampleable texture
+/// of at least 2 x 2. Otherwise the frame is RGBA.
+fn pick_format(wanted: CaptureFormat, tex: &Texture) -> CaptureFormat {
+    if wanted == CaptureFormat::Rgba {
+        return CaptureFormat::Rgba;
+    }
+    if tex.usage().contains(TextureUsages::TEXTURE_BINDING) && tex.width() >= 2 && tex.height() >= 2
+    {
+        return CaptureFormat::Nv12;
+    }
+    static WARN: Once = Once::new();
+    WARN.call_once(|| {
+        log::warn!("NV12 capture needs a sampleable screen texture; capturing RGBA instead");
+    });
+    CaptureFormat::Rgba
 }
 
 /// Records the copy of `tex` into a staging buffer. Returns without capturing when no sink is set.
@@ -131,18 +183,25 @@ pub(crate) fn capture(
     bgra: bool,
     seq: u64,
 ) {
-    let Some(shared) = ACTIVE.lock().as_ref().map(|a| a.shared.clone()) else {
+    let Some((shared, wanted)) = ACTIVE.lock().as_ref().map(|a| (a.shared.clone(), a.format))
+    else {
         return;
     };
     let started = Instant::now();
-    let (w, h) = (tex.width(), tex.height());
+    let format = pick_format(wanted, tex);
+    let (w, h) = match format {
+        CaptureFormat::Rgba => (tex.width(), tex.height()),
+        CaptureFormat::Nv12 => nv12::even_size(tex.width(), tex.height()),
+    };
     let dims = Dims {
         w,
         h,
-        bgra,
+        format,
+        bgra: bgra && format == CaptureFormat::Rgba,
         device: device_id,
     };
-    let bpr = (w * 4).div_ceil(256) * 256;
+    let (row_bytes, rows) = layout(dims);
+    let bpr = row_bytes.div_ceil(256) * 256;
 
     let staging = {
         let mut st = shared.state.lock();
@@ -168,7 +227,7 @@ pub(crate) fn capture(
     let staging = staging.unwrap_or_else(|| Staging {
         buf: device.create_buffer(&BufferDescriptor {
             label: Some("frame staging"),
-            size: u64::from(bpr) * u64::from(h),
+            size: u64::from(bpr) * u64::from(rows),
             usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
             mapped_at_creation: false,
         }),
@@ -177,9 +236,20 @@ pub(crate) fn capture(
     });
 
     let mut enc = device.create_command_encoder(&Default::default());
+    let src = match format {
+        CaptureFormat::Rgba => tex.clone(),
+        CaptureFormat::Nv12 => {
+            let mut conv = NV12.lock();
+            let c = conv.get_or_insert_with(|| Nv12::new(device, device_id));
+            if c.device_id != device_id {
+                *c = Nv12::new(device, device_id);
+            }
+            c.record(device, &mut enc, tex)
+        }
+    };
     enc.copy_texture_to_buffer(
         TexelCopyTextureInfo {
-            texture: tex,
+            texture: &src,
             mip_level: 0,
             origin: Origin3d::ZERO,
             aspect: TextureAspect::All,
@@ -189,12 +259,12 @@ pub(crate) fn capture(
             layout: TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(bpr),
-                rows_per_image: Some(h),
+                rows_per_image: Some(rows),
             },
         },
         Extent3d {
             width: w,
-            height: h,
+            height: rows,
             depth_or_array_layers: 1,
         },
     );
@@ -238,19 +308,14 @@ fn run(shared: Arc<Shared>, mut sink: Sink) {
                 st.alloc -= 1;
             }
         }
-        if let Some((w, h, rgba)) = result {
-            sink(CapturedFrame {
-                width: w,
-                height: h,
-                rgba,
-                seq: job.seq,
-            });
+        if let Some(frame) = result {
+            sink(frame);
         }
     }
 }
 
-/// Maps the staging buffer and converts it to tight straight RGBA.
-fn read(job: &Job) -> Option<(u32, u32, Vec<u8>)> {
+/// Maps the staging buffer and copies it into a tight frame. RGBA is also made straight.
+fn read(job: &Job) -> Option<CapturedFrame> {
     let buf = &job.staging.buf;
     let (tx, rx) = mpsc::channel();
     buf.slice(..).map_async(MapMode::Read, move |r| {
@@ -263,10 +328,14 @@ fn read(job: &Job) -> Option<(u32, u32, Vec<u8>)> {
         })
         .ok()?;
     rx.recv().ok()?.ok()?;
-    let Dims { w, h, bgra, .. } = job.staging.dims;
+    let dims = job.staging.dims;
+    let Dims {
+        w, h, format, bgra, ..
+    } = dims;
     let bpr = job.staging.bpr as usize;
-    let row = w as usize * 4;
-    let mut out = vec![0u8; row * h as usize];
+    let (row, rows) = layout(dims);
+    let (row, rows) = (row as usize, rows as usize);
+    let mut out = vec![0u8; row * rows];
     {
         let data = buf.slice(..).get_mapped_range().ok()?;
         for (src, dst) in data.chunks(bpr).zip(out.chunks_mut(row)) {
@@ -286,16 +355,24 @@ fn read(job: &Job) -> Option<(u32, u32, Vec<u8>)> {
         }
     }
     buf.unmap();
-    // The renderer draws premultiplied alpha. The screen is opaque in practice, so this is a no-op scan.
-    if !out.as_chunks::<4>().0.iter().all(|p| p[3] == 255) {
-        for p in out.as_chunks_mut::<4>().0 {
-            let a = u32::from(p[3]);
-            if 0 < a && a < 255 {
-                for c in &mut p[..3] {
-                    *c = (u32::from(*c) * 255 / a).min(255) as u8;
+    if format == CaptureFormat::Rgba {
+        // The renderer draws premultiplied alpha. The screen is opaque in practice, so this is a no-op scan.
+        if !out.as_chunks::<4>().0.iter().all(|p| p[3] == 255) {
+            for p in out.as_chunks_mut::<4>().0 {
+                let a = u32::from(p[3]);
+                if 0 < a && a < 255 {
+                    for c in &mut p[..3] {
+                        *c = (u32::from(*c) * 255 / a).min(255) as u8;
+                    }
                 }
             }
         }
     }
-    Some((w, h, out))
+    Some(CapturedFrame {
+        width: w,
+        height: h,
+        format,
+        data: out,
+        seq: job.seq,
+    })
 }

@@ -13,7 +13,7 @@ Date: 2026-10-01. Branch `build/m5` (over main, merged with `build/m5-headless`,
 | str0m + axum server, page, input protocol, clock-sync latency probe | done (`build/m5-rtc`), with the fixes below |
 | `player serve`, library Stream button | done. The button builds and its spawn code is the same command the gate runs; nobody clicked it (no synthetic input). |
 | Damage-aware encoding | `FrameGate` skips unchanged frames. A static picture is repeated every 100 ms (see Findings). |
-| Readback-free GPU-to-encoder path | **not done.** The frame goes GPU texture, CPU readback (2 staging buffers, 2.4 to 3.0 ms per 1080p frame on a worker thread, 0.04 to 0.2 ms on the game thread), swscale RGBA to NV12 (about 3 ms), encoder. wgpu offers no safe handle for VideoToolbox or VA-API. |
+| Readback-free GPU-to-encoder path | **not done.** The frame goes GPU texture, GPU RGBA to NV12 conversion (see "GPU NV12 capture" at the end of this file), CPU readback of 1.5 bytes per pixel, encoder. wgpu offers no safe handle for VideoToolbox or VA-API. |
 
 ## Gate
 
@@ -61,6 +61,9 @@ Run under `runlock.py` after MacRuns reported the Mac quiet (load average about 
 2. **Keepalive.** With a 1 s keepalive, Chromium treated sparse frames as network jitter and its jitter buffer reached 1.4 s over the VPN. A 100 ms repeat of a static picture keeps it at 40 to 70 ms. Cost: a static VideoToolbox picture is about 0.3 Mbit/s and an encode every 100 ms. `STREAM_KEEPALIVE_MS` overrides it.
 3. **Input mapping.** Pointer positions map to the size of the frame being encoded (the game chose 1738x978), not to the `--size` option.
 4. Flush frames (a repeat 2 frame periods after a change, so the decoder releases the last picture) keep the picture's timecode, and the page counts each timecode once; otherwise the 1 s display delay of the repeat showed up as latency.
+5. **Silent audio (decoder layout).** Browsers played silence (RMS 0) while Opus packets arrived with no loss, so the mixer was not the cause. The decoder dropped every audio frame. The WAV decoder leaves the frame's channel layout unspecified. The resampler was set up from a filled-in copy of that layout, but it received the raw frame. `swr_convert_frame` then returned AVERROR_INPUT_CHANGED ("Input changed") for every frame, so the queue stayed empty. The fix fills in the frame's layout before the resampler is set up. Probe game: a synthetic 10 s 440 Hz tone, not a commercial game. Before: `audio_rms_max` 0, `totalAudioEnergy` 0, 800+ packets, 0 lost. After: `audio_rms_max` 0.253, `totalAudioEnergy` 2.02, 805 packets, 0 lost. A C reproduction against ffmpeg 7.1.5 (the artemis build) rejected 118 of 118 frames before the fix and accepted 118 of 118 after it (480000 samples, which is 10 s at 48 kHz).
+
+Real game check: SecretIsland 0.17.8.0 chapter 1 (`ch1_intro`), served from a scratch copy whose splash label jumps to chapter 1. Main's pre-fix build (`530205b`) and the fixed build both played the music: `audio_rms_max` 0.173 and 0.172, `totalAudioEnergy` 0.244 and 0.234, 0 lost packets, both sessions. The game ships MP3 files with a native channel layout, so this bug path does not run for it. The fix covers sources with an unspecified layout, such as WAV.
 
 ## macOS firewall
 
@@ -80,3 +83,25 @@ Every newly built, ad hoc signed `player` binary triggers the macOS application 
 ## Reproduce locally
 
 `player serve <game>/game --data <scratch>` with `M5_DIR=<scratch> --harness-script harness/m5/zz_m5observe.rpy` for the gate; plain use needs only `player serve <game>`; open the printed URL, press Connect.
+
+## GPU NV12 capture (issue #54, branch perf/gpu-encode)
+
+The capture path converts RGBA to NV12 on the GPU (`gfx/src/nv12.wgsl`, `gfx/src/nv12.rs`). The readback moves 1.5 bytes per pixel, and the encoder takes NV12 with no swscale pass. `URP_CAPTURE_RGBA=1` keeps the old RGBA path for same-binary A/B runs. The API is in `player/CONTRACTS.md`, "gfx offscreen output".
+
+Parity (Mac, `gfx` test, opaque gradient card): GPU NV12 against swscale NV12 gives a maximum difference of 1 level, a mean of 0.008 and a PSNR of about 69 dB, at 320x240 and 1920x1080.
+
+Encode cost (artemis, 1920x1080, Chromium driven from the Mac through `harness/stream_probe.py --duration 30 --click --latency-overlay`, encoder `h264_vaapi` in both builds, same game copy, runs interleaved):
+
+| Build | Run | Latency all frames p50 / p95 / max (ms) | Server encode_ms per frame | Probe checks |
+|---|---|---|---|---|
+| main 530205b (RGBA) | 1 | 178 / 245 / 297 | 10.96 | video pass, audio fail |
+| perf/gpu-encode (NV12) | 1 | 143 / 183 / 233 | 5.56 | video pass, audio fail |
+| main 530205b (RGBA) | 2 | 97 / 170 / 176 | 12.43 | video pass, audio fail |
+| perf/gpu-encode (NV12) | 2 | 108 / 177 / 197 | 5.56 | video pass, audio fail |
+
+Reading: the server's per-frame encode time falls from about 11 to 12 ms to 5.6 ms in both rounds. End-to-end latency does not separate the builds. Round 1 favours NV12 by 35 ms at p50, and round 2 favours RGBA by 11 ms. The artemis load average was 10 to 27 on 8 cores (other users' jobs), so these latency figures are not a clean baseline, and no latency gain is claimed.
+
+The audio check (RMS 0) failed in all four runs, in both builds. The video checks passed. The Safari section above traces the same symptom to the probe's AudioContext, which stays suspended until a user gesture. `stream_probe.py` does not yet resume it the way `gate_m5.py` does, so this is the likely cause, not yet confirmed.
+
+Not measured in this slice: per-stage capture cost on artemis (`urp serve` does not print `capture_stats`), and an end-to-end run of the NV12 build on the Mac.
+

@@ -13,6 +13,7 @@ mod soft;
 #[cfg(target_os = "macos")]
 mod vt;
 
+pub use convert::Converter;
 pub use gate::{FrameGate, burn_timecode};
 pub use opus::OpusEncoder;
 

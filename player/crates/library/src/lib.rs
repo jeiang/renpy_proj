@@ -3,6 +3,7 @@
 
 mod config;
 mod gui;
+pub mod import;
 mod key;
 mod launch;
 pub mod mods;
@@ -10,7 +11,7 @@ mod scan;
 pub mod settings;
 mod status;
 
-pub use config::{Game, Library, default_data_dir};
+pub use config::{Game, GameRef, Library, default_data_dir};
 pub use gui::run_window;
 pub use key::{game_key, resolve_game};
 pub use launch::spawn_player;

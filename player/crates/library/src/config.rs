@@ -5,7 +5,17 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
+use crate::key::{game_key, resolve_game};
 use crate::scan::scan_folders;
+
+/// A game named on a command line, resolved by `Library::game_ref`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct GameRef {
+    /// What `urp <game>` takes: the project folder or the `.app` bundle.
+    pub path: PathBuf,
+    /// Game key (see `game_key`).
+    pub key: String,
+}
 
 /// One game found by a scan.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -113,33 +123,63 @@ impl Library {
         self.games = games;
     }
 
-    /// Removes a game from the library and hides its path so that rescans skip it. `game` is a game key,
-    /// a path, or a name that only one game has. Never touches the game's files.
+    /// Removes a game from the library and hides its path so that rescans skip it. `game` names the game
+    /// as `game_ref` does. Never touches the game's files.
     pub fn remove_game(&mut self, game: &str) -> Result<Game> {
-        let canon = Path::new(game).canonicalize().ok();
+        let Some(i) = self.position(game)? else {
+            anyhow::bail!("no game {game:?} in the library");
+        };
+        let g = self.games.remove(i);
+        if !self.hidden.contains(&g.path) {
+            self.hidden.push(g.path.clone());
+        }
+        Ok(g)
+    }
+
+    /// The game a command line names: a game key, a path, or a name that one game in the library has.
+    /// A game folder or `.app` on disk that is not in the library is accepted too. Fails for an unknown
+    /// or ambiguous name. Reads only.
+    pub fn game_ref(&self, arg: &str) -> Result<GameRef> {
+        let path = match self.position(arg)? {
+            Some(i) => self.games[i].path.clone(),
+            None if Path::new(arg).exists() => PathBuf::from(arg),
+            None => anyhow::bail!("no game {arg:?} in the library"),
+        };
+        let path = resolve_game(&path)?;
+        let key = game_key(&path);
+        Ok(GameRef { path, key })
+    }
+
+    /// The index of the one game `arg` names: its key, then its path (as given or canonical), then its name.
+    /// `None` when no game matches.
+    fn position(&self, arg: &str) -> Result<Option<usize>> {
+        let canon = Path::new(arg).canonicalize().ok();
         let by = |pred: &dyn Fn(&Game) -> bool| -> Vec<usize> {
             (0..self.games.len())
                 .filter(|&i| pred(&self.games[i]))
                 .collect()
         };
-        let mut hits = by(&|g| g.key == game);
+        let mut hits = by(&|g| g.key == arg);
         if hits.is_empty() {
             hits =
-                by(&|g| g.path == Path::new(game) || canon.as_ref().is_some_and(|c| g.path == *c));
+                by(&|g| g.path == Path::new(arg) || canon.as_ref().is_some_and(|c| g.path == *c));
         }
         if hits.is_empty() {
-            hits = by(&|g| g.name == game);
+            hits = by(&|g| g.name == arg);
         }
         match hits.as_slice() {
-            [] => anyhow::bail!("no game {game:?} in the library"),
-            [i] => {
-                let g = self.games.remove(*i);
-                if !self.hidden.contains(&g.path) {
-                    self.hidden.push(g.path.clone());
-                }
-                Ok(g)
+            [] => Ok(None),
+            [i] => Ok(Some(*i)),
+            many => {
+                let names: Vec<String> = many
+                    .iter()
+                    .map(|&i| format!("{} ({})", self.games[i].key, self.games[i].path.display()))
+                    .collect();
+                anyhow::bail!(
+                    "{arg:?} names more than one game: {}; use its key or path",
+                    names.join(", ")
+                )
             }
-            _ => anyhow::bail!("{game:?} names more than one game; use its key or path"),
         }
     }
 
@@ -251,5 +291,46 @@ mod tests {
         assert_eq!(lib.games.len(), 1);
         assert!(a.join("game/script.rpy").is_file());
         assert!(lib.remove_folder(&one).is_err());
+    }
+
+    #[test]
+    fn a_game_is_named_by_key_path_or_name() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path().canonicalize().unwrap();
+        let (one, two) = (root.join("one"), root.join("two"));
+        std::fs::create_dir_all(&one).unwrap();
+        std::fs::create_dir_all(&two).unwrap();
+        let a = game(&one, "Alpha");
+        game(&two, "Alpha");
+        let b = game(&two, "Beta");
+        let mut lib = Library::default();
+        lib.add_folders(&[one, two]).unwrap();
+        assert_eq!(lib.games.len(), 3);
+
+        let beta_key = lib.games.iter().find(|g| g.path == b).unwrap().key.clone();
+        assert_eq!(lib.game_ref(&beta_key).unwrap().path, b);
+        assert_eq!(lib.game_ref(&beta_key).unwrap().key, beta_key);
+        assert_eq!(lib.game_ref(&b.to_string_lossy()).unwrap().path, b);
+        assert_eq!(lib.game_ref("Beta").unwrap().path, b);
+
+        // Two games named Alpha: the name alone is ambiguous, the key or path is not.
+        let err = format!("{:#}", lib.game_ref("Alpha").unwrap_err());
+        assert!(err.contains("names more than one game"), "{err}");
+        assert!(lib.remove_game("Alpha").is_err());
+        assert_eq!(lib.game_ref(&a.to_string_lossy()).unwrap().path, a);
+
+        let err = format!("{:#}", lib.game_ref("Nope").unwrap_err());
+        assert!(err.contains("no game"), "{err}");
+    }
+
+    #[test]
+    fn a_game_folder_outside_the_library_is_accepted_by_path() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path().canonicalize().unwrap();
+        let outside = game(&root, "Outside");
+        let lib = Library::default();
+        let r = lib.game_ref(&outside.to_string_lossy()).unwrap();
+        assert_eq!(r.path, outside);
+        assert_eq!(r.key, game_key(&outside));
     }
 }

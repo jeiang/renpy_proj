@@ -60,6 +60,9 @@ impl App {
                     if ui.button("Add folder...").clicked() {
                         actions.push(Action::AddFolder);
                     }
+                    if ui.button("Import archive...").clicked() {
+                        actions.push(Action::ImportArchive);
+                    }
                 });
             });
             ui.label(

@@ -537,29 +537,32 @@ fn drawable_size() -> (u32, u32) {
 #[pyo3(signature = (dir, every_n=1))]
 fn dump_frames(dir: &str, every_n: u64) -> PyResult<()> {
     if every_n == 0 {
-        crate::set_frame_sink(None);
+        crate::set_frame_sink(crate::CaptureFormat::Rgba, None);
         return Ok(());
     }
     let dir = std::path::PathBuf::from(dir);
     std::fs::create_dir_all(&dir).map_err(rt)?;
-    crate::set_frame_sink(Some(Box::new(move |f| {
-        if f.seq % every_n != 0 {
-            return;
-        }
-        let path = dir.join(format!("frame_{:06}.png", f.seq));
-        let res = (|| -> Result<(), Box<dyn std::error::Error>> {
-            let file = std::io::BufWriter::new(std::fs::File::create(&path)?);
-            let mut enc = png::Encoder::new(file, f.width, f.height);
-            enc.set_color(png::ColorType::Rgba);
-            enc.set_depth(png::BitDepth::Eight);
-            enc.set_compression(png::Compression::Fast);
-            enc.write_header()?.write_image_data(&f.rgba)?;
-            Ok(())
-        })();
-        if let Err(e) = res {
-            log::warn!("cannot write {}: {e}", path.display());
-        }
-    })));
+    crate::set_frame_sink(
+        crate::CaptureFormat::Rgba,
+        Some(Box::new(move |f| {
+            if f.seq % every_n != 0 {
+                return;
+            }
+            let path = dir.join(format!("frame_{:06}.png", f.seq));
+            let res = (|| -> Result<(), Box<dyn std::error::Error>> {
+                let file = std::io::BufWriter::new(std::fs::File::create(&path)?);
+                let mut enc = png::Encoder::new(file, f.width, f.height);
+                enc.set_color(png::ColorType::Rgba);
+                enc.set_depth(png::BitDepth::Eight);
+                enc.set_compression(png::Compression::Fast);
+                enc.write_header()?.write_image_data(&f.data)?;
+                Ok(())
+            })();
+            if let Err(e) = res {
+                log::warn!("cannot write {}: {e}", path.display());
+            }
+        })),
+    );
     Ok(())
 }
 
@@ -584,9 +587,12 @@ fn bench_capture(
         let got = Arc::new(AtomicU64::new(0));
         let g = got.clone();
         let before = crate::capture_stats().4;
-        crate::set_frame_sink(Some(Box::new(move |_| {
-            g.fetch_add(1, Ordering::Relaxed);
-        })));
+        crate::set_frame_sink(
+            crate::CaptureFormat::Rgba,
+            Some(Box::new(move |_| {
+                g.fetch_add(1, Ordering::Relaxed);
+            })),
+        );
         let t0 = std::time::Instant::now();
         let mut present_ns = 0u128;
         for _ in 0..frames {
@@ -601,7 +607,7 @@ fn bench_capture(
             std::thread::sleep(std::time::Duration::from_millis(5));
         }
         let wall = t0.elapsed().as_secs_f64() * 1000.0;
-        crate::set_frame_sink(None);
+        crate::set_frame_sink(crate::CaptureFormat::Rgba, None);
         let replaced = crate::capture_stats().4 - before;
         Ok((
             present_ns as f64 / 1e6 / frames as f64,
