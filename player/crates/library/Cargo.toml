@@ -36,3 +36,4 @@ unrar = { version = "0.5", optional = true }
 [dev-dependencies]
 tempfile = "3"
 sevenz-rust2 = { version = "0.24", default-features = false, features = ["deflate", "compress", "util"] }
+egui_kittest = { version = "0.36.2", default-features = false }
