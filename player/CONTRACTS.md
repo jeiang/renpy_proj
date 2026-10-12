@@ -268,7 +268,7 @@ Added for "M5: LAN streaming to a browser" (issue #38). Design: ARCHITECTURE.md 
 ## Data flow
 
 ```
-Python/Ren'Py -> gfx (offscreen screen texture) --flip--> gfx frame sink --CapturedFrame (RGBA)--> player glue
+Python/Ren'Py -> gfx (offscreen screen texture) --flip--> gfx frame sink --CapturedFrame (NV12 or RGBA)--> player glue
 player glue --encode::RawFrame--> stream::Server::push_frame --> FrameGate -> VideoEncoder (H.264) -> str0m (RTP)
 media mixer (virtual output, 48 kHz stereo f32) --tap--> player glue --> stream::Server::push_audio --> OpusEncoder -> str0m
 browser page JS --data channels--> stream (str0m) --InputEvent--> player glue --> platform::inject --> SDL-numbered events in the pygame queue
@@ -287,9 +287,10 @@ browser page JS --data channels--> stream (str0m) --InputEvent--> player glue --
 ## `gfx` offscreen output (owner: `Headless`)
 
 - In headless mode `renpy.gl2.wgpudraw.create` builds the renderer on an offscreen texture (no surface, no window; `Gpu.present()` never blocks on a display). `WgpuDraw.flip` still paces frames with its software timer at the game's refresh rate (60 Hz default); `Gpu.skipped_frames()` stays 0.
-- `pub struct gfx::CapturedFrame { pub width: u32, pub height: u32, pub rgba: Vec<u8> /* tight rows, straight (non-premultiplied) RGBA8, row 0 at top */, pub seq: u64 /* counts flips from 1 */ }`
-- `pub fn gfx::set_frame_sink(sink: Option<Box<dyn FnMut(gfx::CapturedFrame) + Send + 'static>>)`: while set, every `Gpu.present()` copies the screen to a staging buffer and hands the pixels to the sink from a background thread, in order, with at most 2 frames in flight (a flip that finds both busy replaces the pending slot, so the newest frame wins and the game thread never waits). `Gpu.screenshot` keeps working.
-- Readback-free: not required for M5 where wgpu offers no safe path. The orchestrator records measured readback cost in `harness/M5-status.md`.
+- `pub enum gfx::CaptureFormat { Rgba, Nv12 }`. `Nv12` is BT.709 limited-range NV12, converted on the GPU (`gfx/src/nv12.wgsl`): a Y plane, then interleaved U and V at half resolution. The shader writes an `R8Unorm` target laid out as NV12, so the readback moves 1.5 bytes per pixel and the encoder takes NV12 with no swscale pass. An odd last column or row is cropped. `Rgba` is the fallback. `urp serve` forces it with `URP_CAPTURE_RGBA=1` for same-binary A/B runs.
+- `pub struct gfx::CapturedFrame { pub width: u32, pub height: u32, pub format: gfx::CaptureFormat, pub data: Vec<u8> /* tight rows in `format`: RGBA is w*h*4 bytes, straight (non-premultiplied), row 0 at top; NV12 is w*h*3/2 bytes, Y plane first */, pub seq: u64 /* counts flips from 1 */ }`
+- `pub fn gfx::set_frame_sink(format: gfx::CaptureFormat, sink: Option<Box<dyn FnMut(gfx::CapturedFrame) + Send + 'static>>)`: while set, every `Gpu.present()` copies the screen (converted to `format`) to a staging buffer and hands the pixels to the sink from a background thread, in order, with at most 2 frames in flight (a flip that finds both busy replaces the pending slot, so the newest frame wins and the game thread never waits). `Gpu.screenshot` keeps working.
+- Readback-free: not done. wgpu offers no safe handle for VideoToolbox or VA-API, so frames still pass a CPU readback, now as NV12 (1.5 bytes per pixel). See `harness/M5-status.md`, "GPU NV12 capture".
 
 ## `media` virtual output and tap (owner: `Headless`)
 

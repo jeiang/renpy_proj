@@ -111,20 +111,34 @@ pub fn run(args: Vec<String>, run_game: impl FnOnce(Vec<String>) -> Result<i32>)
     let _ = std::io::stdout().flush();
 
     let s = server.clone();
-    gfx::set_frame_sink(Some(Box::new(move |f: gfx::CapturedFrame| {
-        s.push_frame(encode::RawFrame {
-            width: f.width,
-            height: f.height,
-            format: encode::PixelFormat::Rgba,
-            data: f.rgba,
-            capture_ms: 0, // `Server::push_frame` stamps its own clock
-        });
-    })));
+    // NV12 is converted on the GPU. `URP_CAPTURE_RGBA=1` keeps the old RGBA readback path,
+    // for same-binary A/B runs.
+    let format = if std::env::var_os("URP_CAPTURE_RGBA").is_some() {
+        gfx::CaptureFormat::Rgba
+    } else {
+        gfx::CaptureFormat::Nv12
+    };
+    gfx::set_frame_sink(
+        format,
+        Some(Box::new(move |f: gfx::CapturedFrame| {
+            let format = match f.format {
+                gfx::CaptureFormat::Rgba => encode::PixelFormat::Rgba,
+                gfx::CaptureFormat::Nv12 => encode::PixelFormat::Nv12,
+            };
+            s.push_frame(encode::RawFrame {
+                width: f.width,
+                height: f.height,
+                format,
+                data: f.data,
+                capture_ms: 0, // `Server::push_frame` stamps its own clock
+            });
+        })),
+    );
     let s = server.clone();
     media::set_pcm_tap(Some(Box::new(move |pcm: &[f32]| s.push_audio(pcm))));
 
     let code = run_game(rest);
-    gfx::set_frame_sink(None);
+    gfx::set_frame_sink(gfx::CaptureFormat::Rgba, None);
     media::set_pcm_tap(None);
     if let Ok(s) = std::sync::Arc::try_unwrap(server) {
         let stats = s.stats();

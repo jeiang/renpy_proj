@@ -3,12 +3,13 @@
 
 mod capture;
 pub mod gpu;
+mod nv12;
 pub mod program;
 mod py;
 pub mod translate;
 pub mod yuv;
 
-pub use capture::{CapturedFrame, capture_stats, set_frame_sink};
+pub use capture::{CaptureFormat, CapturedFrame, capture_stats, set_frame_sink};
 pub use py::init_module;
 
 use std::ffi::CStr;
