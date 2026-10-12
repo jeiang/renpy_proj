@@ -1079,7 +1079,9 @@ impl Decoder {
                 // swr rejects a frame whose layout differs from the one it was set up with.
                 // PCM WAV and other decoders leave the layout unspecified, so fill it in first.
                 unsafe {
-                    if (*self.aframe).ch_layout.order == ffi::AVChannelOrder::AV_CHANNEL_ORDER_UNSPEC {
+                    if (*self.aframe).ch_layout.order
+                        == ffi::AVChannelOrder::AV_CHANNEL_ORDER_UNSPEC
+                    {
                         let n = (*self.aframe).ch_layout.nb_channels;
                         ffi::av_channel_layout_default(&mut (*self.aframe).ch_layout, n);
                     }
