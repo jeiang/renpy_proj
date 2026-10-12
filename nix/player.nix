@@ -1,7 +1,17 @@
 # The player: one cargo build of the workspace's `player` binary with vendored crates and prefetched sources.
-{ pkgs, ffmpegLgpl, sources, cpython, renpySrc, renpyRev }:
+# `rar = true` (package `urp`): default cargo features, which include `rar` (UnRAR, extraction only; not an open source licence).
+# `rar = false` (package `urp-norar`): `--no-default-features --features wayland`, free software only.
+{ pkgs, ffmpegLgpl, sources, cpython, renpySrc, renpyRev, rar ? true }:
 let
   inherit (pkgs) lib;
+  # RARLAB's UnRAR licence: freeware, redistributable, not free software. nixpkgs has no attribute for it.
+  unrarLicense = {
+    shortName = "unrar";
+    fullName = "UnRAR licence";
+    url = "https://www.rarlab.com/rar/unrarsrc-7.1.10.tar.gz";
+    free = false;
+    redistributable = true;
+  };
   linuxLibs = with pkgs; [ vulkan-loader wayland libxkbcommon libx11 libxcursor libxrandr libxi libxcb alsa-lib systemdLibs libdrm ];
   # The window-system, Vulkan and audio libraries are opened with dlopen. fixupPhase shrinks the runpath to the
   # NEEDED libraries, so postFixup puts the dlopen directories back.
@@ -9,7 +19,7 @@ let
     "${lib.makeLibraryPath linuxLibs}:/run/opengl-driver/lib";
 in
 pkgs.rustPlatform.buildRustPackage {
-  pname = "player";
+  pname = if rar then "urp" else "urp-norar";
   version = "0.1.0";
   src = lib.fileset.toSource {
     root = ../.;
@@ -18,6 +28,8 @@ pkgs.rustPlatform.buildRustPackage {
   sourceRoot = "source/player";
   cargoLock.lockFile = ../player/Cargo.lock;
   cargoBuildFlags = [ "-p" "player" ];
+  buildNoDefaultFeatures = !rar;
+  buildFeatures = lib.optionals (!rar) [ "wayland" ];
   doCheck = false;
 
   nativeBuildInputs = with pkgs; [
@@ -39,8 +51,14 @@ pkgs.rustPlatform.buildRustPackage {
   PLAYER_DLOPEN_RPATH = dlopenRpath;
 
   postFixup = lib.optionalString pkgs.stdenv.hostPlatform.isLinux ''
-    patchelf --add-rpath "${dlopenRpath}" $out/bin/player
+    patchelf --add-rpath "${dlopenRpath}" $out/bin/urp
   '';
+
+  meta = {
+    description = "Universal Ren'Py Player" + lib.optionalString (!rar) " (without RAR support)";
+    mainProgram = "urp";
+    license = [ lib.licenses.mit lib.licenses.asl20 ] ++ lib.optional rar unrarLicense;
+  };
 
   preBuild = ''
     mkdir -p build-out

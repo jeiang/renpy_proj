@@ -33,7 +33,7 @@ def main():
         r = j(f)
         if r:
             results[r["id"]] = r
-    out = ["# M6 status", "", "Deep runs: seeded playthroughs (3 seeds, up to 30 min each) on the corpus; `player upgrade` on every Python 2 error.", ""]
+    out = ["# M6 status", "", "Deep runs: seeded playthroughs (3 seeds, up to 30 min each) on the corpus; `urp upgrade` on every Python 2 error.", ""]
     rows, errors = [], []
     for k in sorted(games, key=lambda k: (not str(games[k]["renpy"]).startswith("7."), k)):
         d = j(runs / k / "checks" / "deep.json")

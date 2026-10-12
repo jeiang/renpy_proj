@@ -3,7 +3,7 @@
 
   python3 harness/tools/slotrun.py [--slot N] -- <command...>
 
-For long single-game jobs that start gate runs themselves (`player upgrade`): the gate children inherit WAYLAND_DISPLAY, DISPLAY,
+For long single-game jobs that start gate runs themselves (`urp upgrade`): the gate children inherit WAYLAND_DISPLAY, DISPLAY,
 SWAYSOCK, HARNESS_SLOT and HARNESS_COMPOSITOR=sway, so screenshots of the Ren'Py 7 stock engine (Xwayland) work without the
 real session. Needs sway, swaymsg, grim and Xwayland on PATH. Stdlib only.
 """

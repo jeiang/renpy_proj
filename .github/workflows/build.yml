@@ -1,6 +1,6 @@
 # Reusable workflow: builds the three binary packages. Called by ci.yml (with checks) and release.yml (without).
 # Packages come from the repository's own scripts: player/packaging/{manylinux/build.sh,macos.sh,windows.ps1}.
-# Output: workflow artifacts package-linux, package-macos, package-windows.
+# Output: workflow artifacts package-linux (tarball + AppImage), package-macos, package-windows.
 name: build
 
 on:
@@ -51,10 +51,15 @@ jobs:
         env:
           PLAYER_CHECKS: ${{ inputs.checks && '1' || '0' }}
         run: player/packaging/manylinux/build.sh
+      # The AppImage is what a release publishes. The tarball stays a CI artifact (ci.yml's synthetic corpus unpacks it).
+      - name: Build the AppImage
+        run: player/packaging/appimage.sh
       - uses: actions/upload-artifact@v7
         with:
           name: package-linux
-          path: player/build-out/manylinux/player-linux-x86_64.tar.gz
+          path: |
+            player/build-out/manylinux/urp-linux-x86_64.tar.gz
+            player/build-out/manylinux/urp-linux-x86_64.AppImage
           if-no-files-found: error
           retention-days: 7
 
@@ -97,12 +102,12 @@ jobs:
             cargo test --release --workspace'
       - name: Zip the app
         run: |
-          ditto -c -k --keepParent player/build-out/macos/RenPyPlayer.app player-macos-arm64.zip
-          ls -l player-macos-arm64.zip
+          ditto -c -k --keepParent "player/build-out/macos/Universal Ren'Py Player.app" urp-macos-arm64.zip
+          ls -l urp-macos-arm64.zip
       - uses: actions/upload-artifact@v7
         with:
           name: package-macos
-          path: player-macos-arm64.zip
+          path: urp-macos-arm64.zip
           if-no-files-found: error
           retention-days: 7
 
@@ -170,6 +175,6 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: package-windows
-          path: player/build-out/windows/player-windows-x86_64.zip
+          path: player/build-out/windows/urp-windows-x86_64.zip
           if-no-files-found: error
           retention-days: 7

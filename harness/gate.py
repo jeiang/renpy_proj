@@ -33,7 +33,7 @@ def parse():
     r.add_argument("--stock-engine", help="stock engine id from corpus.toml (default: the game's)")
     r.add_argument("--strip-game-cache", choices=["auto", "yes", "no"], default="auto",
                    help="stock only: delete game/cache in the scratch clone (auto: when the SDK version differs from the game's)")
-    r.add_argument("--player-bin", help="player binary (default: player/target/release/player in the main checkout)")
+    r.add_argument("--player-bin", help="player binary (default: player/target/release/urp in the main checkout)")
     r.add_argument("--player-game-arg", choices=["base", "game"], default="base",
                    help="what to pass the player as <game-dir>: the folder that holds game/, or game/ itself")
     r.add_argument("--baseline", help="earlier out dir: compare probe dialogue and route screenshots against it")

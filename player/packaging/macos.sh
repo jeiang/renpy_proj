@@ -3,8 +3,8 @@
 #
 #   player/packaging/macos.sh [--no-build] [--probe-only]
 #
-# Output (gitignored): player/build-out/macos/RenPyPlayer.app
-#   Contents/MacOS/player       the player binary (this is the "signed binary" the gate runs)
+# Output (gitignored): player/build-out/macos/Universal Ren'Py Player.app
+#   Contents/MacOS/urp       the player binary (this is the "signed binary" the gate runs)
 #   Contents/Frameworks/*.dylib every library that is not a macOS system library (see below)
 #
 # Steps
@@ -48,8 +48,8 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 player_dir="$(cd "$here/.." && pwd)"
 repo_root="$(cd "$player_dir/.." && pwd)"
 out="$player_dir/build-out/macos"
-app="$out/RenPyPlayer.app"
-exe="$app/Contents/MacOS/player"
+app="$out/Universal Ren'Py Player.app"
+exe="$app/Contents/MacOS/urp"
 fw="$app/Contents/Frameworks"
 bundle_id="io.github.jeiang.renpy-player"
 ent=(--entitlements "${PLAYER_ENTITLEMENTS:-$here/entitlements.plist}")
@@ -125,7 +125,7 @@ unresolved_deps() {
 }
 
 if [ "$probe_only" = 0 ]; then
-    bin="$player_dir/target/release/player"
+    bin="$player_dir/target/release/urp"
     [ -x "$bin" ] || { echo "missing $bin" >&2; exit 1; }
 
     # --- 2. bundle layout and libraries ------------------------------------------------------------
@@ -142,11 +142,11 @@ if [ "$probe_only" = 0 ]; then
 <plist version="1.0">
 <dict>
     <key>CFBundleDevelopmentRegion</key><string>en</string>
-    <key>CFBundleExecutable</key><string>player</string>
+    <key>CFBundleExecutable</key><string>urp</string>
     <key>CFBundleIdentifier</key><string>$bundle_id</string>
     <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
-    <key>CFBundleName</key><string>Ren'Py Player</string>
-    <key>CFBundleDisplayName</key><string>Ren'Py Player</string>
+    <key>CFBundleName</key><string>Universal Ren'Py Player</string>
+    <key>CFBundleDisplayName</key><string>Universal Ren'Py Player</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>$version</string>
     <key>CFBundleVersion</key><string>$version</string>
@@ -269,7 +269,7 @@ if [ -n "${DEVELOPER_ID_IDENTITY:-}" ]; then
     codesign --force -s "$DEVELOPER_ID_IDENTITY" -o runtime --timestamp "${ent[@]}" "$app"
     codesign --verify --strict --deep --verbose=2 "$app"
     if [ -n "${NOTARY_KEYCHAIN_PROFILE:-}" ]; then
-        zipfile="$out/RenPyPlayer-notarize.zip"
+        zipfile="$out/urp-notarize.zip"
         ditto -c -k --keepParent "$app" "$zipfile"
         log "notarizing (this waits for Apple)"
         xcrun notarytool submit "$zipfile" --keychain-profile "$NOTARY_KEYCHAIN_PROFILE" --wait

@@ -21,8 +21,8 @@ This project is not affiliated with the Ren'Py project.
 | M2 | macOS parity for Ren'Py 8 games (images, text, audio, saves, library, packaging) | Done: [harness/M2-status.md](harness/M2-status.md) |
 | M3 | Ren'Py 7 support (Python 2 compatibility module, patch library) | Done: [harness/M3-status.md](harness/M3-status.md) |
 | M4 | Linux and Windows | Linux measured on a real GPU ([harness/M4-status.md](harness/M4-status.md)). Windows on a real GPU is not measured yet. |
-| M5 | LAN streaming to a browser (`player serve`) | Done: [harness/M5-status.md](harness/M5-status.md) |
-| M6 | AI upgrade pass (`player upgrade`, maintainers) | Implemented: [harness/M6-status.md](harness/M6-status.md) |
+| M5 | LAN streaming to a browser (`urp serve`) | Done: [harness/M5-status.md](harness/M5-status.md) |
+| M6 | AI upgrade pass (`urp upgrade`, maintainers) | Implemented: [harness/M6-status.md](harness/M6-status.md) |
 
 Known gaps are listed in ARCHITECTURE.md. Treat the player as pre-release software.
 
@@ -31,7 +31,7 @@ Known gaps are listed in ARCHITECTURE.md. Treat the player as pre-release softwa
 | Platform | Build | Package script |
 |---|---|---|
 | macOS (Apple Silicon) | yes | `player/packaging/macos.sh` (signed `.app`) |
-| Linux x86_64 | yes | `player/packaging/linux.sh`, `player/packaging/manylinux/` (tarball) |
+| Linux x86_64 | yes | `player/packaging/manylinux/build.sh` (tarball), then `player/packaging/appimage.sh` (AppImage); `player/packaging/linux.sh` (nix build tarball) |
 | Windows x64 | yes, little tested | `player/packaging/windows.ps1` (zip) |
 
 ## Build
@@ -41,8 +41,29 @@ You need [Nix](https://nixos.org/download) with flakes.
 ```sh
 nix develop .#player        # shell with Rust, FFmpeg (LGPL) and the other build inputs
 cd player && cargo build --release -p player
-nix build .#player          # the same player as a Nix package: result/bin/player
+nix build .#urp          # the same player as a Nix package: result/bin/urp
+nix build .#urp-norar    # the same without RAR support
 ```
+
+RAR archives are extracted with RARLAB's UnRAR code (cargo feature `rar`, on by default). The UnRAR licence is freeware, not an open
+source licence ([player/packaging/licences/UnRAR-LICENSE.txt](player/packaging/licences/UnRAR-LICENSE.txt)). Everything else is
+permissive or LGPL. For a build without it use `cargo build --release -p player --no-default-features --features wayland`, or
+`nix build .#urp-norar` (free software only). In Nix the licence of `urp` lists `unrar` (unfree, redistributable): the flake admits it
+for that one package, so `nix build .#urp` needs no `NIXPKGS_ALLOW_UNFREE`. Both packages install the binary as `bin/urp`.
+
+Packages from a checkout (release builds come from CI):
+
+```sh
+player/packaging/macos.sh                        # player/build-out/macos/Universal Ren'Py Player.app (builds, signs ad hoc, probes)
+player/packaging/manylinux/build.sh              # Linux x86_64, needs podman: .../urp-linux-x86_64/ and urp-linux-x86_64.tar.gz
+player/packaging/appimage.sh                     # turns that directory into urp-linux-x86_64.AppImage
+powershell -NoProfile -File player\packaging\windows.ps1   # player\build-out\windows\urp-windows-x86_64.zip
+```
+
+`appimage.sh` downloads `appimagetool` 1.9.1 (pinned by SHA-256) and needs `python3` (it draws the icon). The AppImage uses the static type2
+runtime that the tool embeds, so it needs no `libfuse2`. On a host without FUSE run it with
+`./urp-<tag>-linux-x86_64.AppImage --appimage-extract-and-run [args]` (or extract it once with `--appimage-extract` and run
+`squashfs-root/AppRun`). All packages include RAR support and carry the UnRAR licence in their `licenses/` folder.
 
 The first build downloads Ren'Py 8.5.3 and pinned Python wheels (`player/engine/fetch.sh`) and builds a static CPython 3.12.
 Gitignored inputs and how to get them are in [docs/LOCAL-FILES.md](docs/LOCAL-FILES.md).
@@ -50,13 +71,17 @@ Gitignored inputs and how to get them are in [docs/LOCAL-FILES.md](docs/LOCAL-FI
 ## Run
 
 ```sh
-player <game>                 # run a game: <game> is a folder with game/ inside, or the game/ folder
-player                        # open the library window
-player scan <folder>...       # add folders to the library
-player serve <game>           # run headless and stream to a browser on the LAN (prints a URL)
+urp <game>                 # run a game: <game> is a folder with game/ inside, or the game/ folder
+urp                        # open the library window: games on the left; Overview, Mods and Patches for the selected game; Settings
+urp scan <folder>...       # add folders to the library
+urp library remove <game|folder>   # drop a game or folder from the library (files stay)
+urp mods <game> install <folder|archive>   # install a mod from a folder, .zip, .tar.gz, .tar.xz, .tar.zst, .7z or .rar
+urp mods <game> list|enable|disable|order|remove ...
+urp settings set stream.fps 30             # also: renderer, stream.port, stream.size, stream.kbps
+urp serve <game>           # run headless and stream to a browser on the LAN (prints a URL)
 ```
 
-`player --help` lists all commands (`list`, `report`, `patches`, `mods`, `upgrade`). Your save data and caches go to the player's
+`urp --help` lists all commands (`list`, `library`, `settings`, `report`, `patches`, `mods`, `upgrade`). Your save data and caches go to the player's
 own data folder. The player never writes into the game folder.
 
 ## Test
@@ -79,7 +104,7 @@ The gate on real commercial games is a maintainer tool. It needs games that this
 |---|---|
 | `rustfmt` | `cargo fmt --all --check` |
 | `Licence notices are current` | Regenerates `player/packaging/licences/RUST_DEPENDENCIES.md` with `cargo about` and fails when it differs from the committed file. Run `player/packaging/licences/generate.sh` after a `Cargo.lock` change. |
-| `Build` (`build.yml`) | On macOS arm64, Linux (manylinux_2_28 container) and Windows x64: release build with the packaging script of the platform, `cargo clippy -- -D warnings` and `cargo test`. |
+| `Build` (`build.yml`) | On macOS arm64, Linux (manylinux_2_28 container) and Windows x64: release build with the packaging script of the platform, `cargo clippy -- -D warnings` and `cargo test`. The Linux job uploads `package-linux` with the tarball (used by the synthetic corpus job) and the AppImage. |
 | `Synthetic corpus` | On Linux under Xvfb and Mesa lavapipe: the synthetic games through `harness/testgames/run.py`, stock engine first, then the Linux package of the `Build` job (recipe and thresholds: [harness/testgames/README.md](harness/testgames/README.md), "CI on Linux"). |
 
 On Windows, `cargo test` runs only for the crates that do not use Python (`encode`, `library`, `pyhost`, `stream`). The test binaries of the other crates cannot link there: `pyo3-ffi` imports Python as a DLL unless the static link lines of `pyhost` are present. Linux and macOS run all tests.
@@ -116,7 +141,7 @@ request, so the cache of `main` is the one that every later run and every releas
 Fetched inputs (Ren'Py source, wheels, static CPython, FFmpeg, Ren'Py SDKs) are cached with `actions/cache`. The keys are the hashes of
 the fetch and build scripts, so a change to a pin rebuilds them. The real-game gate is not part of CI.
 
-`.github/workflows/garret.yml` runs on every push to `main`. It builds `nix build .#player` for `x86_64-linux` and `aarch64-darwin`
+`.github/workflows/garret.yml` runs on every push to `main`. It builds `nix build .#urp` and `.#urp-norar` for `x86_64-linux` and `aarch64-darwin`
 and pushes the closures to the garret cache (`cache.jeiang.dev`) with a GitHub OIDC token, so the cornn-flaek hosts that install the
 player substitute it. garret accepts the push only while cornn-flaek's `modules/garret/default.nix` lists this repository and workflow.
 
@@ -125,10 +150,10 @@ GitHub Release with the assets and a `SHA256SUMS` file. You publish the draft by
 
 | Asset | Content |
 |---|---|
-| `renpy-player-<tag>-macos-arm64.zip` | `RenPyPlayer.app`, ad hoc signed (no Developer ID yet: macOS asks the user to allow it) |
-| `renpy-player-<tag>-linux-x86_64-manylinux_2_28.tar.gz` | Binary and LGPL FFmpeg libraries, glibc 2.28 or newer |
-| `renpy-player-<tag>-windows-x86_64.zip` | `player.exe` and the LGPL FFmpeg DLLs |
-| `renpy-player-<tag>-rust-dependency-licences.md`, `renpy-player-<tag>-THIRD_PARTY.md` | Licence notices (also inside each package) |
+| `urp-<tag>-macos-arm64.zip` | `Universal Ren'Py Player.app`, ad hoc signed (no Developer ID yet: macOS asks the user to allow it) |
+| `urp-<tag>-linux-x86_64.AppImage` | Binary and LGPL FFmpeg libraries, glibc 2.28 or newer, no `libfuse2` needed. Without FUSE: `--appimage-extract-and-run` |
+| `urp-<tag>-windows-x86_64.zip` | `urp.exe` and the LGPL FFmpeg DLLs |
+| `urp-<tag>-rust-dependency-licences.md`, `urp-<tag>-THIRD_PARTY.md` | Licence notices (also inside each package) |
 
 ## Repository map
 

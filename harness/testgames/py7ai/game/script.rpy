@@ -1,6 +1,6 @@
 # Model upgrade test. The python block below works in Python 2 only: the string module lost join in Python 3, and no
 # rewrite rule of the compat module covers it (the error handler only knows ordering). There is no patch in this
-# folder: `player upgrade` has to write it. The script has 20 lines on purpose (see py7patch).
+# folder: `urp upgrade` has to write it. The script has 20 lines on purpose (see py7patch).
 define config.name = "Synth7AI"
 define config.save_directory = "synth7-ai-test"
 define config.screen_width = 800

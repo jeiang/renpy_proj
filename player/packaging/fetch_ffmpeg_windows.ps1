@@ -1,7 +1,7 @@
 # Fetches the LGPL FFmpeg 7.1 shared build for Windows x64 (BtbN FFmpeg-Builds) into player\upstream\ffmpeg-win.
 # Never vendored in git. The archive is checked by SHA-256, then `ffmpeg -L` and the build configuration are
 # checked: the build must be LGPL (no GPL, no nonfree). Result: upstream\ffmpeg-win\{bin,include,lib}; the
-# player build uses it through FFMPEG_DIR, and packaging\windows.ps1 copies bin\*.dll beside player.exe.
+# player build uses it through FFMPEG_DIR, and packaging\windows.ps1 copies bin\*.dll beside urp.exe.
 #
 #   powershell -NoProfile -File packaging\fetch_ffmpeg_windows.ps1
 $ErrorActionPreference = 'Stop'

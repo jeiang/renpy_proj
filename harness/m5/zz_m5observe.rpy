@@ -1,4 +1,4 @@
-# M5 stream gate observer, loaded with `player serve <game> --harness-script harness/m5/zz_m5observe.rpy`
+# M5 stream gate observer, loaded with `urp serve <game> --harness-script harness/m5/zz_m5observe.rpy`
 # with env M5_DIR=<scratch dir>. It only observes: it never sends input. Input comes from the browser page.
 # progress.txt lines: `menu <fx> <fy>` (centre of the Start button as a fraction of the game screen),
 # `say <n>` for every say statement that begins.

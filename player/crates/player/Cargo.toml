@@ -6,8 +6,13 @@ edition.workspace = true
 publish.workspace = true
 license.workspace = true
 
+[[bin]]
+name = "urp"
+path = "src/main.rs"
+
 [features]
-default = ["wayland"]
+default = ["wayland", "rar"]
+rar = ["library/rar"]
 wayland = ["platform/wayland"]
 
 [dependencies]
@@ -27,3 +32,6 @@ text = { path = "../text" }
 py2fix = { path = "../py2fix" }
 encode = { path = "../encode" }
 stream = { path = "../stream" }
+
+[dev-dependencies]
+tempfile = "3"

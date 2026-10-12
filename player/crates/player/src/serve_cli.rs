@@ -1,5 +1,6 @@
-//! `player serve <game> [--bind <addr>] [--port <n>] [--size <WxH>] [--fps <n>] [--kbps <n>] [--encoder <name>]
+//! `urp serve <game> [--bind <addr>] [--port <n>] [--size <WxH>] [--fps <n>] [--kbps <n>] [--encoder <name>]
 //! [--latency-overlay] [game args]`: runs the game headless and streams it to a browser (M5).
+//! Defaults of port, size, fps and kbps come from `urp settings` (built-in: 8080, 1920x1080, 60, 8000); flags win.
 //! The game renders offscreen (`gfx`), its mixer feeds a virtual audio output (`media`), `stream` encodes both and
 //! serves them over WebRTC, and the browser's input events are injected into the pygame queue (`platform::inject`).
 //! Contract: player/CONTRACTS.md, "M5 contracts".
@@ -19,21 +20,27 @@ struct Options {
     latency_overlay: bool,
 }
 
-fn parse_size(v: &str) -> Result<(u32, u32)> {
-    let (w, h) = v
-        .split_once('x')
-        .with_context(|| format!("--size wants <width>x<height>, got {v}"))?;
-    Ok((w.parse()?, h.parse()?))
-}
-
 /// Splits the serve options out of `args`; the rest goes to the normal game argument parser.
 fn parse(args: Vec<String>) -> Result<(Options, Vec<String>)> {
+    // Defaults come from `urp settings` of the data folder this run uses; flags win.
+    let data = args
+        .iter()
+        .position(|a| a == "--data")
+        .and_then(|i| args.get(i + 1))
+        .map_or_else(library::default_data_dir, std::path::PathBuf::from);
+    let defaults = match library::Settings::load(&data) {
+        Ok(s) => s.stream,
+        Err(e) => {
+            eprintln!("warning: ignoring the settings: {e:#}");
+            Default::default()
+        }
+    };
     let mut o = Options {
         bind: "0.0.0.0".parse()?,
-        port: 8080,
-        size: (1920, 1080),
-        fps: 60,
-        kbps: 8000,
+        port: defaults.port,
+        size: defaults.size,
+        fps: defaults.fps,
+        kbps: defaults.kbps,
         encoder: None,
         latency_overlay: false,
     };
@@ -48,7 +55,7 @@ fn parse(args: Vec<String>) -> Result<(Options, Vec<String>)> {
                     .context("--bind wants an IP address")?
             }
             "--port" => o.port = value("--port")?.parse().context("--port wants a number")?,
-            "--size" => o.size = parse_size(&value("--size")?)?,
+            "--size" => o.size = library::settings::parse_size(&value("--size")?)?,
             "--fps" => o.fps = value("--fps")?.parse().context("--fps wants a number")?,
             "--kbps" => o.kbps = value("--kbps")?.parse().context("--kbps wants a number")?,
             "--encoder" => o.encoder = Some(value("--encoder")?),
@@ -92,7 +99,7 @@ pub fn run(args: Vec<String>, run_game: impl FnOnce(Vec<String>) -> Result<i32>)
             fps: o.fps,
             kbps: o.kbps,
             latency_overlay: o.latency_overlay,
-            title: "Ren'Py Player".into(),
+            title: "Universal Ren'Py Player".into(),
             encoder: o.encoder,
         },
         Box::new(inject),

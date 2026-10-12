@@ -1,119 +1,126 @@
-//! `player mods <game> list|enable|disable|order [<mod>...]`: edits `<data>/mods/<game key>/order.txt`.
-//! Contract: player/CONTRACTS.md, "Game file view (`vfs`)".
-//!
-//! A mod is a folder `<data>/mods/<game key>/<mod>/` with the layout of the game's base folder
-//! (`game/...`). `order.txt` holds one enabled mod per line; the last line has the highest priority.
+//! `urp mods <game> list|enable|disable|order|install|remove`: CLI glue over `library::mods`.
+//! Contract: player/CONTRACTS.md, "Game file view (`vfs`)" and "Mods".
 
-use std::path::{Path, PathBuf};
+use std::io::{IsTerminal, Write};
+use std::path::Path;
 
 use anyhow::{Context, Result, bail};
+use library::mods;
 
-const USAGE: &str = "usage: player mods <game> list\n       player mods <game> enable <mod>...   (appended: highest priority)\n       player mods <game> disable <mod>...\n       player mods <game> order <mod>...    (enabled mods, lowest priority first)";
+const USAGE: &str = "usage: urp mods <game> list [--json]\n       urp mods <game> enable <mod>...   (appended: highest priority)\n       urp mods <game> disable <mod>...\n       urp mods <game> order <mod>...    (enabled mods, lowest priority first)\n       urp mods <game> install <folder | archive> [--name <name>] [--yes]\n       urp mods <game> remove <mod>...   (deletes the mod folder)";
 
-/// The base and game folder of a user path, as `main.rs` resolves it (a `.app` bundle, then
-/// canonical), so the key equals the one the running player computes.
-fn game_key_of(game: &str) -> Result<(String, PathBuf)> {
-    let path = Path::new(game)
-        .canonicalize()
-        .with_context(|| format!("game path not found: {game}"))?;
-    let path = if path.extension().is_some_and(|e| e == "app") {
-        path.join("Contents/Resources/autorun/game")
-    } else {
-        path
-    };
-    let (base, gamedir) = vfs::resolve_game(&path);
-    Ok((vfs::game_key(&base, &gamedir), base))
+/// The key of a user game path, equal to the one the running player computes.
+pub fn game_key_of(game: &str) -> Result<String> {
+    let path = Path::new(game);
+    library::resolve_game(path)?;
+    Ok(library::game_key(path))
 }
 
-fn installed(root: &Path) -> Result<Vec<String>> {
-    let mut names = Vec::new();
-    if root.is_dir() {
-        for e in std::fs::read_dir(root)? {
-            let e = e?;
-            if e.path().is_dir() {
-                names.push(e.file_name().to_string_lossy().into_owned());
+/// Asks y/N on stderr. Only called on a terminal.
+fn confirm(question: &str) -> Result<bool> {
+    eprint!("{question} [y/N] ");
+    std::io::stderr().flush()?;
+    let mut line = String::new();
+    std::io::stdin().read_line(&mut line)?;
+    Ok(matches!(line.trim(), "y" | "Y" | "yes" | "Yes"))
+}
+
+fn install(data: &Path, key: &str, args: &[String]) -> Result<i32> {
+    let mut source = None;
+    let mut name = None;
+    let mut yes = false;
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--yes" | "-y" => yes = true,
+            "--name" => {
+                name = Some(
+                    it.next()
+                        .with_context(|| format!("--name needs a value\n{USAGE}"))?,
+                )
             }
+            _ if source.is_none() && !a.starts_with("--") => source = Some(a),
+            _ => bail!("{USAGE}"),
         }
     }
-    names.sort();
-    Ok(names)
-}
+    let source = source.with_context(|| USAGE.to_string())?;
+    let mut plan = mods::plan_install(data, key, Path::new(source))?;
+    if let Some(n) = name {
+        plan.set_name(n)?;
+    }
 
-fn check_exists(root: &Path, names: &[String]) -> Result<()> {
-    for n in names {
-        if n.is_empty() || n.contains('/') || n.starts_with('.') {
-            bail!("not a mod name: {n:?}");
+    println!("install {} as mod {}", plan.source.display(), plan.name);
+    println!("  into {}", plan.mod_dir().display());
+    println!("  layout: {}", plan.layout.describe());
+    println!(
+        "  {} files, {:.1} MiB unpacked",
+        plan.files.len(),
+        plan.unpacked_bytes as f64 / (1 << 20) as f64
+    );
+    const SHOWN: usize = 40;
+    for f in plan.files.iter().take(SHOWN) {
+        println!("  {f}");
+    }
+    if plan.files.len() > SHOWN {
+        println!("  ... and {} more", plan.files.len() - SHOWN);
+    }
+
+    if !yes {
+        if !std::io::stdin().is_terminal() {
+            bail!("not a terminal: pass --yes to install without asking");
         }
-        if !root.join(n).is_dir() {
-            bail!("no mod folder {} (mods live in {})", n, root.display());
+        if !confirm("Install and enable this mod?")? {
+            eprintln!("not installed");
+            return Ok(1);
         }
     }
-    Ok(())
+    mods::install(&plan)?;
+    let order = mods::list(data, key)?
+        .iter()
+        .find(|m| m.name == plan.name)
+        .and_then(|m| m.order)
+        .unwrap_or(0);
+    println!(
+        "installed {} and enabled it (position {order} in the load order: the last mod wins)",
+        plan.name
+    );
+    Ok(0)
 }
 
 pub fn run(args: &[String], data: &Path) -> Result<i32> {
-    let [game, sub, names @ ..] = args else {
+    let [game, sub, rest @ ..] = args else {
         bail!("{USAGE}")
     };
-    let (key, _base) = game_key_of(game)?;
-    let root = data.join("mods").join(&key);
-    let mut order = vfs::read_order(&root)?;
+    let key = game_key_of(game)?;
 
     match sub.as_str() {
         "list" => {
-            if !names.is_empty() {
-                bail!("{USAGE}");
-            }
-            let present = installed(&root)?;
-            for (i, n) in order.iter().enumerate() {
-                let state = if present.contains(n) {
-                    "enabled"
-                } else {
-                    "missing"
-                };
-                println!("{n}\t{state}\t{}", i + 1);
-            }
-            for n in present.iter().filter(|n| !order.contains(n)) {
-                println!("{n}\tdisabled");
-            }
-            if order.is_empty() && present.is_empty() {
-                eprintln!("no mods in {}", root.display());
-            }
-        }
-        "enable" => {
-            if names.is_empty() {
-                bail!("{USAGE}");
-            }
-            check_exists(&root, names)?;
-            for n in names {
-                order.retain(|o| o != n);
-                order.push(n.clone());
-            }
-            vfs::write_order(&root, &order)?;
-        }
-        "disable" => {
-            if names.is_empty() {
-                bail!("{USAGE}");
-            }
-            for n in names {
-                if !order.contains(n) {
-                    bail!("mod is not enabled: {n}");
+            let json = match rest {
+                [] => false,
+                [f] if f == "--json" => true,
+                _ => bail!("{USAGE}"),
+            };
+            let list = mods::list(data, &key)?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&list)?);
+            } else {
+                for m in &list {
+                    match m.order {
+                        Some(i) => println!("{}\t{}\t{i}", m.name, m.state.as_str()),
+                        None => println!("{}\t{}", m.name, m.state.as_str()),
+                    }
+                }
+                if list.is_empty() {
+                    eprintln!("no mods in {}", mods::mods_root(data, &key).display());
                 }
             }
-            order.retain(|o| !names.contains(o));
-            vfs::write_order(&root, &order)?;
         }
-        "order" => {
-            check_exists(&root, names)?;
-            let mut seen = Vec::new();
-            for n in names {
-                if seen.contains(n) {
-                    bail!("mod listed twice: {n}");
-                }
-                seen.push(n.clone());
-            }
-            vfs::write_order(&root, names)?;
-        }
+        "enable" | "disable" | "remove" if rest.is_empty() => bail!("{USAGE}"),
+        "enable" => mods::enable(data, &key, rest)?,
+        "disable" => mods::disable(data, &key, rest)?,
+        "order" => mods::set_order(data, &key, rest)?,
+        "remove" => mods::remove(data, &key, rest)?,
+        "install" => return install(data, &key, rest),
         _ => bail!("{USAGE}"),
     }
     Ok(0)

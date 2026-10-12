@@ -1,4 +1,4 @@
-//! `player patches <game> list|validate|apply-test [--data <dir>]`.
+//! `urp patches <game> list|validate|apply-test [--data <dir>]`.
 //! Contract: player/CONTRACTS.md, "Patch library (`patches`)".
 //!
 //! Patch files live in `<data>/patches/<fingerprint>/*.toml` and `<data>/patches/<game key>/*.toml`.
@@ -12,8 +12,7 @@ use std::process::Command;
 
 use anyhow::{Context, Result, bail};
 
-const USAGE: &str =
-    "usage: player patches <game> list|validate|apply-test|accept <id> [--data <dir>]";
+const USAGE: &str = "usage: urp patches <game> list|validate|apply-test [--json] [--data <dir>]\n       urp patches <game> accept <id> [--data <dir>]";
 
 fn game_key_of(game: &str) -> Result<String> {
     let path = Path::new(game)
@@ -59,6 +58,27 @@ fn folders(data: &Path, key: &str) -> (Vec<PathBuf>, Option<String>) {
     (dirs, fp)
 }
 
+/// `list --json` and `validate --json`: the library as one object.
+fn lib_json(lib: &patches::Library, fingerprint: &Option<String>) -> serde_json::Value {
+    serde_json::json!({
+        "fingerprint": fingerprint,
+        "files": lib.files.iter().map(|p| p.display().to_string()).collect::<Vec<_>>(),
+        "patches": lib.patches.iter().map(|p| serde_json::json!({
+            "origin": p.origin.display().to_string(),
+            "index": p.index,
+            "file": p.file,
+            "line": p.line,
+            "original_hash": p.original_hash,
+        })).collect::<Vec<_>>(),
+        "inactive": lib.inactive.iter().map(|(p, state)| serde_json::json!({
+            "path": p.display().to_string(),
+            "state": state,
+        })).collect::<Vec<_>>(),
+        "errors": lib.errors.iter().map(ToString::to_string).collect::<Vec<_>>(),
+        "ok": lib.errors.is_empty(),
+    })
+}
+
 fn note_fingerprint(fp: &Option<String>) {
     match fp {
         Some(fp) => eprintln!("build fingerprint {fp} (from the last start)"),
@@ -78,15 +98,21 @@ pub fn run(args: &[String], data: &Path, exe: &Path) -> Result<i32> {
         let [id] = rest else { bail!("{USAGE}") };
         return accept(data, &key, id);
     }
-    if !rest.is_empty() {
-        bail!("{USAGE}");
-    }
+    let json = match rest {
+        [] => false,
+        [f] if f == "--json" && sub != "accept" => true,
+        _ => bail!("{USAGE}"),
+    };
 
     match sub.as_str() {
         "list" | "validate" => {
             let (dirs, fp) = folders(data, &key);
             note_fingerprint(&fp);
             let lib = patches::load_dirs(&dirs);
+            if json {
+                println!("{}", serde_json::to_string_pretty(&lib_json(&lib, &fp))?);
+                return Ok(i32::from(!lib.errors.is_empty()));
+            }
             if sub == "list" {
                 for (p, state) in &lib.inactive {
                     println!("inactive\t{}\t{}", state, p.display());
@@ -123,10 +149,30 @@ pub fn run(args: &[String], data: &Path, exe: &Path) -> Result<i32> {
             }
         }
         "apply-test" => {
-            let status = Command::new(exe)
-                .arg(game)
+            let mut cmd = Command::new(exe);
+            // Headless: the child only loads the script, so it needs no window or audio device.
+            cmd.arg(game)
                 .arg("--data")
                 .arg(data)
+                .env("PLAYER_HEADLESS", "1");
+            if json {
+                // The child prints the results as one JSON line; the engine may print other lines first.
+                let out = cmd
+                    .env("PLAYER_PATCHES_APPLY_TEST", "json")
+                    .stderr(std::process::Stdio::inherit())
+                    .output()
+                    .with_context(|| format!("cannot start {}", exe.display()))?;
+                let text = String::from_utf8_lossy(&out.stdout);
+                match text.lines().rev().find(|l| l.starts_with('{')) {
+                    Some(line) => println!("{line}"),
+                    None => bail!(
+                        "apply-test printed no results (exit {:?})",
+                        out.status.code()
+                    ),
+                }
+                return Ok(out.status.code().unwrap_or(2));
+            }
+            let status = cmd
                 .env("PLAYER_PATCHES_APPLY_TEST", "1")
                 .status()
                 .with_context(|| format!("cannot start {}", exe.display()))?;

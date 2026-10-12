@@ -78,7 +78,7 @@ flowchart TB
 - WebRTC via str0m, signalling via axum (one page and `POST /offer`, LAN host candidates only).
 - H.264 through FFmpeg hardware encoders (VideoToolbox, NVENC/AMF/QSV/MF, VAAPI), with openh264 as the software fallback. Audio is Opus.
 - Input arrives over two data channels (reliable, and unordered for pointer moves). Encoding is damage-aware: it skips frames where nothing changed.
-- Started with `player serve <game>` (headless, prints a LAN URL) or a Stream button in the library.
+- Started with `urp serve <game>` (headless, prints a LAN URL) or a Stream button in the library.
 
 ## Ren'Py 7 games ([compat module](https://github.com/jeiang/renpy_proj/issues/19), [prototype](https://github.com/jeiang/renpy_proj/tree/prototype/py2compat-proto))
 - **Detection:** from the bundled engine (the `renpy/` version or `lib/python2.7`), not from `script_version.txt`. A bare `game/` folder is guessed from `.rpyc` markers, and the user can override the guess.
@@ -105,7 +105,7 @@ flowchart TB
 - Engine patches: common ones are player settings (for example, skipping save signature checks). The rest go through the patch library.
 
 ## User experience ([UX](https://github.com/jeiang/renpy_proj/issues/30))
-- A library that scans the folders you choose, including nested ones, plus `player <path>`. The library shows the engine version, Ren'Py 7 status, patches and the pre-flight result.
+- A library that scans the folders you choose, including nested ones, plus `urp <path>`. The library shows the engine version, Ren'Py 7 status, patches and the pre-flight result.
 - Patches are plain files, handled by CLI list, validate and apply-test commands. The AI upgrade pass writes the same format.
 
 ## Licensing ([licence](research/licence/README.md))
@@ -129,7 +129,7 @@ Each milestone is a GitHub issue labelled `build`. Gates are the harness tiers f
 | M2 | **macOS parity for Ren'Py 8 games:** image loader, Rust text, audio, the save detector and import, library and CLI, pre-flight report, packaging (single signed binary). | The full gate (lint, probe, stock-save resume, stock frame-diff) on every Ren'Py 8 corpus game. Video: zero drops in every run on a quiet machine, with A/V sync, inside Ren'Py. **Passed** (`harness/M2-status.md`). |
 | M3 | **Ren'Py 7:** the Python 2 compatibility module, including the syntax fixer, the patch library and the runtime report. | The full gate on all Ren'Py 7 corpus games, including Harem_Hotel. AlexsVantasticAdventure's menu-only probe is investigated. **Passed** (`harness/M3-status.md`). |
 | M4 | **Linux and Windows on real GPUs:** D3D12 and Vulkan, D3D11VA and VAAPI/NVDEC video, and Windows `/MT` packaging. | The full gate on both platforms, plus the anisotropic-filtering visual check on each GPU backend. |
-| M5 | **Streaming:** `player serve` and the library button. | A LAN browser session plays a corpus game with input, audio and video. Glass-to-glass latency is measured. **Passed** (`harness/M5-status.md`). |
+| M5 | **Streaming:** `urp serve` and the library button. | A LAN browser session plays a corpus game with input, audio and video. Glass-to-glass latency is measured. **Passed** (`harness/M5-status.md`). |
 | M6 | **AI upgrade pass** ([design](https://github.com/jeiang/renpy_proj/issues/20)): seeded deep runs find errors past the gate; a maintainer CLI sends a bounded slice to an OpenAI-compatible model; patches are verified from a save before the failing node, written as proposed, and activated by a human. Patches stay local. | Every Python 2 error the deep runs find on the 17 Ren'Py 7 games gets a verified patch, or is reported unpatchable or "needs human" with evidence. |
 | Later | **Strangler:** move Python subsystems to Rust in the order profiling gives. Also build-phase optimisations such as zero-copy IOSurface video. | Each move passes the full corpus gate on all three desktops. |
 

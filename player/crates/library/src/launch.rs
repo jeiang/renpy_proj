@@ -1,4 +1,4 @@
-//! Launching a game: `player <game> --data <data>` as a child process.
+//! Launching a game: `urp <game> --data <data>` as a child process.
 
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
@@ -13,7 +13,7 @@ pub fn spawn_player(exe: &Path, game: &Path, data: &Path) -> std::io::Result<Chi
         .spawn()
 }
 
-/// A running `player serve` child. `urls` fills as the child prints its `Stream URL:` lines.
+/// A running `urp serve` child. `urls` fills as the child prints its `Stream URL:` lines.
 pub struct Serve {
     pub child: Child,
     pub urls: Vec<String>,
@@ -75,7 +75,7 @@ mod tests {
     use std::os::unix::fs::PermissionsExt;
 
     /// The Stream button calls `spawn_serve(player, game path, data)`. The gate runs
-    /// `player serve <game> --data <data> ...`. Check the exact argv of the child and that the
+    /// `urp serve <game> --data <data> ...`. Check the exact argv of the child and that the
     /// printed URLs reach the library window.
     #[test]
     fn spawn_serve_runs_the_serve_subcommand_and_collects_urls() {

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""M5 gate: a browser (Playwright) plays a corpus game that `player serve` streams, input through the data channels only.
+"""M5 gate: a browser (Playwright) plays a corpus game that `urp serve` streams, input through the data channels only.
 
 Run with the Playwright venv (see harness/stream_probe.py header):
   export PLAYWRIGHT_BROWSERS_PATH=$(nix build --no-link --print-out-paths nixpkgs#playwright-driver.browsers) PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=true
@@ -71,7 +71,7 @@ class Mac:
             if u:
                 return u
             if self.proc.poll() is not None:
-                raise RuntimeError("player serve exited early:\n" + txt[-2000:])
+                raise RuntimeError("urp serve exited early:\n" + txt[-2000:])
             time.sleep(0.5)
         raise RuntimeError("no Stream URL")
 
@@ -189,9 +189,9 @@ def say_count(prog):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--host", choices=["mac", "artemis"], default="mac")
-    ap.add_argument("--player", default=os.path.join(REPO, "player/target/release/player"))
+    ap.add_argument("--player", default=os.path.join(REPO, "player/target/release/urp"))
     ap.add_argument("--corpus", default="/Users/aidanp/Projects/renpy_proj/corpus")
-    ap.add_argument("--remote-player", dest="remote_player", default="~/Projects/renpy_proj-remote/m5/player/target/release/player")
+    ap.add_argument("--remote-player", dest="remote_player", default="~/Projects/renpy_proj-remote/m5/player/target/release/urp")
     ap.add_argument("--remote-observe", dest="remote_observe", default="~/Projects/renpy_proj-remote/m5/harness/m5/zz_m5observe.rpy")
     ap.add_argument("--out", required=True)
     ap.add_argument("--port", type=int, default=18080)
@@ -199,7 +199,7 @@ def main():
     ap.add_argument("--headed", action="store_true")
     ap.add_argument("--url-host", help="replace the host of the printed URL (for example `artemis.stream_host` of local/hosts.toml)")
     ap.add_argument("--says", type=int, default=8, help="dialogue lines to advance through the data channel")
-    ap.add_argument("--extra", default="--latency-overlay", help="extra `player serve` options")
+    ap.add_argument("--extra", default="--latency-overlay", help="extra `urp serve` options")
     a = ap.parse_args()
     a.out = os.path.abspath(a.out)
     os.makedirs(a.out, exist_ok=True)

@@ -8,15 +8,16 @@ runtime report and an entry in `results`.
 Patch files: `<data>/patches/<fingerprint>/*.toml` and `<data>/patches/<game key>/*.toml`.
 A patch file with a sidecar (`<stem>.json`, key `state`) is loaded only when the state is `accepted`; `proposed`,
 `needs-human` and any other state are skipped (listed in `results["inactive"]`). `PLAYER_PATCHES_PROPOSED=1` also loads
-`proposed` ones (used by `player upgrade` to verify). A file without a sidecar is active.
+`proposed` ones (used by `urp upgrade` to verify). A file without a sidecar is active.
 A patch matches a node whose `PyCode` has the patch's `file` and `line` (the node's line or the
 first line of its code) and whose source hash starts with `original_hash`. The new source is
 compiled as plain Python 3 and replaces `code.source` and `code.bytecode`. The node, its name, the
 `.rpyc` files and saves are not touched.
 
-Environment: `PLAYER_PATCHES_APPLY_TEST=1` (set by `player patches <game> apply-test`) prints a
+Environment: `PLAYER_PATCHES_APPLY_TEST=1` (set by `urp patches <game> apply-test`) prints a
 summary, writes nothing else and exits after the patches are applied, before init and before any
-window. The exit code is 0 when every patch matched, 1 otherwise.
+window. The exit code is 0 when every patch matched, 1 otherwise. `PLAYER_PATCHES_APPLY_TEST=json` prints the
+`results` dict as one JSON line instead (`urp patches <game> apply-test --json`).
 """
 
 import hashlib
@@ -160,13 +161,20 @@ def on_script_loaded(settings):
         import traceback
 
         results["errors"].append("patch library failed: " + traceback.format_exc())
-        sys.stderr.write("player patches: patch library failed, the game starts unpatched:\n" + traceback.format_exc() + "\n")
+        sys.stderr.write("urp patches: patch library failed, the game starts unpatched:\n" + traceback.format_exc() + "\n")
 
     for t in results["errors"]:
-        sys.stderr.write("player patches: %s\n" % t)
+        sys.stderr.write("urp patches: %s\n" % t)
 
     for u in results["unmatched"]:
-        sys.stderr.write("player patches: not applied: %s: %s\n" % (u["patch"], u["reason"]))
+        sys.stderr.write("urp patches: not applied: %s: %s\n" % (u["patch"], u["reason"]))
+
+    if apply_test and os.environ.get("PLAYER_PATCHES_APPLY_TEST") == "json":
+        # `urp patches <game> apply-test --json`: the results dict as one line.
+        print(json.dumps(results))
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os._exit(0 if not results["unmatched"] and not results["errors"] else 1)
 
     if apply_test:
         print("fingerprint: %s" % results["fingerprint"])

@@ -95,14 +95,14 @@ Each entry is a **dotted** module name (for example `c"renpy.pygame.surface"`) a
 - `WgpuDraw` uses the platform functions `get_window().get_window_flags/set_position/resize`, `get_drawable_size`, `get_display_bounds`, `get_info` and `display.destroy`.
 - `WgpuDraw.screenshot(None)` returns a transparent surface: there is no readable back buffer. M1 screenshot evidence is `screencapture -l <windowid>` of the player window.
 
-## `player`
+## `player` crate (binary `urp`)
 
 ```
-player <game-dir> [--data <dir>] [--logdir <dir>] [--harness-script <file>] [--renderer <name>] [ren'py args]
+urp <game-dir> [--data <dir>] [--logdir <dir>] [--harness-script <file>] [--renderer <name>] [ren'py args]
 ```
 
 - `<game-dir>` is the project folder, its `game/` subfolder, or a `.app` bundle (the player uses `Contents/Resources/autorun/game`). Arguments the player does not know (for example `lint`) go to Ren'Py.
-- `--data` defaults to `~/Library/Application Support/renpy-player` on macOS. `--logdir` overrides `<data>/logs/<game key>`.
+- `--data` defaults to `~/Library/Application Support/universal-renpy-player` on macOS. `--logdir` overrides `<data>/logs/<game key>`.
 - It collects the `inittab()` of `engine`, `surface`, `platform`, `media` and `gfx`, mounts `LAYER_ZIP`, `COMMON_ZIP` and `STDLIB_ZIP`, and runs `_player.boot.main`. The exit code is Python's.
 - The working directory of the game is the project folder (Ren'Py's `basedir`), as in stock. A game that writes relative paths (SecretIsland writes `gameLog.txt`) writes there. The player itself never writes into the game folder or the project folder.
 - Run the screenshot gates with the release binary: the debug build renders too slowly for the harness settle times.
@@ -122,7 +122,7 @@ Decision: an in-process path map, not an OS-level virtual file system. MO2's USV
 - The working directory stays the base folder, as in stock, so relative paths still work and resolve through the map.
 - Rust crate `player/crates/vfs`: `pub struct Vfs`, `pub fn install(Vfs)`, `pub fn get() -> Option<&'static Vfs>`, `Vfs::resolve_read(&Path) -> Option<PathBuf>`, `Vfs::resolve_write(&Path) -> PathBuf`, `Vfs::list_dir(&Path) -> Vec<DirEntry>`, `Vfs::remove(&Path)`, `Vfs::rename(&Path, &Path)`. Python builtin `_player_vfs` exposes the same functions. `media` and `surface` resolve any path they open themselves through `vfs::get()`.
 - `player/engine/python/_player/vfs.py` patches `builtins.open`, `io.open`, `io.FileIO`, `os.open`, `os.stat`/`lstat`, `os.path.exists`/`isfile`/`isdir`/`getsize`/`getmtime`, `os.listdir`, `os.scandir`, `os.walk`, `os.remove`/`unlink`, `os.rename`/`replace`, `os.mkdir`/`makedirs`, `os.rmdir`, `shutil` helpers that bypass these. `_player.boot` installs it before `renpy.bootstrap`.
-- Mods: a mod folder has the same layout as the game base folder (`game/...`). Ren'Py loads mod `.rpy`/`.rpyc`/archives because the loader scans the union view. `player mods <game> list|enable|disable|order` edits `order.txt`.
+- Mods: a mod folder has the same layout as the game base folder (`game/...`). Ren'Py loads mod `.rpy`/`.rpyc`/archives because the loader scans the union view. `urp mods <game> list|enable|disable|order|install|remove` edit the mods (see `library` below).
 
 ## `text` (Python: `renpy.text.ftfont`, `renpy.text.hbfont`, `renpy.text.bidi`)
 
@@ -138,13 +138,64 @@ Pure-Rust text replaces the stock Cython FreeType/HarfBuzz modules and the LTR-o
 
 ## `library` (CLI and GUI)
 
-`player` subcommands: `player <game>` (run), `player serve <game>` (M5, reserved), `player scan <folder>...`, `player list`, `player mods ...`, `player report <game>`. Scanned folders and found games live in `<data>/library.toml`. `player` with no arguments opens the library window (egui on the existing winit/wgpu stack), which lists games with engine version, Ren'Py 7 status, mods and the pre-flight result, and launches a game as a child process.
+`urp` subcommands: `urp <game>` (run), `urp serve <game>`, `urp scan <folder>...`, `urp list`, `urp library folders|remove <game|folder>`, `urp mods <game> ...`, `urp settings get|set`, `urp patches <game> ...`, `urp report <game>`. Scanned folders and found games live in `<data>/library.toml`. `urp` with no arguments (or only `--data <dir>`) opens the library window (egui on the existing winit/wgpu stack; no Python in that process). The CLI and the window share the Rust API of the `library` crate (below); patch logic stays in the `player` crate (`apply-test` boots the engine), so the window shells out to `urp patches ... --json`.
+
+### Library window (`library/src/gui.rs`, `gui/*.rs`)
+
+- Layout: a top bar (title, **Add folder...**, **Rescan**, **Settings**, one status message line), the game list on the left (icon, name, engine version, Ren'Py 7 mark, `mods enabled/installed`, last pre-flight status, running/streaming), and a detail pane on the right for the selected game with the tabs **Overview**, **Mods** and **Patches**.
+- **Overview**: path, engine version, Ren'Py 7 badge, pre-flight status, mods count; **Play**, **Stream** / **Stop stream** (with the URLs and a Copy button), **Report**, **Open folder**; **Remove from library...** (confirm dialog; `Library::remove_game`; the game's files are never touched). Play and Stream start `urp <game> --data <data>` and `urp serve <game> --data <data>` as children.
+- **Mods** (`mods::list`): one row per mod, highest priority first (the end of `order.txt`), with an enable checkbox, Up/Down (`mods::set_order`) and Remove (confirm; `mods::remove`). Disabled mods follow. **Install mod from file...** (picker limited to the `mods::archive_formats()` suffixes), **Install mod from folder...**, and dropping a file or folder on the window (egui-winit turns `WindowEvent::DroppedFile` into `raw.dropped_files`; only with a game selected, only the first item) all start the same two steps: `mods::plan_install` on a worker thread (spinner), then a confirm dialog (editable mod name via `InstallPlan::set_name`, `Layout::describe()`, file count, unpacked size, scrollable destination list), then `mods::install` on a worker thread. Errors show inside the dialog.
+- **Patches**: runs `urp patches <game> list --json` the first time the tab opens, plus **List**, **Validate** (`validate --json`) and **Apply test** (`apply-test --json`, async with a spinner; boots the engine headless) on request. The tab shows fingerprint, patches (`file:line`, patch file and index, original hash), inactive patch files with their state, errors, and for apply-test the applied and unmatched patches. An inactive patch in state `proposed` has an **Accept** button that runs `urp patches <game> accept <id>` (`<id>` = patch file name without `.toml`) and then lists again. Exit code 1 with valid JSON is a result, not a failure.
+- **Settings** dialog: scanned folders (list, **Add folder...**, Remove with confirm via `Library::remove_folder`), renderer (`Default`, `wgpu`, `sw`: the draw backends `--renderer` accepts, written to `Settings.renderer`) and the stream defaults (port, size, fps, kbps). **Save** validates with `Settings::set` and writes `<data>/settings.toml`; the child processes read that file themselves.
+- Worker threads send results to the UI thread over a channel; the event loop wakes every 50 ms while one runs, else every 500 ms.
+- Test hook (no input injection needed for screenshots): env `URP_GUI_PREVIEW`, comma-separated `game=<index>`, `tab=overview|mods|patches`, `dialog=settings`, `install=<path>`, `run=validate|apply-test`, sets the initial state.
+
+### Library (`library::Library`, `library.toml`)
+
+- `Library { folders, games, hidden: Vec<PathBuf> }` (`hidden` is omitted from the file when empty). `rescan()` drops games whose path is in `hidden`.
+- `remove_game(path_or_key_or_name: &str) -> Result<Game>`: drops the entry and adds its path to `hidden`, so rescans skip it. The name only works when one game has it. `remove_folder(&Path) -> Result<Vec<Game>>`: drops a scanned folder and rescans; the returned games were reachable only through it. `add_folders` (`urp scan <folder>`) removes every `hidden` path below a folder it adds, so re-adding a folder brings its games back. Neither call touches any game or folder on disk.
+- CLI: `urp library folders` (one absolute path per line), `urp library remove <game|folder>` (a stored folder path wins over a game of that name), `urp list`, `urp scan`.
+
+### Settings (`library::Settings`, `<data>/settings.toml`)
+
+```toml
+renderer = "gl"        # omitted = the game picks (`--renderer`)
+[stream]
+port = 8080            # 0 = pick a free port
+size = [1920, 1080]
+fps = 60
+kbps = 8000
+```
+
+- Missing file or key = default; the defaults are the former built-in defaults of `urp serve`. Unknown keys are an error. `Settings::load/save`, `get(key) -> Result<String>`, `set(key, value)`, `library::settings::{KEYS, parse_size}`.
+- `urp <game>` passes `--renderer <settings.renderer>` unless the command line has `--renderer`; `urp serve` takes port, size, fps and kbps from the settings unless a flag gives them. The data folder is the one of `--data`. The window starts both as child processes with `--data`, so they read the same file.
+- CLI: `urp settings get [<key>]` (all keys as `key = value` when no key), `urp settings set <key> <value>`. Keys: `renderer` (`default` or empty unsets it), `stream.port`, `stream.size` (`WxH`), `stream.fps`, `stream.kbps`.
+
+### Mods (`library::mods`)
+
+A mod is `<data>/mods/<game key>/<mod>/` with the layout of the game's base folder; `order.txt` lists the enabled mods (last line wins). API (`data: &Path`, `key: &str` = `library::game_key(game path)`):
+
+- `list(data, key) -> Result<Vec<ModEntry>>`; `ModEntry { name, state: Enabled | Missing | Disabled, order: Option<usize> }` (enabled and missing ones in `order.txt` order, then disabled ones by name), `enable(data, key, &[String])` (appends; highest priority), `disable`, `set_order` (replaces `order.txt`), `remove` (deletes the folder and the `order.txt` lines), `check_name(&str)`.
+- `plan_install(data, key, source: &Path) -> Result<InstallPlan>` and `install(&InstallPlan) -> Result<()>`. The source is a folder or a `.zip`, `.tar.gz`/`.tgz`, `.tar.xz`/`.txz`, `.tar.zst`/`.tzst`, `.tar`, `.7z`, or `.rar` (feature `rar`; `archive_formats()` lists what this build reads). `InstallPlan { data, key, name, source, layout: Layout, files: Vec<String>, unpacked_bytes }`: `name` defaults to the file or folder name without its archive suffix (`set_name` changes it and checks it), `files` are destination paths relative to the mod folder, `layout` is `Keep | Strip(folder) | UnderGame`. Planning only reads.
+- Layout rule: `game/` at the root keeps the layout; one top-level folder that holds `game/` is stripped; anything else (loose `.rpy`, `.rpyc`, `.rpa`, images) goes under `game/`. `__MACOSX/`, `._*` (AppleDouble), `.DS_Store` and `Thumbs.db` are dropped.
+- Rejected: absolute paths, `..`, `:` and NUL in a name, every kind of link, device files, encrypted or multi-volume RAR/7z/zip content, and a source that declares or unpacks to more than `MAX_UNPACKED_BYTES` (64 GiB).
+- `install` fails when `<data>/mods/<key>/<name>/` exists. It extracts into `.installing-<name>-<pid>` beside it and renames at the end (nothing is left behind on failure), then **enables** the mod (appended to `order.txt`).
+- `rar` is a Cargo feature of `library` and `player` (`player` default: `["wayland", "rar"]`). It links UnRAR (Alexander Roshal's freeware licence, extraction only; THIRD_PARTY.md). Without it a `.rar` source is an error that says so.
+- CLI: `urp mods <game> list [--json]`, `enable|disable|order|remove <mod>...`, `install <folder|archive> [--name <n>] [--yes]`. `install` prints the plan (destination, layout, file count, files) and asks `[y/N]` on a terminal; without a terminal it fails unless `--yes`. `list` prints `name<TAB>state[<TAB>order]`.
+
+### `--json` outputs
+
+All print one JSON document on stdout; diagnostics stay on stderr.
+
+- `urp mods <game> list --json`: `[{"name": "a", "state": "enabled" | "missing" | "disabled", "order": 1 | null}]`.
+- `urp patches <game> list --json` and `validate --json`: `{"fingerprint": "<16 hex>" | null, "files": ["<path>"], "patches": [{"origin": "<path>", "index": 1, "file": "game/x.rpy", "line": 12, "original_hash": "<hex>"}], "inactive": [{"path": "<path>", "state": "<sidecar state>"}], "errors": ["<message>"], "ok": true}`. Exit code 1 when `errors` is not empty.
+- `urp patches <game> apply-test --json`: the `results` dict of `_player.patches` on one line: `{"fingerprint", "dirs": [], "files": [], "inactive": [], "applied": [{"patch", "file", "line", "node"}], "unmatched": [{"patch", "file", "line", "reason"}], "errors": []}`. Exit code 1 when anything is unmatched or failed. The child runs with `PLAYER_PATCHES_APPLY_TEST=json`.
 
 ## M2 additions (merged)
 
 - `gfx`: `renpy.gl2.wgpudraw.gpu_memory_bytes() -> int | None` (Metal: `recommendedMaxWorkingSetSize`; other backends None). `screenshot(None)` draws the last surface tree, so save thumbnails are real. Shader programs are translated after `ShaderCache.load()` and their pipelines build on background threads.
 - `platform`: joysticks and controllers through gilrs with SDL numbering. Gap: gilrs gives no raw element lists, so `Joystick` axis and button counts grow as elements are seen, and hats and balls are 0.
-- `saves` (merged): player saves live in `<data>/saves/<sanitized config.save_directory>/`, not `<game key>`. The import marker is `<data>/reports/<game key>/stock-import.json`. Stock sources are `$RENPY_PATH_TO_SAVES` (default `~/Library/RenPy`)`/<save_directory>` and `<game>/saves`. `PLAYER_NO_STOCK_IMPORT=1` turns the import off. `preflight.json` has top-level `status` (`ok`, `warning` or `blocked`), `renpy7` and `engine_version`. `game.txt` beside it maps the report to the game folder for `player report`. The player trusts the signing keys of saves and `persistent` it imported.
+- `saves` (merged): player saves live in `<data>/saves/<sanitized config.save_directory>/`, not `<game key>`. The import marker is `<data>/reports/<game key>/stock-import.json`. Stock sources are `$RENPY_PATH_TO_SAVES` (default `~/Library/RenPy`)`/<save_directory>` and `<game>/saves`. `PLAYER_NO_STOCK_IMPORT=1` turns the import off. `preflight.json` has top-level `status` (`ok`, `warning` or `blocked`), `renpy7` and `engine_version`. `game.txt` beside it maps the report to the game folder for `urp report`. The player trusts the signing keys of saves and `persistent` it imported.
 - `surface` (merged): `renpy.pygame.image` also exports `prefetch`, `prefetch_clear`, `prefetch_shutdown` and `prefetch_stats` (the image loader pool). Engine patches 0100-0103 hook it into `Cache.preload_image` and the final predict. The image cache is sized from `gpu_memory_bytes()` unless the game sets `config.image_cache_size_mb`.
 - `vfs` (merged): `Vfs::list_dir` returns `io::Result`. Extra API: `prepare_write`, `mkdir`, `rmdir`, `layer_dirs`, `is_virtual`, `read_order`, `write_order`, `game_key`, `resolve_game`. `_player.boot` changes the working directory to the base folder before it installs the vfs. Not virtual: bytes paths, file descriptors, `dir_fd` and `os.fwalk`; symlinks from outside into the base folder; a whiteout of one module file for the import hook. The mod list is fixed at start. `media` resolves the paths it opens itself through `vfs::get()`.
 - `text` (merged): pure-Rust `renpy.text.ftfont`, `hbfont` and `bidi` (skrifa, rustybuzz, unicode-bidi). FreeType and HarfBuzz are no longer linked. Known differences from stock: 1 px hinted-advance differences for some CFF glyphs under autohint; synthesized vertical metrics for fonts without `vmtx`; color bitmap and COLR glyphs are blank; `antialias=False` thresholds coverage at 128.
@@ -162,7 +213,7 @@ Added for "M3: Ren'Py 7 games via the Python 2 compatibility module" (issue #36)
 
 `player/engine/python/_player/compat/` (package). Active only when `renpy7` is true. It ports prototype items 2-5, 7-9: the AST Python 2 semantics pass hooked in front of `renpy.python.wrap_node` for game code only; `exec` in functions; the error-driven mixed-type ordering fix with rollback and retry (it calls `renpy.ui.reset()` first: an error inside a screen update leaves the ui widget stack open, and the retry would fail with `ui.interact called with non-empty widget/layer stack`); Ren'Py 7 engine differences (`images/` search prefix, decompiler stubs, `.rpyc` pickle-helper failures skipped and logged); the loose `.py` import hook; the rules version folded into every compile cache key. Script-parser leniencies are the syntax slice's (below). After init it sets `layout.yesno_prompt` when the game did not (Ren'Py 8 asks the save-trust question for a save with an unknown signing key through that name): the game's `confirm` or `yesno_prompt` screen, else the player screen `_py2c_yesno`. The answer is always the user's. A fixed runtime error is written to the runtime report, not `traceback.txt`, and shown once in game as a notice. An unfixed error follows stock behavior (`traceback.txt` in the log dir). The ordering fix keys a fixed site by file, name and the first line of the failing node's code block (module-level code objects all have `co_firstlineno` 1), so several failing module-level blocks in one file each get one fix.
 
-Runtime report: `<data>/reports/<game key>/runtime.jsonl`, one JSON object per event: `{"time", "kind": "rewrite"|"fix"|"syntax"|"patch"|"skip"|"media", "file", "line", "detail"}`. `player report` prints a summary of it after the pre-flight report. A `media` event (file, detail) marks a movie the player could not show (an unsupported pixel format, a decode failure); the gate fails a launch whose report has one.
+Runtime report: `<data>/reports/<game key>/runtime.jsonl`, one JSON object per event: `{"time", "kind": "rewrite"|"fix"|"syntax"|"patch"|"skip"|"media", "file", "line", "detail"}`. `urp report` prints a summary of it after the pre-flight report. A `media` event (file, detail) marks a movie the player could not show (an unsupported pixel format, a decode failure); the gate fails a launch whose report has one.
 
 ## Syntax fixer (`py2fix`)
 
@@ -182,9 +233,9 @@ Lexi.name = _("PatchedGirl")
 '''
 ```
 
-Rust parses and validates; Python applies after load and before the first init block, replacing `code.source` and `code.bytecode` of the matched `PyCode` in memory. Mismatches are reported with the hash found. Patch file overrides (whole files) are the vfs `patches/<game key>/files/` layer. CLI: `player patches <game> list|validate|apply-test` (`apply-test` loads the game headless, as `lint` does, and reports which patches match).
+Rust parses and validates; Python applies after load and before the first init block, replacing `code.source` and `code.bytecode` of the matched `PyCode` in memory. Mismatches are reported with the hash found. Patch file overrides (whole files) are the vfs `patches/<game key>/files/` layer. CLI: `urp patches <game> list|validate|apply-test [--json]` (`apply-test` loads the game headless, as `lint` does, and reports which patches match).
 - `compat` (M3, merged): `_player.compat.fingerprint()` (prototype algorithm; skips the harness script), `event(kind, file=None, line=None, detail="")` (the single `runtime.jsonl` writer; the file is emptied at the first event of each process, so it records the last run), `plain_python3()` (context manager: the Python 2 pass stays off, used when patch source compiles).
-- `patches` (M3, merged): entry fields are only `file`, `line`, `original_hash` (`sha1:` plus 8 to 40 hex digits) and `source`; unknown fields are errors. `<data>/reports/<key>/patches.json` holds results and the fingerprint. `PLAYER_PATCHES_APPLY_TEST=1` makes the player exit after applying patches and write no report or events (used by `player patches <game> apply-test`).
+- `patches` (M3, merged): entry fields are only `file`, `line`, `original_hash` (`sha1:` plus 8 to 40 hex digits) and `source`; unknown fields are errors. `<data>/reports/<key>/patches.json` holds results and the fingerprint. `PLAYER_PATCHES_APPLY_TEST=1` makes the player exit after applying patches and write no report or events (used by `urp patches <game> apply-test`).
 - `compat` notice: `PLAYER_COMPAT_NOTICE=off` hides the in-game notice; events are still written to `runtime.jsonl`.
 - `text` (M3): FreeType's kern-table pair limit is reproduced. For Ren'Py 7 games, patches 0900 (FreeType shaper default up to 7.7) and 0901 (Ren'Py 7 glyph overlap blend) apply. Patch 0902 (Ren'Py 7 games whose `config.script_version` is unknown or older than 7.8.3; upstream added the block in 7.8.3 and 8.3.3, renpy issue #5827) keeps the pops of the "End an obsolete ongoing transition" block in `Interface.interact_core` but does not set `restart_interaction`: Ren'Py 7 before 7.8.3 never restarted there, and the restart evaluated every shown screen a second time when `config.enter_transition` ended (LuckyParadox's main menu re-rolled its background 0.5 s after it appeared).
 
@@ -308,13 +359,13 @@ Details fixed by the implementation (no interface change):
 - The answer SDP is rewritten so audio and video share one stream id (str0m picks random ids per m-line); the page also puts both tracks in one `MediaStream`.
 - Page: `?hud=0` hides the status line; `window.__stream` also has `connect()`, `state()`, `sdp`, `pc()`, `video`.
 
-## `player serve` and the library button (owner: orchestrator)
+## `urp serve` and the library button (owner: orchestrator)
 
 ```
-player serve <game-dir> [--bind <addr>] [--port <n>] [--size <WxH>] [--fps <n>] [--kbps <n>] [--encoder <name>] [--latency-overlay] [--data <dir>] [--harness-script <file>] [ren'py args]
+urp serve <game-dir> [--bind <addr>] [--port <n>] [--size <WxH>] [--fps <n>] [--kbps <n>] [--encoder <name>] [--latency-overlay] [--data <dir>] [--harness-script <file>] [ren'py args]
 ```
 
-Headless (no window, no audio device): prints `Stream URL: http://<ip>:<port>/` for each LAN address, runs until the game quits or Ctrl-C. The library window's Stream button launches `player serve` as a child process, shows the URL and a Stop button.
+Headless (no window, no audio device): prints `Stream URL: http://<ip>:<port>/` for each LAN address, runs until the game quits or Ctrl-C. `--port`, `--size`, `--fps` and `--kbps` default to `urp settings` (`stream.*`; built-in 8080, 1920x1080, 60, 8000). The library window's Stream button launches `urp serve` as a child process, shows the URL and a Stop button.
 
 
 ## M5 integration notes (orchestrator)
@@ -323,7 +374,7 @@ Headless (no window, no audio device): prints `Stream URL: http://<ip>:<port>/` 
 - A repeated picture sent so the browser releases its last decoder frame ("flush", 2 frame periods after a changed frame) keeps that picture's timecode; the keepalive (default every 100 ms while the picture is static, `STREAM_KEEPALIVE_MS`) restamps it. A 1 s keepalive made Chromium's video jitter buffer grow to 1.4 s over NetBird (sparse frames look like network jitter), so the gate runs at 100 ms; a static VideoToolbox picture then costs about 0.3 Mbit/s. The page counts each timecode once.
 - Headless extras (`gfx`/`media`/`platform`): `renpy.gl2.wgpudraw.dump_frames(dir, every_n)`, `capture_stats()`, `bench_capture(w, h, n)`; `Gpu.is_offscreen()`. `platform::inject::wheel(dx, dy)` is in lines with positive dy = up (the page sends negated DOM deltas). Test hooks `renpy.pygame.event._inject_for_test`, `renpysound._tap_install_for_test` and `_tap_stats_for_test` need env `PLAYER_TEST_INJECT=1`. `PLAYER_HEADLESS=1` also selects the dummy audio device. A headless window defaults to 1280x720 until the game asks for a size.
 - Stream crate backends: `aws-lc-rs` on macOS and Linux, `wincrypto` on Windows. Per-interface UDP sockets for a wildcard bind. `STREAM_NO_AUDIO=1` drops audio (debug switch).
-- `player serve` pass the game as `<base>/game` (the project root makes the player load the game's own `renpy/common`).
+- `urp serve` pass the game as `<base>/game` (the project root makes the player load the game's own `renpy/common`).
 - Gate: `harness/m5/gate_m5.py` (Playwright, data-channel input only), observer script `harness/m5/zz_m5observe.rpy`; results in `harness/M5-status.md`.
 
 # M6 contracts
@@ -332,16 +383,16 @@ Added for "M6: AI upgrade pass for Ren'Py 7 games" (issue #39). Design: issue #2
 
 ## Patch states (sidecar)
 
-- A patch file `<id>.toml` may have a sidecar `<id>.json` (same folder, same stem) with `state`. The patch loader (`patches::load_dirs`, `_player_patches.load_dirs`) reads a file only when it has **no sidecar** (hand-written patches, as in M3) or the state is **`accepted`**. `proposed`, `needs-human` and every other value are skipped, and so is a sidecar that does not parse. Skipped files are listed in `Library.inactive` / `results["inactive"]` (`patches.json`) and by `player patches <game> list` as `inactive<TAB>state<TAB>path`.
-- `PLAYER_PATCHES_PROPOSED=1` also loads `proposed` files. Only `player upgrade` verification and `harness/gate.py --with-proposed` set it.
-- The id of a patch is its file stem. `player upgrade` names it after the error (`<game key without punctuation>-NN`).
-- Sidecar fields written by `player upgrade`: `state`, `error_id`, `game`, `model`, `prompt_sha256_16` (first 16 hex digits of the SHA-256 of the prompt messages), `attempts`, `explanation`, `file`, `line`, `original_hash`, `gate` (the full-tier result, or `"skipped (--no-gate)"`), `verification` (load check, reproduction on the unpatched game, path of the verification log), `created`, `attempt_dir`. A `needs-human` sidecar has `failures` instead. `accepted_at_unix` is added on accept.
+- A patch file `<id>.toml` may have a sidecar `<id>.json` (same folder, same stem) with `state`. The patch loader (`patches::load_dirs`, `_player_patches.load_dirs`) reads a file only when it has **no sidecar** (hand-written patches, as in M3) or the state is **`accepted`**. `proposed`, `needs-human` and every other value are skipped, and so is a sidecar that does not parse. Skipped files are listed in `Library.inactive` / `results["inactive"]` (`patches.json`) and by `urp patches <game> list` as `inactive<TAB>state<TAB>path`.
+- `PLAYER_PATCHES_PROPOSED=1` also loads `proposed` files. Only `urp upgrade` verification and `harness/gate.py --with-proposed` set it.
+- The id of a patch is its file stem. `urp upgrade` names it after the error (`<game key without punctuation>-NN`).
+- Sidecar fields written by `urp upgrade`: `state`, `error_id`, `game`, `model`, `prompt_sha256_16` (first 16 hex digits of the SHA-256 of the prompt messages), `attempts`, `explanation`, `file`, `line`, `original_hash`, `gate` (the full-tier result, or `"skipped (--no-gate)"`), `verification` (load check, reproduction on the unpatched game, path of the verification log), `created`, `attempt_dir`. A `needs-human` sidecar has `failures` instead. `accepted_at_unix` is added on accept.
 
-## `player patches <game> ... accept <id>`
+## `urp patches <game> ... accept <id>`
 
-`player patches <game> accept <id> [--data <dir>]` sets the state of `<id>` from `proposed` to `accepted` after it parses without errors. Any other state is an error (`needs-human` and unverified patches are never accepted). A patch without a sidecar is already active.
+`urp patches <game> accept <id> [--data <dir>]` sets the state of `<id>` from `proposed` to `accepted` after it parses without errors. Any other state is an error (`needs-human` and unverified patches are never accepted). A patch without a sidecar is already active.
 
-## `player upgrade <game> [options]`
+## `urp upgrade <game> [options]`
 
 A maintainer command. It runs `harness/upgrade.py` with this executable as the player (`PLAYER_HARNESS_DIR` or the repository found from the executable or the working directory; `PLAYER_PYTHON`, default `python3`, must be Python 3.12: use `nix develop .#player`). One implementation of the gate, the machine lock and the stock baselines. Options: `--errors <dir>` (error folders of a deep run), `--error <id>`, `--data <dir>` (patch library and `upgrade/` state; default is the player data folder), `--endpoint`, `--model`, `--tries 3`, `--token-cap 12000`, `--no-gate`, `--dry-run`, `--stock-out <dir>`.
 

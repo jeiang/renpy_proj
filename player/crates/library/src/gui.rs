@@ -1,14 +1,13 @@
 //! The library window: egui on winit and wgpu (Metal on macOS). No Python runs in this process. Playing a
-//! game starts `player <game> --data <data>` as a child process.
+//! game starts `urp <game> --data <data>` as a child process.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Child;
-use std::sync::Arc;
+use std::sync::{Arc, mpsc};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, anyhow};
-use egui::{Color32, RichText};
 use wgpu::{
     CurrentSurfaceTexture, DeviceDescriptor, Instance, InstanceDescriptor, Limits, LoadOp,
     Operations, PowerPreference, PresentMode, RenderPassColorAttachment, RenderPassDescriptor,
@@ -22,7 +21,15 @@ use winit::window::{Window, WindowId};
 
 use crate::config::{Game, Library};
 use crate::launch::{Serve, spawn_player, spawn_serve};
+use crate::mods::{self, InstallPlan, ModEntry};
+use crate::settings::Settings;
 use crate::status::{ModsInfo, Preflight, mods_info, preflight};
+
+mod dialogs;
+mod patches;
+mod tabs;
+
+use patches::Report;
 
 const REFRESH: Duration = Duration::from_secs(2);
 
@@ -46,6 +53,22 @@ enum Action {
     OpenFolder(usize),
     AddFolder,
     Rescan,
+    Select(String),
+    RemoveGame(String),
+    /// Mod of the selected game: name, enable (else disable).
+    ModEnable(String, bool),
+    /// Mod of the selected game: name, steps in `order.txt` (-1 = lower priority).
+    ModMove(String, isize),
+    ModRemove(String),
+    /// Opens the picker for a folder (true) or an archive file (false).
+    PickMod(bool),
+    PlanInstall(PathBuf),
+    CommitInstall,
+    Patches(&'static str),
+    AcceptPatch(String),
+    OpenSettings,
+    SaveSettings,
+    RemoveFolder(PathBuf),
 }
 
 struct Gpu {
@@ -58,6 +81,101 @@ struct Gpu {
     state: egui_winit::State,
 }
 
+/// What the right-hand pane of the selected game shows.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Tab {
+    Overview,
+    Mods,
+    Patches,
+}
+
+/// A destructive step that waits for a click on a confirm dialog.
+enum Confirm {
+    Game { key: String, name: String },
+    Mod(String),
+    Folder(PathBuf),
+}
+
+/// The install dialog: plan on a worker thread, confirm, extract on a worker thread.
+enum Install {
+    Planning(PathBuf),
+    Confirm {
+        plan: Box<InstallPlan>,
+        name: String,
+        error: String,
+    },
+    Installing(String),
+    Failed(String),
+}
+
+/// The Settings dialog's text fields. They are checked by `Settings::set` when saved.
+struct SettingsDraft {
+    /// Empty = "Default".
+    renderer: String,
+    port: String,
+    width: String,
+    height: String,
+    fps: String,
+    kbps: String,
+    error: String,
+}
+
+impl SettingsDraft {
+    fn new(s: &Settings) -> SettingsDraft {
+        SettingsDraft {
+            renderer: s.renderer.clone().unwrap_or_default(),
+            port: s.stream.port.to_string(),
+            width: s.stream.size.0.to_string(),
+            height: s.stream.size.1.to_string(),
+            fps: s.stream.fps.to_string(),
+            kbps: s.stream.kbps.to_string(),
+            error: String::new(),
+        }
+    }
+
+    /// Checks every field and writes `<data>/settings.toml`.
+    fn save(&self, data: &Path) -> Result<()> {
+        let mut s = Settings::load(data)?;
+        s.set("renderer", &self.renderer)?;
+        s.set("stream.port", &self.port)?;
+        s.set(
+            "stream.size",
+            &format!("{}x{}", self.width.trim(), self.height.trim()),
+        )?;
+        s.set("stream.fps", &self.fps)?;
+        s.set("stream.kbps", &self.kbps)?;
+        s.save(data)
+    }
+}
+
+/// What the Patches tab knows about one game.
+#[derive(Default)]
+struct PatchView {
+    /// The last `list` or `validate` result, and which of the two it was.
+    list: Option<(&'static str, Report)>,
+    apply: Option<Report>,
+    /// The `urp patches` subcommand that runs right now.
+    busy: Option<&'static str>,
+    requested: bool,
+    error: String,
+    note: String,
+}
+
+/// Results of worker threads, handled on the UI thread.
+enum Msg {
+    Plan(Result<InstallPlan, String>),
+    Installed(Result<(), String>),
+    Patches {
+        key: String,
+        sub: &'static str,
+        result: Result<Report, String>,
+    },
+    Accepted {
+        key: String,
+        result: Result<String, String>,
+    },
+}
+
 struct App {
     data: PathBuf,
     player: PathBuf,
@@ -68,6 +186,17 @@ struct App {
     streams: Vec<(String, Serve)>,
     icons: HashMap<PathBuf, Option<egui::TextureHandle>>,
     message: String,
+    /// Key of the game shown in the right-hand pane.
+    selected: Option<String>,
+    tab: Tab,
+    mods: Vec<ModEntry>,
+    mods_error: String,
+    patches: HashMap<String, PatchView>,
+    settings: Option<SettingsDraft>,
+    confirm: Option<Confirm>,
+    install: Option<Install>,
+    tx: mpsc::Sender<Msg>,
+    rx: mpsc::Receiver<Msg>,
     gpu: Option<Gpu>,
     ctx: egui::Context,
     fatal: Option<anyhow::Error>,
@@ -75,6 +204,7 @@ struct App {
 
 impl App {
     fn new(data: PathBuf, player: PathBuf, library: Library) -> App {
+        let (tx, rx) = mpsc::channel();
         let mut app = App {
             data,
             player,
@@ -85,12 +215,188 @@ impl App {
             streams: Vec::new(),
             icons: HashMap::new(),
             message: String::new(),
+            selected: None,
+            tab: Tab::Overview,
+            mods: Vec::new(),
+            mods_error: String::new(),
+            patches: HashMap::new(),
+            settings: None,
+            confirm: None,
+            install: None,
+            tx,
+            rx,
             gpu: None,
             ctx: egui::Context::default(),
             fatal: None,
         };
         app.refresh_status();
+        app.preview();
         app
+    }
+
+    /// Test hook for screenshots on a machine without input injection: `URP_GUI_PREVIEW` is a comma-separated
+    /// list of `game=<index>`, `tab=overview|mods|patches`, `dialog=settings`, `install=<path>` and
+    /// `run=validate|apply-test`.
+    fn preview(&mut self) {
+        let Ok(spec) = std::env::var("URP_GUI_PREVIEW") else {
+            return;
+        };
+        for item in spec.split(',') {
+            match item.split_once('=') {
+                Some(("game", n)) => {
+                    if let Some(g) = n
+                        .parse()
+                        .ok()
+                        .and_then(|n: usize| self.library.games.get(n))
+                    {
+                        self.select(g.key.clone());
+                    }
+                }
+                Some(("tab", "mods")) => self.tab = Tab::Mods,
+                Some(("tab", "patches")) => self.tab = Tab::Patches,
+                Some(("dialog", "settings")) => self.open_settings(),
+                Some(("install", p)) => self.perform(Action::PlanInstall(PathBuf::from(p))),
+                Some(("run", "validate")) => self.perform(Action::Patches("validate")),
+                Some(("run", "apply-test")) => self.perform(Action::Patches("apply-test")),
+                _ => {}
+            }
+        }
+    }
+
+    fn select(&mut self, key: String) {
+        if self.selected.as_ref() != Some(&key) {
+            self.selected = Some(key);
+            self.refresh_mods();
+        }
+    }
+
+    fn selected_index(&self) -> Option<usize> {
+        let key = self.selected.as_ref()?;
+        self.library.games.iter().position(|g| g.key == *key)
+    }
+
+    fn open_settings(&mut self) {
+        match Settings::load(&self.data) {
+            Ok(s) => self.settings = Some(SettingsDraft::new(&s)),
+            Err(e) => self.message = format!("{e:#}"),
+        }
+    }
+
+    fn refresh_mods(&mut self) {
+        let Some(g) = self.selected_index().map(|i| &self.library.games[i]) else {
+            self.mods.clear();
+            self.mods_error.clear();
+            return;
+        };
+        match mods::list(&self.data, &g.key) {
+            Ok(l) => {
+                self.mods = l;
+                self.mods_error.clear();
+            }
+            Err(e) => {
+                self.mods.clear();
+                self.mods_error = format!("{e:#}");
+            }
+        }
+    }
+
+    /// True while a worker thread runs (the window then wakes more often).
+    fn busy(&self) -> bool {
+        matches!(
+            self.install,
+            Some(Install::Planning(_) | Install::Installing(_))
+        ) || self.patches.values().any(|p| p.busy.is_some())
+    }
+
+    /// Runs `f` on a thread and sends its result to the UI thread.
+    fn spawn(&self, f: impl FnOnce() -> Msg + Send + 'static) {
+        let (tx, ctx) = (self.tx.clone(), self.ctx.clone());
+        std::thread::spawn(move || {
+            let _ = tx.send(f());
+            ctx.request_repaint();
+        });
+    }
+
+    fn run_patches(&mut self, sub: &'static str) {
+        let Some(g) = self.selected_index().map(|i| self.library.games[i].clone()) else {
+            return;
+        };
+        let view = self.patches.entry(g.key.clone()).or_default();
+        if view.busy.is_some() {
+            return;
+        }
+        view.busy = Some(sub);
+        view.requested = true;
+        view.error.clear();
+        let (exe, data) = (self.player.clone(), self.data.clone());
+        self.spawn(move || Msg::Patches {
+            key: g.key,
+            sub,
+            result: patches::run(&exe, &g.path, &data, sub),
+        });
+    }
+
+    /// Applies the results of finished worker threads.
+    fn poll_workers(&mut self) {
+        while let Ok(msg) = self.rx.try_recv() {
+            match msg {
+                Msg::Plan(result) => {
+                    if matches!(self.install, Some(Install::Planning(_))) {
+                        self.install = Some(match result {
+                            Ok(plan) => Install::Confirm {
+                                name: plan.name.clone(),
+                                plan: Box::new(plan),
+                                error: String::new(),
+                            },
+                            Err(e) => Install::Failed(e),
+                        });
+                    }
+                }
+                Msg::Installed(result) => {
+                    let name = match &self.install {
+                        Some(Install::Installing(n)) => n.clone(),
+                        _ => String::new(),
+                    };
+                    match result {
+                        Ok(()) => {
+                            self.install = None;
+                            self.message = format!("Installed mod {name}");
+                        }
+                        Err(e) => self.install = Some(Install::Failed(e)),
+                    }
+                    self.refresh_mods();
+                    self.refresh_status();
+                }
+                Msg::Patches { key, sub, result } => {
+                    let view = self.patches.entry(key).or_default();
+                    view.busy = None;
+                    match result {
+                        Ok(r) if sub == "apply-test" => view.apply = Some(r),
+                        Ok(r) => view.list = Some((sub, r)),
+                        Err(e) => view.error = e,
+                    }
+                }
+                Msg::Accepted { key, result } => {
+                    let view = self.patches.entry(key.clone()).or_default();
+                    match result {
+                        Ok(line) => {
+                            view.note = line;
+                            if self.selected.as_ref() == Some(&key) {
+                                self.run_patches("list");
+                            }
+                        }
+                        Err(e) => view.error = e,
+                    }
+                }
+            }
+        }
+    }
+
+    fn save_library(&mut self) -> String {
+        match self.library.save(&self.data) {
+            Ok(()) => format!("{} games in the library", self.library.games.len()),
+            Err(e) => format!("{e:#}"),
+        }
     }
 
     fn refresh_status(&mut self) {
@@ -106,10 +412,12 @@ impl App {
             })
             .collect();
         self.status_at = Instant::now();
+        self.refresh_mods();
     }
 
     /// Drops finished children and reports a failed exit.
     fn reap(&mut self) {
+        self.poll_workers();
         let mut done = Vec::new();
         self.running
             .retain_mut(|(key, child)| match child.try_wait() {
@@ -223,12 +531,165 @@ impl App {
             }
             Action::Rescan => {
                 self.library.rescan();
-                self.message = match self.library.save(&self.data) {
-                    Ok(()) => format!("{} games in the library", self.library.games.len()),
-                    Err(e) => format!("{e:#}"),
-                };
+                self.message = self.save_library();
                 self.refresh_status();
             }
+            Action::Select(key) => self.select(key),
+            Action::RemoveGame(key) => match self.library.remove_game(&key) {
+                Ok(g) => {
+                    self.patches.remove(&g.key);
+                    if self.selected.as_ref() == Some(&g.key) {
+                        self.selected = None;
+                        self.refresh_mods();
+                    }
+                    let saved = self.save_library();
+                    self.message = format!(
+                        "Removed {} from the library; its files were not touched. {saved}",
+                        g.name
+                    );
+                    self.refresh_status();
+                }
+                Err(e) => self.message = format!("{e:#}"),
+            },
+            Action::ModEnable(name, on) => {
+                if let Some(i) = self.selected_index() {
+                    let key = &self.library.games[i].key;
+                    let names = [name];
+                    let r = if on {
+                        mods::enable(&self.data, key, &names)
+                    } else {
+                        mods::disable(&self.data, key, &names)
+                    };
+                    if let Err(e) = r {
+                        self.message = format!("{e:#}");
+                    }
+                    self.refresh_status();
+                }
+            }
+            Action::ModMove(name, delta) => {
+                if let Some(i) = self.selected_index() {
+                    let key = &self.library.games[i].key;
+                    let mut order: Vec<String> = self
+                        .mods
+                        .iter()
+                        .filter(|m| m.order.is_some())
+                        .map(|m| m.name.clone())
+                        .collect();
+                    if let Some(at) = order.iter().position(|n| *n == name) {
+                        let to = at.saturating_add_signed(delta).min(order.len() - 1);
+                        let n = order.remove(at);
+                        order.insert(to, n);
+                        if let Err(e) = mods::set_order(&self.data, key, &order) {
+                            self.message = format!("{e:#}");
+                        }
+                        self.refresh_status();
+                    }
+                }
+            }
+            Action::ModRemove(name) => {
+                if let Some(i) = self.selected_index() {
+                    let key = &self.library.games[i].key;
+                    self.message = match mods::remove(&self.data, key, std::slice::from_ref(&name))
+                    {
+                        Ok(()) => format!("Removed mod {name}"),
+                        Err(e) => format!("{e:#}"),
+                    };
+                    self.refresh_status();
+                }
+            }
+            Action::PickMod(folder) => {
+                let dialog = rfd::FileDialog::new().set_title("Install a mod");
+                let picked = if folder {
+                    dialog.pick_folder()
+                } else {
+                    let mut exts: Vec<&str> = mods::archive_formats()
+                        .iter()
+                        .filter_map(|s| s.rsplit('.').next())
+                        .collect();
+                    exts.dedup();
+                    dialog.add_filter("Mod archive", &exts).pick_file()
+                };
+                if let Some(p) = picked {
+                    self.perform(Action::PlanInstall(p));
+                }
+            }
+            Action::PlanInstall(path) => {
+                let Some(i) = self.selected_index() else {
+                    self.message = "Select a game first, then install the mod.".into();
+                    return;
+                };
+                if self.install.is_some() {
+                    self.message = "Another mod install is open; finish or cancel it first.".into();
+                    return;
+                }
+                let key = self.library.games[i].key.clone();
+                let data = self.data.clone();
+                self.install = Some(Install::Planning(path.clone()));
+                self.spawn(move || {
+                    Msg::Plan(mods::plan_install(&data, &key, &path).map_err(|e| format!("{e:#}")))
+                });
+            }
+            Action::CommitInstall => {
+                if let Some(Install::Confirm { plan, name, error }) = &mut self.install {
+                    match plan.set_name(name.trim()) {
+                        Ok(()) => {
+                            let plan = plan.clone();
+                            self.install = Some(Install::Installing(plan.name.clone()));
+                            self.spawn(move || {
+                                Msg::Installed(mods::install(&plan).map_err(|e| format!("{e:#}")))
+                            });
+                        }
+                        Err(e) => *error = format!("{e:#}"),
+                    }
+                }
+            }
+            Action::Patches(sub) => {
+                if let Some(i) = self.selected_index() {
+                    let key = self.library.games[i].key.clone();
+                    self.patches.entry(key).or_default().note.clear();
+                    self.run_patches(sub);
+                }
+            }
+            Action::AcceptPatch(id) => {
+                if let Some(i) = self.selected_index() {
+                    let g = self.library.games[i].clone();
+                    let (exe, data) = (self.player.clone(), self.data.clone());
+                    let view = self.patches.entry(g.key.clone()).or_default();
+                    view.error.clear();
+                    self.spawn(move || Msg::Accepted {
+                        key: g.key,
+                        result: patches::accept(&exe, &g.path, &data, &id),
+                    });
+                }
+            }
+            Action::OpenSettings => self.open_settings(),
+            Action::SaveSettings => {
+                if let Some(d) = &mut self.settings {
+                    match d.save(&self.data) {
+                        Ok(()) => {
+                            self.settings = None;
+                            self.message = "Settings saved".into();
+                        }
+                        Err(e) => d.error = format!("{e:#}"),
+                    }
+                }
+            }
+            Action::RemoveFolder(dir) => match self.library.remove_folder(&dir) {
+                Ok(gone) => {
+                    if self.selected_index().is_none() {
+                        self.selected = None;
+                        self.refresh_mods();
+                    }
+                    let saved = self.save_library();
+                    self.message = format!(
+                        "Removed {} from the scanned folders ({} games left the library; nothing was deleted). {saved}",
+                        dir.display(),
+                        gone.len()
+                    );
+                    self.refresh_status();
+                }
+                Err(e) => self.message = format!("{e:#}"),
+            },
         }
     }
 
@@ -244,150 +705,10 @@ impl App {
         self.icons[path].clone()
     }
 
-    fn draw(&mut self, ui: &mut egui::Ui) -> Vec<Action> {
-        let mut actions = Vec::new();
-        ui.horizontal(|ui| {
-            ui.heading("Ren'Py Player");
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.button("Rescan").clicked() {
-                    actions.push(Action::Rescan);
-                }
-                if ui.button("Add folder...").clicked() {
-                    actions.push(Action::AddFolder);
-                }
-            });
-        });
-        ui.label(
-            RichText::new(format!(
-                "{} games in {} folders. Data: {}",
-                self.library.games.len(),
-                self.library.folders.len(),
-                self.data.display()
-            ))
-            .small()
-            .weak(),
-        );
-        if !self.message.is_empty() {
-            ui.label(RichText::new(&self.message).color(Color32::LIGHT_BLUE));
-        }
-        ui.separator();
-        if self.library.games.is_empty() {
-            ui.add_space(24.0);
-            ui.label("No games yet. Press \"Add folder...\" and choose a folder that holds Ren'Py games.");
-        }
-        let games = self.library.games.clone();
-        egui::ScrollArea::vertical()
-            .auto_shrink(false)
-            .show(ui, |ui| {
-                for (i, g) in games.iter().enumerate() {
-                    let (pre, mods) = self.status.get(&g.key).cloned().unwrap_or_default();
-                    let streaming = self.streams.iter().any(|(k, _)| *k == g.key);
-                    let running = streaming || self.running.iter().any(|(k, _)| *k == g.key);
-                    let stream_urls: Vec<String> = self
-                        .streams
-                        .iter()
-                        .find(|(k, _)| *k == g.key)
-                        .map(|(_, s)| s.urls.clone())
-                        .unwrap_or_default();
-                    let icon = self.icon(g);
-                    ui.horizontal(|ui| {
-                        match &icon {
-                            Some(t) => {
-                                ui.add(
-                                    egui::Image::new(t).fit_to_exact_size(egui::vec2(48.0, 48.0)),
-                                );
-                            }
-                            None => {
-                                ui.allocate_space(egui::vec2(48.0, 48.0));
-                            }
-                        }
-                        ui.vertical(|ui| {
-                            ui.set_min_width(340.0);
-                            ui.label(RichText::new(&g.name).strong());
-                            ui.label(RichText::new(g.path.display().to_string()).small().weak());
-                            if streaming {
-                                if stream_urls.is_empty() {
-                                    ui.label(RichText::new("Streaming: starting...").weak());
-                                }
-                                for u in &stream_urls {
-                                    ui.horizontal(|ui| {
-                                        ui.label(
-                                            RichText::new("Open in a browser:")
-                                                .color(Color32::LIGHT_GREEN),
-                                        );
-                                        ui.monospace(u);
-                                        if ui.small_button("Copy").clicked() {
-                                            ui.ctx().copy_text(u.clone());
-                                        }
-                                    });
-                                }
-                            }
-                            ui.horizontal_wrapped(|ui| {
-                                match &g.engine {
-                                    Some(v) => ui.label(format!("Ren'Py {v}")),
-                                    None => {
-                                        ui.label(RichText::new("Ren'Py version unknown").weak())
-                                    }
-                                };
-                                if g.renpy7 {
-                                    ui.label(
-                                        RichText::new(" Ren'Py 7: needs the compatibility module ")
-                                            .color(Color32::BLACK)
-                                            .background_color(Color32::from_rgb(255, 176, 32)),
-                                    );
-                                }
-                                if mods.installed > 0 {
-                                    ui.label(format!("Mods {}/{}", mods.enabled, mods.installed));
-                                }
-                                match &pre {
-                                    None => ui.label(RichText::new("Pre-flight: not run").weak()),
-                                    Some(p) => {
-                                        let colour = match p.status.as_str() {
-                                            "ok" => Color32::LIGHT_GREEN,
-                                            "warning" => Color32::from_rgb(255, 176, 32),
-                                            _ => Color32::LIGHT_RED,
-                                        };
-                                        ui.label(
-                                            RichText::new(format!("Pre-flight: {}", p.status))
-                                                .color(colour),
-                                        )
-                                    }
-                                };
-                            });
-                        });
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui.button("Open folder").clicked() {
-                                actions.push(Action::OpenFolder(i));
-                            }
-                            if ui.button("Report").clicked() {
-                                actions.push(Action::Report(i));
-                            }
-                            if streaming {
-                                if ui.button("Stop stream").clicked() {
-                                    actions.push(Action::StopStream(i));
-                                }
-                            } else if ui
-                                .add_enabled(!running, egui::Button::new("Stream"))
-                                .clicked()
-                            {
-                                actions.push(Action::Stream(i));
-                            }
-                            let label = if running { "Running" } else { "Play" };
-                            if ui.add_enabled(!running, egui::Button::new(label)).clicked() {
-                                actions.push(Action::Play(i));
-                            }
-                        });
-                    });
-                    ui.separator();
-                }
-            });
-        actions
-    }
-
     fn init_gpu(&mut self, el: &ActiveEventLoop) -> Result<()> {
         let attrs = Window::default_attributes()
-            .with_title("Ren'Py Player Library")
-            .with_inner_size(winit::dpi::LogicalSize::new(1000.0, 640.0));
+            .with_title("Universal Ren'Py Player")
+            .with_inner_size(winit::dpi::LogicalSize::new(1100.0, 720.0));
         let window = Arc::new(
             el.create_window(attrs)
                 .context("cannot create the window")?,
@@ -472,9 +793,7 @@ impl App {
         let ctx = self.ctx.clone();
         let mut actions = Vec::new();
         let out = ctx.run_ui(input, |ui| {
-            egui::CentralPanel::default().show(ui, |ui| {
-                actions = self.draw(ui);
-            });
+            actions = self.draw(ui);
         });
         for a in actions {
             self.perform(a);
@@ -593,9 +912,11 @@ impl ApplicationHandler for App {
     }
 
     fn about_to_wait(&mut self, el: &ActiveEventLoop) {
-        // Wake twice a second to notice finished games and new pre-flight reports.
+        // Wake twice a second to notice finished games and new pre-flight reports; faster while a worker
+        // thread runs, so that its result and the spinner show promptly.
+        let every = if self.busy() { 50 } else { 500 };
         el.set_control_flow(ControlFlow::WaitUntil(
-            Instant::now() + Duration::from_millis(500),
+            Instant::now() + Duration::from_millis(every),
         ));
     }
 

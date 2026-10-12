@@ -2,7 +2,7 @@
 # Host-side driver: runs container-build.sh in quay.io/pypa/manylinux_2_28_x86_64 with rootless podman.
 #   player/packaging/manylinux/build.sh [CACHE_DIR]
 # Run it from a checkout of the repository on a Linux x86_64 host. Output (gitignored):
-#   player/build-out/manylinux/player-linux-x86_64/ and player-linux-x86_64.tar.gz
+#   player/build-out/manylinux/urp-linux-x86_64/ and urp-linux-x86_64.tar.gz
 # CACHE_DIR (default ~/.cache/renpy-manylinux) keeps downloads, static deps, FFmpeg and the Rust toolchain.
 # PLAYER_CHECKS=1 also runs `cargo clippy -- -D warnings` and `cargo test --release` in the container (CI does).
 # Needs `podman` (rootless: newuidmap, newgidmap, subuid and subgid entries). Without podman on PATH it uses

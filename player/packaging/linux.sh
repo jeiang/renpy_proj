@@ -3,7 +3,7 @@
 #
 #   player/packaging/linux.sh [--no-build]     (run inside `nix develop .#player`)
 #
-# Output (gitignored): player/build-out/linux/player-linux-x86_64/{player,lib/} and player-linux-x86_64.tar.gz
+# Output (gitignored): player/build-out/linux/urp-linux-x86_64/{urp,lib/} and urp-linux-x86_64.tar.gz
 #   - The binary is glibc-dynamic with a static libpython. Its interpreter is the generic
 #     /lib64/ld-linux-x86-64.so.2 and its rpath is $ORIGIN/lib.
 #   - lib/ holds the LGPL FFmpeg shared libraries, libva (the VA-API driver, for example radeonsi_drv_video.so, comes from the host: set LIBVA_DRIVERS_PATH where the host path differs from the one libva was built with) and the libraries they need that the system does not
@@ -20,12 +20,12 @@ PLAYER="$(cd "$HERE/.." && pwd)"
 command -v patchelf >/dev/null || { echo "linux.sh: patchelf missing (use 'nix develop .#player')" >&2; exit 1; }
 [ "${1:-}" = --no-build ] || (cd "$PLAYER" && cargo build --release -p player)
 
-NAME=player-linux-x86_64
+NAME=urp-linux-x86_64
 OUT="$PLAYER/build-out/linux"
 PKG="$OUT/$NAME"
 rm -rf "$PKG"; mkdir -p "$PKG/lib"
-cp "$PLAYER/target/release/player" "$PKG/player"
-chmod u+w "$PKG/player"
+cp "$PLAYER/target/release/urp" "$PKG/urp"
+chmod u+w "$PKG/urp"
 
 # Libraries the host provides. Everything else that ldd resolves is bundled.
 SYSTEM='^(linux-vdso|ld-linux.*|libc|libm|libdl|libpthread|librt|libutil|libresolv|libmvec|libnsl|libanl|libnss_[a-z]*|libthread_db|libBrokenLocale|libgcc_s|libdrm.*|libasound|libudev|libvulkan|libwayland-.*|libxkbcommon.*|libX.*|libxcb.*|libpipewire.*|libdrm.*|libGL.*|libEGL.*)\.so'
@@ -39,19 +39,19 @@ bundle() { # copy the non-system libraries of $1 (recursively) into lib/
     fi
   done
 }
-bundle "$PKG/player"
+bundle "$PKG/urp"
 for so in "$PKG"/lib/*.so*; do
   patchelf --set-rpath '$ORIGIN' "$so"
   # nix links FFmpeg against the unversioned name, which only a -dev package provides on other distributions.
   if patchelf --print-needed "$so" | grep -qx 'libvulkan.so'; then patchelf --replace-needed libvulkan.so libvulkan.so.1 "$so"; fi
 done
-patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 --set-rpath '$ORIGIN/lib' "$PKG/player"
-strip --strip-unneeded "$PKG/player" "$PKG"/lib/*.so* 2>/dev/null || true
+patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 --set-rpath '$ORIGIN/lib' "$PKG/urp"
+strip --strip-unneeded "$PKG/urp" "$PKG"/lib/*.so* 2>/dev/null || true
 
 # Check: ldd of the packaged binary. Outside NixOS the host's own library path applies. On NixOS the
 # generic interpreter is nix-ld, which reads NIX_LD_LIBRARY_PATH (the devshell sets LD_LIBRARY_PATH).
 echo "== ldd =="
-LDD=$(NIX_LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}" ldd "$PKG/player")
+LDD=$(NIX_LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}" ldd "$PKG/urp")
 echo "$LDD"
 bad=$(echo "$LDD" | awk '/=> \//{print $3}' | grep -v "^$PKG/lib/" | grep -Ev '/(ld-linux-x86-64|libc|libm|libdl|libpthread|librt|libutil|libresolv|libmvec|libgcc_s|libdrm|libasound|libudev|libvulkan|libwayland-[a-z-]*|libxkbcommon[a-z-]*|libX[a-z0-9]*|libxcb[a-z-]*)\.so' || true)
 if [ -n "$bad" ]; then echo "linux.sh: unexpected dependencies:" >&2; echo "$bad" >&2; exit 1; fi

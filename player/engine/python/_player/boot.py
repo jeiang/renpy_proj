@@ -3,7 +3,7 @@
 Reads its settings from sys.argv:
 
     --game <dir>       the game: either the game/ folder or a project folder that contains game/ (required)
-    --data <dir>       the player data dir (default: the platform app-data folder `renpy-player`)
+    --data <dir>       the player data dir (default: the platform app-data folder `universal-renpy-player`)
     --renderer <name>  draw backend name (sets RENPY_RENDERER)
     --logdir <dir>     where log.txt and traceback.txt go (default: <data>/logs/<game key>)
     --harness-script <file>  an .rpy or .rpym file served to the script loader as an extra game script
@@ -59,12 +59,12 @@ def parse_args(argv):
 
 def default_data_dir():
     if sys.platform == "darwin":
-        return os.path.expanduser("~/Library/Application Support/renpy-player")
+        return os.path.expanduser("~/Library/Application Support/universal-renpy-player")
 
     if sys.platform == "win32":
-        return os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "renpy-player")
+        return os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "universal-renpy-player")
 
-    return os.path.join(os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share")), "renpy-player")
+    return os.path.join(os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share")), "universal-renpy-player")
 
 
 def resolve_game(path):

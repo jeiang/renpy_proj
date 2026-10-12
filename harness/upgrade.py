@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""`player upgrade <game>`: the AI upgrade pass for the Python 2 errors of deep runs (M6). Run through the player binary
-(`player upgrade ...` execs this file) or directly:
+"""`urp upgrade <game>`: the AI upgrade pass for the Python 2 errors of deep runs (M6). Run through the player binary
+(`urp upgrade ...` execs this file) or directly:
 
   upgrade.py <game> --player-bin <player> --errors <dir> [--error <id>] [--data <dir>] [--endpoint URL] [--model NAME]
              [--tries 3] [--token-cap 12000] [--no-gate] [--dry-run]

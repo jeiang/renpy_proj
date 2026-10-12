@@ -1,7 +1,8 @@
-//! `player <game-dir> [--data <dir>] [--logdir <dir>] [--harness-script <file>] [ren'py args]`, plus the
-//! library subcommands `scan`, `list`, `report`, `mods`, `serve`, and the library window (no arguments).
+//! `urp <game-dir> [--data <dir>] [--logdir <dir>] [--harness-script <file>] [ren'py args]`, plus the
+//! library subcommands `scan`, `list`, `library`, `settings`, `report`, `mods`, `serve`, and the library window (no arguments).
 //! Contract: player/CONTRACTS.md.
 
+mod library_cli;
 mod patches_cli;
 mod report_cli;
 mod serve_cli;
@@ -13,7 +14,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 use library::{Library, resolve_game};
 
-const USAGE: &str = "usage: player <game-dir | game/ | .app> [--data <dir>] [--logdir <dir>] \
+const USAGE: &str = "usage: urp <game-dir | game/ | .app> [--data <dir>] [--logdir <dir>] \
 [--harness-script <file>] [--renderer <name>] [ren'py args, for example lint]";
 
 /// Absolute form of a user path that may not exist yet (`--data`, `--logdir`).
@@ -30,7 +31,9 @@ fn py_path(p: &Path) -> String {
 
 fn build_argv(args: Vec<String>) -> Result<Vec<String>> {
     let mut game: Option<PathBuf> = None;
-    let mut boot = vec!["player".to_string()];
+    let mut data: Option<String> = None;
+    let mut renderer_given = false;
+    let mut boot = vec!["urp".to_string()];
     let mut rest = Vec::new();
     let mut it = args.into_iter();
     while let Some(a) = it.next() {
@@ -39,8 +42,13 @@ fn build_argv(args: Vec<String>) -> Result<Vec<String>> {
                 let v = it
                     .next()
                     .with_context(|| format!("{a} needs a value\n{USAGE}"))?;
-                boot.push(a.clone());
-                boot.push(if a == "--renderer" { v } else { absolute(&v)? });
+                renderer_given |= a == "--renderer";
+                let v = if a == "--renderer" { v } else { absolute(&v)? };
+                if a == "--data" {
+                    data = Some(v.clone());
+                }
+                boot.push(a);
+                boot.push(v);
             }
             "--harness-script" => {
                 let v = it
@@ -59,6 +67,20 @@ fn build_argv(args: Vec<String>) -> Result<Vec<String>> {
         }
     }
     let game = game.with_context(|| USAGE.to_string())?;
+    // The renderer of `urp settings` applies unless the command line names one.
+    if !renderer_given {
+        let data = data.map_or_else(library::default_data_dir, PathBuf::from);
+        match library::Settings::load(&data) {
+            Ok(library::Settings {
+                renderer: Some(r), ..
+            }) => {
+                boot.push("--renderer".into());
+                boot.push(r);
+            }
+            Ok(_) => {}
+            Err(e) => eprintln!("warning: ignoring the settings: {e:#}"),
+        }
+    }
     boot.push("--game".into());
     boot.push(py_path(&resolve_game(&game)?));
     boot.extend(rest);
@@ -66,14 +88,17 @@ fn build_argv(args: Vec<String>) -> Result<Vec<String>> {
 }
 
 const SUBCOMMANDS: &str = "\
-       player                                open the library window
-       player scan [<folder>...] [--data <dir>]   add folders to the library and rescan
-       player list [--data <dir>]            list the games in the library
-       player report <game> [--data <dir>]   pre-flight report of a game
-       player patches <game> list|validate|apply-test|accept <id>   port patches of a game
-       player upgrade <game> [--errors <dir>] [--data <dir>] ...   AI upgrade pass (maintainers; see player/CONTRACTS.md, M6)
-       player mods <game> list|enable|disable|order ... [--data <dir>]
-       player serve <game> [--bind <addr>] [--port <n>] [--size <WxH>] [--fps <n>] [--kbps <n>]
+       urp                                   open the library window
+       urp scan [<folder>...] [--data <dir>]   add folders to the library and rescan
+       urp list [--data <dir>]            list the games in the library
+       urp report <game> [--data <dir>]   pre-flight report of a game
+       urp patches <game> list|validate|apply-test [--json] | accept <id>   port patches of a game
+       urp upgrade <game> [--errors <dir>] [--data <dir>] ...   AI upgrade pass (maintainers; see player/CONTRACTS.md, M6)
+       urp mods <game> list [--json] | enable|disable|order <mod>... | remove <mod>...
+       urp mods <game> install <folder|archive> [--name <n>] [--yes]   install a mod (zip, tar.gz, tar.xz, tar.zst, 7z, rar) and enable it
+       urp library folders | remove <game|folder> [--data <dir>]   scanned folders; drop a game or folder from the library
+       urp settings get [<key>] | set <key> <value> [--data <dir>]   renderer, stream.port|size|fps|kbps
+       urp serve <game> [--bind <addr>] [--port <n>] [--size <WxH>] [--fps <n>] [--kbps <n>]
                   [--encoder <name>] [--latency-overlay]   stream the game to a browser (headless)";
 
 /// Splits `--data <dir>` out of `args`. The data folder defaults like `_player.boot.default_data_dir`.
@@ -125,7 +150,7 @@ fn cmd_scan(args: Vec<String>) -> Result<i32> {
 fn cmd_list(args: Vec<String>) -> Result<i32> {
     let (rest, data) = take_data(args)?;
     if let Some(a) = rest.first() {
-        bail!("player list takes no argument, got {a}");
+        bail!("urp list takes no argument, got {a}");
     }
     print_games(&Library::load(&data)?);
     Ok(0)
@@ -211,6 +236,15 @@ fn main() -> Result<()> {
                 args.remove(0);
                 upgrade_cli::run(&args, &std::env::current_exe()?)?
             }
+            "library" | "settings" => {
+                let cmd = args.remove(0);
+                let (rest, data) = take_data(args)?;
+                if cmd == "library" {
+                    library_cli::library(&rest, &data)?
+                } else {
+                    library_cli::settings(&rest, &data)?
+                }
+            }
             "mods" | "report" => {
                 let cmd = args.remove(0);
                 let (rest, data) = take_data(args)?;
@@ -221,9 +255,55 @@ fn main() -> Result<()> {
                 }
             }
             "serve" => serve_cli::run(args.split_off(1), run_game)?,
-            "help" => bail!("{USAGE}\n{SUBCOMMANDS}"),
+            "help" | "-h" | "--help" => {
+                println!("{USAGE}\n{SUBCOMMANDS}");
+                0
+            }
             _ => run_game(args)?,
         }
     };
     std::process::exit(code);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn argv(data: &Path, game: &Path, extra: &[&str]) -> Vec<String> {
+        let mut args = vec![
+            game.to_string_lossy().into_owned(),
+            "--data".into(),
+            data.to_string_lossy().into_owned(),
+        ];
+        args.extend(extra.iter().map(|s| s.to_string()));
+        build_argv(args).unwrap()
+    }
+
+    fn renderer(argv: &[String]) -> Vec<&str> {
+        argv.windows(2)
+            .filter(|w| w[0] == "--renderer")
+            .map(|w| w[1].as_str())
+            .collect()
+    }
+
+    #[test]
+    fn the_renderer_setting_applies_unless_the_flag_names_one() {
+        let d = tempfile::tempdir().unwrap();
+        let game = d.path().join("Game");
+        std::fs::create_dir_all(game.join("game")).unwrap();
+        let data = d.path().join("data");
+
+        assert!(renderer(&argv(&data, &game, &[])).is_empty());
+        library::Settings {
+            renderer: Some("gl".into()),
+            ..Default::default()
+        }
+        .save(&data)
+        .unwrap();
+        assert_eq!(renderer(&argv(&data, &game, &[])), ["gl"]);
+        assert_eq!(
+            renderer(&argv(&data, &game, &["--renderer", "software"])),
+            ["software"]
+        );
+    }
 }

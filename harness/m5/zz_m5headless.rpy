@@ -1,4 +1,4 @@
-# M5 headless smoke driver, loaded with `player <game> --harness-script harness/m5/zz_m5headless.rpy`
+# M5 headless smoke driver, loaded with `urp <game> --harness-script harness/m5/zz_m5headless.rpy`
 # with PLAYER_HEADLESS=1 PLAYER_TEST_INJECT=1 M5_DIR=<scratch dir>. Inert unless M5_DIR is set.
 # It proves, without a window and without an audio device:
 #   - frames: `renpy.gl2.wgpudraw.dump_frames` writes every M5_EVERY-th flip as PNG into $M5_DIR/frames

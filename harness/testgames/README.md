@@ -17,7 +17,7 @@ The real-game gate stays manual on the Mac and on artemis (user decision). Issue
 | `aniso/` | `SynthAniso` | Ren'Py 8.5.3 | Anisotropic textures (`gl_anisotropic`), the existing A/B game. CI runs the six-shot plan `ci.plan`. It has no menu, so its tier is `route` only. |
 | `py7/` | `Synth7` | Ren'Py 7.4.11 (Python 2) | Python 2 `.rpyc` files compiled by the 7.4.11 SDK at build time. See [Ren'Py 7](#renpy-7-games). |
 | `py7patch/` | `Synth7Patch` | Ren'Py 7.4.11 (Python 2) | A port patch (patch library): one node that only Python 2 runs, and the patch that replaces it. |
-| `py7ai/` | `Synth7AI` | Ren'Py 7.4.11 (Python 2) | A node with `string.join`, which Python 3 lacks and no compat rule covers. No patch is committed: the M6 end-to-end proof (`player upgrade`) writes it. |
+| `py7ai/` | `Synth7AI` | Ren'Py 7.4.11 (Python 2) | A node with `string.join`, which Python 3 lacks and no compat rule covers. No patch is committed: the M6 end-to-end proof (`urp upgrade`) writes it. |
 | `py7trust/` | `Synth7Trust` | Ren'Py 7.4.11 (Python 2) | No gui, theme or `confirm` screen, so the game never calls `layout.defaults()`. Gate tier `trust` (check `trust`, player only): the player writes a save, a second launch has a new signing key and loads it. The harness answers the trust question on the screen `_py2c_yesno`: No must not load the save, Yes must load it (two questions, trust and key). Issue #49. |
 
 ## Ren'Py 7 games
@@ -140,7 +140,7 @@ python3 harness/testgames/build.py                # every game into harness/test
 One command builds, runs stock, then runs the player against the stock result:
 
 ```sh
-nix develop -c python3 harness/testgames/run.py --player-bin "$PWD/player/target/release/player"
+nix develop -c python3 harness/testgames/run.py --player-bin "$PWD/player/target/release/urp"
 nix develop -c python3 harness/testgames/run.py --games Synth7,SynthStory --player-bin /abs/path/player
 ```
 
@@ -161,7 +161,7 @@ Single gate commands (the corpus keys are in `harness/corpus.toml`):
 ```sh
 cd harness
 python3 gate.py run --engine stock  --game Synth7 --tier synth --out out/synth/Synth7/stock
-python3 gate.py run --engine player --player-bin /abs/player --baseline /abs/harness/out/synth/Synth7/stock \
+python3 gate.py run --engine player --player-bin /abs/urp --baseline /abs/harness/out/synth/Synth7/stock \
     --game Synth7 --tier synth --out out/synth/Synth7/player
 ```
 
@@ -218,7 +218,7 @@ ALSA, udev, the Vulkan loader and X11 to the host, so the packages above are nee
 export HARNESS_DISPLAY=xvfb
 harness/testgames/fetch.sh
 FFMPEG_SYNTH=/tmp/ffmpeg-synth python3 harness/testgames/build.py
-python3 harness/testgames/run.py --no-build --player-bin "$PWD/player/build-out/manylinux/player-linux-x86_64/player"
+python3 harness/testgames/run.py --no-build --player-bin "$PWD/player/build-out/manylinux/urp-linux-x86_64/urp"
 ```
 
 `run.py` runs stock and then the player for all seven games at the synth tier (lint, probe, route, saveresume) and exits 0
@@ -266,7 +266,7 @@ Branch `build/synth-ci`, player from the same branch (manylinux package, built o
   of the mean limit and 40 % of the pixel limit.
 - `Synth7AI` (not in `run.py`; run with `gate.py` at the synth tier, stock then player against the stock baseline): stock
   passes (lint, probe, route, saveresume). The player fails probe and route with `string.join` (`AttributeError`) because
-  no patch is committed; this is the intended input of the M6 `player upgrade` proof. Lint and saveresume pass.
+  no patch is committed; this is the intended input of the M6 `urp upgrade` proof. Lint and saveresume pass.
 - The gate `video` check of `SynthMedia` under Xvfb and lavapipe (`--engine player --tier full --only video`): pass. Presented
   114.3 fps (100 % of the nominal 24.0 fps, capped), decoded 24.0 fps, 0 late frames, A/V offset at most 36 ms, drift 17 ms.
 
@@ -286,8 +286,8 @@ player directly on the built game folders (build them on a Linux or macOS host, 
 ```bat
 set WGPU_BACKEND=dx12
 set WGPU_ADAPTER_NAME=Microsoft Basic Render Driver
-player.exe C:\spike\synth\story lint
-player.exe C:\spike\synth\story --data C:\spike\data --harness-script C:\spike\harness\rpy\zz_harness.rpy
+urp.exe C:\spike\synth\story lint
+urp.exe C:\spike\synth\story --data C:\spike\data --harness-script C:\spike\harness\rpy\zz_harness.rpy
 ```
 
 `lint` is the headless check. With `HARNESS_DIR` set to an empty folder and a `cmd.txt` written by hand (see `harness/README.md`,
