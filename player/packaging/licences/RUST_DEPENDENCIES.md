@@ -5,7 +5,7 @@ Do not edit by hand.
 
 ## Overview
 
-- Apache License 2.0: 328 crates
+- Apache License 2.0: 329 crates
 - MIT License: 83 crates
 - BSD 2-Clause "Simplified" License: 22 crates
 - BSD 3-Clause "New" or "Revised" License: 12 crates
@@ -18,6 +18,7 @@ Do not edit by hand.
 - SIL Open Font License 1.1: 1 crates
 - Ubuntu Font Licence v1.0: 1 crates
 - Unicode License v3: 1 crates
+- bzip2 and libbzip2 License v1.0.6: 1 crates
 
 ## Licence texts
 
@@ -5594,6 +5595,7 @@ Used by:
 - bitflags 1.3.2 (https://github.com/bitflags/bitflags)
 - bitflags 2.13.2 (https://github.com/bitflags/bitflags)
 - bumpalo 3.20.3 (https://github.com/fitzgen/bumpalo)
+- bzip2 0.6.1 (https://github.com/trifectatechfoundation/bzip2-rs)
 - cc 1.5.1 (https://github.com/rust-lang/cc-rs)
 - cexpr 0.6.0 (https://github.com/jethrogb/rust-cexpr)
 - cfg-if 1.0.5 (https://github.com/rust-lang/cfg-if)
@@ -12972,5 +12974,62 @@ the following restrictions:
     misrepresented as being the original software.
 
 3. This notice may not be removed or altered from any source distribution.
+```
+
+### bzip2 and libbzip2 License v1.0.6
+
+Used by:
+- libbz2-rs-sys 0.2.5 (https://github.com/trifectatechfoundation/libbzip2-rs)
+
+```text
+
+--------------------------------------------------------------------------
+
+The original program, "bzip2", the associated library "libbzip2", and all
+documentation, are
+
+Copyright (C) 1996-2021 Julian R Seward.
+Copyright (C) 2019-2020 Federico Mena Quintero
+Copyright (C) 2021 Micah Snyder
+
+This Rust translation, "libbzip2-rs" is a derived work based on "bzip2" and
+"libbzip2", and is Copyright (C) 2024-2025 Trifecta Tech Foundation and contributors
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+
+1. Redistributions of source code must retain the above copyright
+   notice, this list of conditions and the following disclaimer.
+
+2. The origin of this software must not be misrepresented; you must
+   not claim that you wrote the original software.  If you use this
+   software in a product, an acknowledgment in the product
+   documentation would be appreciated but is not required.
+
+3. Altered source versions must be plainly marked as such, and must
+   not be misrepresented as being the original software.
+
+4. The name of the author may not be used to endorse or promote
+   products derived from this software without specific prior written
+   permission.
+
+THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS
+OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
+DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Julian Seward, jseward@acm.org
+bzip2/libbzip2 version 1.1.0 of 6 September 2010
+
+--------------------------------------------------------------------------
+
 ```
 

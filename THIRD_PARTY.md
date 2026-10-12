@@ -3,7 +3,7 @@
 The player itself is licensed under MIT OR Apache-2.0 (`LICENSE-MIT`, `LICENSE-APACHE`).
 It uses the software below. This file lists what the source tree and the binary packages carry.
 It is not legal advice. Full licence texts are in `player/packaging/licences/`. Binary packages
-(macOS app, Linux tarball, Windows zip) ship these files in a `licenses/` folder (the macOS app
+(macOS app, Linux AppImage and tarball, Windows zip) ship these files in a `licenses/` folder (the macOS app
 uses `Contents/Resources/licenses/`).
 
 This program contains free software licensed under a number of licenses, including the GNU Lesser General Public License (FFmpeg).

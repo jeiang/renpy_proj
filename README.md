@@ -84,19 +84,6 @@ urp serve <game>           # run headless and stream to a browser on the LAN (pr
 `urp --help` lists all commands (`list`, `library`, `settings`, `report`, `patches`, `mods`, `upgrade`). Your save data and caches go to the player's
 own data folder. The player never writes into the game folder.
 
-## Moving from renpy-player
-
-The data folder is now `universal-renpy-player`. Nothing is migrated automatically. To keep your library, saves and reports, move the old folder once:
-
-```sh
-# macOS
-mv ~/Library/Application\ Support/renpy-player ~/Library/Application\ Support/universal-renpy-player
-# Linux
-mv "${XDG_DATA_HOME:-$HOME/.local/share}/renpy-player" "${XDG_DATA_HOME:-$HOME/.local/share}/universal-renpy-player"
-# Windows (PowerShell)
-Rename-Item "$env:APPDATA\renpy-player" universal-renpy-player
-```
-
 ## Test
 
 The compatibility gate and the synthetic games are described in [harness/README.md](harness/README.md) and
