@@ -1,0 +1,36 @@
+Subject: [PATCH] classobject: method.__get__ returns the bound method again
+
+CPython 3.11 and 3.12 removed tp_descr_get from PyMethod_Type. A bound method's
+__get__ then falls through to the function's __get__, so
+bound.__get__(None, owner) returns the bare function instead of the bound method.
+Ren'Py 7 game code calls that form (hasattr(v, '__get__') then v.__get__(None, self)),
+and it fails with a missing-argument TypeError during init.
+
+Restore the 3.9 and 3.13 behavior: method objects return themselves from __get__.
+Upstream: python/cpython d058eaeed4 (gh-113157, gh-89519, gh-113233).
+
+---
+--- a/Objects/classobject.c
++++ b/Objects/classobject.c
+@@ -318,6 +318,13 @@
+     return 0;
+ }
+ 
++static PyObject *
++method_descr_get(PyObject *meth, PyObject *obj, PyObject *cls)
++{
++    Py_INCREF(meth);
++    return meth;
++}
++
+ PyTypeObject PyMethod_Type = {
+     PyVarObject_HEAD_INIT(&PyType_Type, 0)
+     .tp_name = "method",
+@@ -338,6 +345,7 @@
+     .tp_methods = method_methods,
+     .tp_members = method_memberlist,
+     .tp_getset = method_getset,
++    .tp_descr_get = method_descr_get,
+     .tp_new = method_new,
+ };
+ 
