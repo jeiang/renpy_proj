@@ -82,11 +82,14 @@ jobs:
           path: ${{ runner.temp }}/package
       - name: Unpack the player
         run: tar -xzf "$RUNNER_TEMP/package/urp-linux-x86_64.tar.gz" -C "$RUNNER_TEMP/package"
+      # SynthUHD is not in CI: its stock lint, route and save/resume checks take about 75 minutes (harness/testgames/README.md).
+      # Run it by hand with `build.py uhd` and `run.py --games SynthUHD`. Keep the lists below in step with GAMES.
       - name: Build the synthetic games
-        run: python3 harness/testgames/build.py
+        run: python3 harness/testgames/build.py aniso story media text view py7 py7patch py7ai py7trust obf big
       - name: Run stock and player on every game
         run: |
           python3 harness/testgames/run.py --no-build \
+            --games SynthAniso,SynthStory,SynthMedia,SynthText,SynthView,SynthObf,SynthBig,Synth7,Synth7Patch \
             --player-bin "$RUNNER_TEMP/package/urp-linux-x86_64/urp" \
             --gate-args "--diff-mean 0.01 --diff-pct 1.0"
       - name: Keep the gate results of a failed run
