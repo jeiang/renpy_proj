@@ -189,3 +189,26 @@ base = "."
 engine = "sdk-7411"
 save_after = 3
 resume_lines = 2
+[games.SynthUHD]
+source = "harness/testgames/build/uhd"
+renpy = "8.5.3"
+base = "."
+engine = "sdk-853"
+linux_engine = "sdk-853-linux"
+plan = "testgames/uhd/uhd.plan"
+video = "movies/vp9_opus.webm"
+video_fps = 60
+probe_lines = 8
+save_after = 4
+resume_lines = 2
+stages = { say = 40 }
+[games.SynthBig]
+source = "harness/testgames/build/big"
+renpy = "8.5.3"
+base = "."
+engine = "sdk-853"
+linux_engine = "sdk-853-linux"
+plan = "testgames/big/big.plan"
+probe_lines = 12
+save_after = 6
+resume_lines = 4
