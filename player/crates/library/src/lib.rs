@@ -5,7 +5,9 @@ mod config;
 mod gui;
 mod key;
 mod launch;
+pub mod mods;
 mod scan;
+pub mod settings;
 mod status;
 
 pub use config::{Game, Library, default_data_dir};
@@ -13,4 +15,5 @@ pub use gui::run_window;
 pub use key::{game_key, resolve_game};
 pub use launch::spawn_player;
 pub use scan::{detect, scan_folders};
+pub use settings::Settings;
 pub use status::{ModsInfo, Preflight, mods_info, preflight, preflight_path};
