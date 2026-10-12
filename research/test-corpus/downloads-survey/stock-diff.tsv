@@ -1,0 +1,51 @@
+game	engine	status	game_files	stock_files	game_only	stock_only	sha_differ_src	sha_differ_bytecode	sha_src_paths
+MaidandMaidens-0.12.0-pc	8.0.3	ok	429	649	128	348	0	68	
+Superhuman-0.9999b-pc	8.0.3	ok	427	649	1	223	0	188	
+TroubleinParadise-1.0.0-pc	7.3.5	ok	504	610	70	176	1	61	config.py
+Artemis-0.6.2-pc	8.1.3	ok	442	666	1	225	0	195	
+BrothelTycoon-1.30Build472-pc	8.3.3	ok	506	733	1	228	0	228	
+ChampionOfRealms-0.102-pc	8.4.1	ok	501	679	1	179	0	221	
+ChasingSunsets-1.10a-pc	8.0.3	ok	427	649	1	223	0	188	
+CompanionofDarkness-Chapter9-pc	8.2.1	ok	461	686	1	226	0	204	
+CosyCafe-0.13.1-pc	8.3.2	ok	506	733	1	228	0	226	
+DepthsRevival-Ch13-pc	8.3.3	ok	506	733	1	228	0	226	
+Eternum-0.9.5-pc	8.3.2	ok	506	733	1	228	0	226	
+Funkelregen0.9-pc	8.0.3	ok	427	649	1	223	14	192	bootstrap.py;common/00compat.rpy;common/00voice.rpy;common/_shaders.rpym;config.py
+FurrHouse-Chapters_1-20-pc	8.3.7	ok	506	733	1	228	0	226	
+GodsCall-1.6.2-pc	8.0.3	ok	427	649	1	223	0	188	
+Homeforwaywardtravelers-0.21-pc	8.1.3	ok	442	666	1	225	0	195	
+Imperial-1.0_Wounds_of_the_Past-pc	8.3.2	ok	506	733	1	228	0	226	
+IndependentHorizonsChapterI-Completed-pc	8.0.0	ok	465	649	123	307	224	69	__init__.py;add_from.py;arguments.py;ast.py;atl.py
+Knockout_Master-1.14a_Full_S12	8.1.1	ok	440	664	1	225	0	195	
+LeapofFaith-1.0.3c-dlc-pc	8.0.2	ok	426	648	1	223	0	188	
+LivingTogether_alpha_052_subscriber-0.52-pc		no-stock	427						
+Lust Age	8.0.3	ok	429	649	128	348	0	68	
+MatrixHearts-3.9-pc		no-survey							
+MyBestDeal-4.3-pc	7.8.8	ok	491	713	0	222	2	229	display/dragdrop.py;vc_version.py
+MyBullyIsMyLover-Ch.2_Ep.1-pc	8.5.2	ok	521	699	1	179	0	231	
+Myfamilyfarm-0.3.1-pc	7.6.3	ok	444	668	1	225	0	195	
+Mynewneighbors-1.83-pc	8.3.4	ok	506	733	1	228	0	226	
+MyPervyPoltergeist-0.8-pc	8.1.1	ok	440	664	1	225	0	195	
+MyRealDesire-Completed-pc	8.3.3	ok	506	733	1	228	0	226	
+MythicManor-0.22-pc	8.3.2	ok	506	733	1	228	0	226	
+My Time With You	8.0.2	ok	427	648	2	223	21	191	__init__.py;bootstrap.py;common/00compat.rpy;common/00gui.rpy;common/00matrixcolor.rpy
+NaughtyLyanna-Season02-0.29-pc	8.2.0	ok	461	686	1	226	0	204	
+OppaiOdyssey-0.5-pc	8.1.3	ok	442	666	1	225	0	195	
+Out of Touch		no-stock	0						
+PaleCarnations-Ch4Up6-pc	8.3.4	ok	506	733	1	228	0	226	
+PriceOfPower-Ch30-pc	7.7.3	ok	463	688	1	226	0	204	
+Ravager-5.3.1-market	8.3.4	ok	506	733	1	228	0	224	
+SnowStorm-v0.10-WW-pc	7.3.5	ok	503	610	69	176	0	168	
+Stormside-v0.23.1.4-linux	8.0.3	ok	429	649	128	348	0	68	
+StrayIncubus-S2Ch3	8.3.4	ok	679	733	128	182	42	226	audio/renpysound.pyx;compat/dictviews.pyx;display/accelerator.pyx;display/behavior.py;display/matrix.pxd
+SweetAffection-0.11.9-pc	8.0.0	ok	477	649	135	307	224	69	__init__.py;add_from.py;arguments.py;ast.py;atl.py
+TerminusReachSentinel2-Update40-pc	7.3.5	ok	503	610	69	176	0	59	
+The-Arson-Betrayal-0.8.0-pc	8.3.1	ok	506	733	1	228	0	226	
+The Awakening	8.2.1	ok	645	686	139	180	240	210	__init__.py;add_from.py;arguments.py;ast.py;atl.py
+The Fiery Scion	8.2.0	ok	507	686	47	226	211	210	__init__.py;add_from.py;arguments.py;ast.py;atl.py
+The Inn	8.3.7	ok	507	733	2	228	5	215	common/00sync.rpy;common/_errorhandling.rpym;log.py;main.py;savelocation.py
+TheSwordbearer-0.11-pc	7.4.6	ok	472	647	1	176	0	158	
+TribulationsOfAMage-0.51.0-pc	7.3.5	ok	503	610	69	176	0	59	
+UnexpectedConsequences-0.18-pc	8.4.2	no-stock	487						
+VaeVictisKhan-0.15.3-pc	7.6.3	ok	541	668	98	225	0	195	
+YuriUniversity-0.67-pc	8.0.2	ok	428	648	127	347	2	68	common/00console.rpy;common/00start.rpy
