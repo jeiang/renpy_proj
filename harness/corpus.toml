@@ -191,6 +191,7 @@ video_fps = 60
 probe_lines = 8
 save_after = 4
 resume_lines = 2
+stages = { say = 40 }
 [games.SynthBig]
 source = "harness/testgames/build/big"
 renpy = "8.5.3"

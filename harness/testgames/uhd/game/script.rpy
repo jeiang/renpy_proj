@@ -101,4 +101,5 @@ label start:
     pause 4.5
     scene black
     n "End of the 4K test game."
+    n "Thanks for watching."
     return
