@@ -11,6 +11,7 @@ mod vfs_cli;
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
 use library::Library;
@@ -211,18 +212,61 @@ fn cmd_warm(args: Vec<String>) -> Result<i32> {
     Ok(0)
 }
 
-/// `urp warm-game <game> [--data <dir>]`: the worker of one warm-up. It fills the game's caches the way a launch
-/// does, and exits once the scripts have loaded. It does nothing when a play or another warm-up holds the lock.
+/// `urp warm-game <game> [--data <dir>]`: the worker of one warm-up. It runs the same headless boot as a play, so
+/// Ren'Py writes the same caches. It stops once the bytecode caches are saved, the last cache write of a load.
+/// It does nothing when a play or another warm-up holds the lock.
 fn warm_game(args: Vec<String>) -> Result<i32> {
-    let launch = build_launch(args)?;
+    let mut launch = build_launch(args)?;
     let Some(_warm) = library::WarmGuard::try_acquire(&launch.data, &launch.key)? else {
         return Ok(0);
     };
-    // Patch application test mode stops the process once `load_script` has written the caches. It reports
-    // unmatched patches through its exit code. That is not a cache failure, so the driver ignores the code.
-    // SAFETY: `main` calls this before the player starts any thread.
-    unsafe { std::env::set_var("PLAYER_PATCHES_APPLY_TEST", "json") };
+    // A log directory of its own, wiped first: a log line left by an earlier play cannot end the warm-up early.
+    let logdir = launch.data.join("warm").join(&launch.key);
+    let _ = std::fs::remove_dir_all(&logdir);
+    std::fs::create_dir_all(&logdir)
+        .with_context(|| format!("cannot create {}", logdir.display()))?;
+    launch.argv.push("--logdir".into());
+    launch.argv.push(py_path(&logdir));
+    // No window and no audio device, as in `urp serve`.
+    platform::set_headless(WARM_WIDTH, WARM_HEIGHT);
+    media::set_virtual_output(true);
+    watch_for_bytecode_save(logdir, Instant::now() + WARM_DEADLINE);
     boot(launch.argv)
+}
+
+const WARM_WIDTH: u32 = 1280;
+const WARM_HEIGHT: u32 = 720;
+/// Stock Ren'Py logs this line once `save_bytecode` has written the caches. It is the last cache write of a load.
+const BYTECODE_SAVED: &str = "Save bytecode took";
+/// A warm-up that has not reached the save by this time gives up. This bounds a game that hangs before it.
+const WARM_DEADLINE: Duration = Duration::from_secs(900);
+
+/// Ends the worker once the bytecode caches are saved, or at the deadline. The worker holds nothing that needs
+/// unwinding, and the kernel releases its lock on exit.
+fn watch_for_bytecode_save(logdir: PathBuf, deadline: Instant) {
+    std::thread::spawn(move || {
+        loop {
+            if logged(&logdir, BYTECODE_SAVED) {
+                std::process::exit(0);
+            }
+            if Instant::now() >= deadline {
+                eprintln!("warning: warm-up stopped at the deadline before the bytecode save");
+                std::process::exit(0);
+            }
+            std::thread::sleep(Duration::from_millis(200));
+        }
+    });
+}
+
+/// True when a file directly in `logdir` contains `marker`.
+fn logged(logdir: &Path, marker: &str) -> bool {
+    std::fs::read_dir(logdir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .any(|e| {
+            std::fs::read(e.path()).is_ok_and(|b| String::from_utf8_lossy(&b).contains(marker))
+        })
 }
 
 fn cmd_scan(args: Vec<String>) -> Result<i32> {
