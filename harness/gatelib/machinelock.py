@@ -10,6 +10,7 @@ import fcntl
 import os
 import re
 import shutil
+import stat
 import sys
 import time
 
@@ -60,10 +61,35 @@ def _write_owner(pid, body):
 NO_OWNER_S = 5   # a dir with no owner file this old: its creator died between mkdir and the owner file (that takes microseconds)
 
 
+def _remove_stray_file():
+    """Called with the flock held, on a path that exists and is not a dir. A regular file here is no protocol state: a
+    stray. Remove it when no process holds a flock on it (a non-blocking flock succeeds only then). Otherwise leave it:
+    the caller waits, as for a live owner (#63)."""
+    try:
+        fd = os.open(LOCK_DIR, os.O_RDONLY | os.O_NOFOLLOW)
+    except OSError:
+        return
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            return
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            return
+        _log("removed the stray regular file at the lock path (no process holds it)")
+        os.unlink(LOCK_DIR)
+    finally:
+        os.close(fd)
+
+
 def _remove_dead_dir():
-    """Called with the flock held, on a dir that exists. Remove it when its owner pid is dead, or when it has no owner
+    """Called with the flock held, on a path that exists. Remove a stray regular file (see _remove_stray_file). Otherwise
+    remove the dir when its owner pid is dead, or when it has no owner
     file for NO_OWNER_S s. Wait on a dir whose owner pid is alive. rmtree tolerates a dir that vanishes meanwhile
     (an old-protocol taker may rename it aside at the same moment)."""
+    if not os.path.isdir(LOCK_DIR):
+        _remove_stray_file()
+        return
     owner = read_owner()
     if owner and owner["pid"] is not None:
         if pid_alive(owner["pid"]):
@@ -162,7 +188,8 @@ def take(timeout, cmd=None):
             except FileExistsError:
                 _remove_dead_dir()
                 if time.time() - t0 > timeout:
-                    raise TimeoutError("machine lock %s held for more than %d s" % (LOCK_DIR, timeout))
+                    what = "is a regular file held by a live process" if os.path.isfile(LOCK_DIR) else "is held"
+                    raise TimeoutError("machine lock %s %s for more than %d s" % (LOCK_DIR, what, timeout))
                 time.sleep(POLL_S)
         _write_owner(os.getpid(), "cmd=" + (cmd if cmd is not None else " ".join(sys.argv))[:200])
     except BaseException:
