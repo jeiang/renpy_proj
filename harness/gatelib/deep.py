@@ -216,6 +216,8 @@ def check_deep(ctx):
         if reason == "stuck":   # the driver gave up: a loop came back 3 times and nothing new ran (not a play to the budget)
             msg = "%s: ended stuck: a loop came back and no new label or script line ran; the seed did not play to its budget" % name
             (problems if ctx.game.get("driver") else warnings).append(msg)
+        if reason in ("error", "verify-error"):   # the play stopped at an uncaught error (a deep-error record): a failure
+            problems.append("%s: ended with deep-done %s: an uncaught error stopped the play; see errors/" % (name, reason))
         lj = _read_json(ctx.out / name / "deep" / "lines.json")
         if lj:
             all_lines |= set(lj["lines"])
