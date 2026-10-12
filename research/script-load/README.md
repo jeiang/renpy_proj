@@ -66,7 +66,7 @@ The urp cold data dir holds the same four compiled files (`game/mod/Gallery`, `O
 
 ## Change: accept the Ren'Py 8.3 `.rpyc` digest
 
-Patch `0011-rpyc-legacy-digest.patch` changes the stale check in `renpy/script.py`. A game `.rpyc` is loaded when its stored digest equals `md5(source + b"_2025-07-06")` (8.5.3) or `md5(source)` (8.3.4). The player cache accepts only the 8.5.3 digest, because urp writes that cache. An edited `.rpy` matches neither digest, so it is compiled again. The patch adds no runtime event, because no existing event kind describes this decision.
+Patch `0011-rpyc-legacy-digest.patch` changes the stale check in `renpy/script.py`. A game `.rpyc` is loaded when its stored digest equals `md5(source + b"_2025-07-06")` (8.5.3). For games that ship a Ren'Py 8 runtime (a `lib/py3-*` folder in the game), it is also loaded when its stored digest equals `md5(source)` (8.3.4). Ren'Py 7 games never take the 8.3 digest. The player cache accepts only the 8.5.3 digest, because urp writes that cache. An edited `.rpy` matches neither digest, so it is compiled again. The patch adds no runtime event, because no existing event kind describes this decision.
 
 Measured on artemis with a urp build from this branch. Each run used a copy of the Wartribe game, a fresh data directory, and a private Xvfb with a clean environment.
 
@@ -84,6 +84,7 @@ The SynthStory gate (`harness/testgames/run.py --games SynthStory`, run on artem
 
 - Wartribe stock is the game's own Ren'Py 8.3.4 engine, not 8.5.3. The stock cold case is not like-for-like with urp (8.5.3). A stock 8.5.3 cold run on Wartribe was not done.
 - Each Wartribe series has one cold launch and two warm launches. Each WaifuAcademy series has one cold and two warm launches. Repeat runs would show a spread that this sheet does not measure.
+- The legacy digest is gated by the game's runtime folder, not by a file format check. A scan of 25 game roots under `~/Games` (each with both `.rpy` and `.rpyc`) found 4 Ren'Py 7 roots (`lib/python2*`) and 21 Ren'Py 8 roots (`lib/py3-*`). Some Ren'Py 7 `.rpyc` files (NBNL) store `md5(source)`, so without the gate the patch would load them as current. Pickle module markers and `script_version` (5003000 in both 7.4 and 8.3) do not separate the two versions, so they are not used.
 - Wartribe runs did not use `systemd-run`. The WaifuAcademy runs used the same lock.
 - Warm stock "Loading script" on Wartribe (5 to 10 s) is slower than urp warm (about 1 s). This was not investigated.
 - urp prints `Could not open 'cache/shaders.txt'` on every launch. It does not affect the timing path.
@@ -97,7 +98,7 @@ Upstream facts used (not copied into this repo):
 
 - Ren'Py 8.5.3 `renpy/script.py` sets `RPYC_MAGIC = b"_2025-07-06"` (line 55) and computes the stale-check digest as `md5(source + RPYC_MAGIC)` (lines 911 and 1025).
 - Ren'Py 8.3.4 uses `md5(source)` for the same check.
-- urp redirects the compiled cache with `config.player_cache_dir` (`player/engine/patches/0006-player-cache-redirect.patch`). The cache path is `<data>/cache/<game key>/<BUILD_FINGERPRINT>/rpyc/<slot>/<name>`. A cache candidate is used only when its stored digest equals `md5(source + RPYC_MAGIC)`. A game `.rpyc` is also used when its stored digest equals `md5(source)` (`player/engine/patches/0011-rpyc-legacy-digest.patch`).
+- urp redirects the compiled cache with `config.player_cache_dir` (`player/engine/patches/0006-player-cache-redirect.patch`). The cache path is `<data>/cache/<game key>/<BUILD_FINGERPRINT>/rpyc/<slot>/<name>`. A cache candidate is used only when its stored digest equals `md5(source + RPYC_MAGIC)`. A game `.rpyc` is also used when its stored digest equals `md5(source)`, but only for Ren'Py 8 games (`lib/py3-*`) (`player/engine/patches/0011-rpyc-legacy-digest.patch`).
 
 The format background and the unrpyc study are in `research/rpyc-loading/README.md`.
 
