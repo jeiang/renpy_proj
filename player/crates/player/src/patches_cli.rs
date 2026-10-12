@@ -150,7 +150,7 @@ pub fn run(args: &[String], data: &Path, exe: &Path) -> Result<i32> {
         }
         "apply-test" => {
             let mut cmd = Command::new(exe);
-            // Headless: without it Ren'Py's presplash opens a window before the patches are applied.
+            // Headless: the child only loads the script, so it needs no window or audio device.
             cmd.arg(game)
                 .arg("--data")
                 .arg(data)

@@ -255,7 +255,10 @@ fn main() -> Result<()> {
                 }
             }
             "serve" => serve_cli::run(args.split_off(1), run_game)?,
-            "help" => bail!("{USAGE}\n{SUBCOMMANDS}"),
+            "help" | "-h" | "--help" => {
+                println!("{USAGE}\n{SUBCOMMANDS}");
+                0
+            }
             _ => run_game(args)?,
         }
     };
