@@ -198,6 +198,7 @@ fn cmd_warm(args: Vec<String>) -> Result<i32> {
         bail!("usage: urp warm <game>... [--data <dir>]");
     }
     let exe = std::env::current_exe().context("cannot find the player executable")?;
+    let mut stopped = Vec::new();
     for game in &games {
         let status = std::process::Command::new(&exe)
             .arg("warm-game")
@@ -205,11 +206,20 @@ fn cmd_warm(args: Vec<String>) -> Result<i32> {
             .arg("--data")
             .arg(&data)
             .status();
-        if let Err(e) = status {
-            eprintln!("warning: warm-up of {game} did not run: {e}");
+        match status {
+            Ok(st) if st.success() => {}
+            Ok(st) => {
+                eprintln!("warning: warm-up of {game} stopped ({st})");
+                stopped.push(game.clone());
+            }
+            Err(e) => {
+                eprintln!("warning: warm-up of {game} did not run: {e}");
+                stopped.push(game.clone());
+            }
         }
     }
-    Ok(0)
+    // A stopped warm-up is reported once and not retried. The next launch loads the scripts itself.
+    Ok(if stopped.is_empty() { 0 } else { 1 })
 }
 
 /// `urp warm-game <game> [--data <dir>]`: the worker of one warm-up. It runs the same headless boot as a play, so
@@ -230,43 +240,45 @@ fn warm_game(args: Vec<String>) -> Result<i32> {
     // No window and no audio device, as in `urp serve`.
     platform::set_headless(WARM_WIDTH, WARM_HEIGHT);
     media::set_virtual_output(true);
-    watch_for_bytecode_save(logdir, Instant::now() + WARM_DEADLINE);
-    boot(launch.argv)
+    let marker = logdir.join(BYTECODE_SAVED_FILE);
+    // SAFETY: no thread has been started yet. The engine reads both variables when it boots in this process.
+    // The marker is written by _player/bytecode.py after the bytecode save. Eager compile makes the save cover every
+    // block, not only the init blocks (RENPY_LAZY_COMPILE is read by the engine's lazy-compile patch).
+    unsafe {
+        std::env::set_var("URP_WARM_MARKER", &marker);
+        std::env::set_var("RENPY_LAZY_COMPILE", "0");
+    }
+    watch_for_bytecode_save(marker.clone(), Instant::now() + WARM_DEADLINE);
+    let code = boot(launch.argv)?;
+    // The marker can appear just before boot returns, before the watcher's next poll. That still counts as saved.
+    if marker.exists() {
+        return Ok(0);
+    }
+    eprintln!("warning: warm-up ended before the bytecode save (game exit {code})");
+    Ok(1)
 }
 
 const WARM_WIDTH: u32 = 1280;
 const WARM_HEIGHT: u32 = 720;
-/// Stock Ren'Py logs this line once `save_bytecode` has written the caches. It is the last cache write of a load.
-const BYTECODE_SAVED: &str = "Save bytecode took";
+/// The file that `_player/bytecode.py` creates after the bytecode save, in the warm-up's log directory.
+const BYTECODE_SAVED_FILE: &str = "bytecode-saved";
 /// A warm-up that has not reached the save by this time gives up. This bounds a game that hangs before it.
 const WARM_DEADLINE: Duration = Duration::from_secs(900);
 
-/// Ends the worker once the bytecode caches are saved, or at the deadline. The worker holds nothing that needs
-/// unwinding, and the kernel releases its lock on exit.
-fn watch_for_bytecode_save(logdir: PathBuf, deadline: Instant) {
+/// Ends the worker once the marker exists. At the deadline it exits with 1: the warm-up did not finish.
+fn watch_for_bytecode_save(marker: PathBuf, deadline: Instant) {
     std::thread::spawn(move || {
         loop {
-            if logged(&logdir, BYTECODE_SAVED) {
+            if marker.exists() {
                 std::process::exit(0);
             }
             if Instant::now() >= deadline {
                 eprintln!("warning: warm-up stopped at the deadline before the bytecode save");
-                std::process::exit(0);
+                std::process::exit(1);
             }
             std::thread::sleep(Duration::from_millis(200));
         }
     });
-}
-
-/// True when a file directly in `logdir` contains `marker`.
-fn logged(logdir: &Path, marker: &str) -> bool {
-    std::fs::read_dir(logdir)
-        .into_iter()
-        .flatten()
-        .flatten()
-        .any(|e| {
-            std::fs::read(e.path()).is_ok_and(|b| String::from_utf8_lossy(&b).contains(marker))
-        })
 }
 
 fn cmd_scan(args: Vec<String>) -> Result<i32> {

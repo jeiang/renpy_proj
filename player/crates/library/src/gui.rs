@@ -198,6 +198,8 @@ struct App {
     /// Games waiting for a background warm-up, and the warm-up drivers that run now.
     warm_queue: VecDeque<Game>,
     warm_running: Vec<(String, Child)>,
+    /// Games whose last background warm-up stopped with an error. Shown quietly, never retried.
+    warm_failed: HashSet<String>,
     streams: Vec<(String, Serve)>,
     icons: HashMap<PathBuf, Option<egui::TextureHandle>>,
     message: String,
@@ -229,6 +231,7 @@ impl App {
             running: Vec::new(),
             warm_queue: VecDeque::new(),
             warm_running: Vec::new(),
+            warm_failed: HashSet::new(),
             streams: Vec::new(),
             icons: HashMap::new(),
             message: String::new(),
@@ -445,6 +448,11 @@ impl App {
             || self.warm_running.iter().any(|(k, _)| k == key)
     }
 
+    /// Whether the game's last background warm-up stopped with an error.
+    fn warm_stopped(&self, key: &str) -> bool {
+        self.warm_failed.contains(key)
+    }
+
     /// Queues the games that a library change brought in, then starts what the warm-up slots allow.
     fn queue_warm(&mut self, before: &HashSet<String>) {
         let added: Vec<Game> = self
@@ -540,8 +548,22 @@ impl App {
                 }
             }
         });
+        let mut stopped = Vec::new();
         self.warm_running
-            .retain_mut(|(_, child)| child.try_wait().is_ok_and(|st| st.is_none()));
+            .retain_mut(|(key, child)| match child.try_wait() {
+                Ok(None) => true,
+                Ok(Some(st)) => {
+                    if !st.success() {
+                        stopped.push(key.clone());
+                    }
+                    false
+                }
+                Err(_) => {
+                    stopped.push(key.clone());
+                    false
+                }
+            });
+        self.warm_failed.extend(stopped);
         self.pump_warm();
         if let Some(m) = done.pop() {
             self.message = m;

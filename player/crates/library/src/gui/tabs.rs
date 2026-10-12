@@ -132,6 +132,7 @@ impl App {
                     let selected = self.selected.as_ref() == Some(&g.key);
                     let running = self.running.iter().any(|(k, _)| *k == g.key);
                     let preparing = self.is_preparing(&g.key);
+                    let stopped = self.warm_stopped(&g.key);
                     let streaming = self.streams.iter().any(|(k, _)| *k == g.key);
                     let icon = self.icon(g);
                     let bg = ui.painter().add(egui::Shape::Noop);
@@ -204,6 +205,11 @@ impl App {
                                         }
                                         if !streaming && !running && preparing {
                                             ui.label(RichText::new("Preparing").small().weak());
+                                        }
+                                        if !streaming && !running && !preparing && stopped {
+                                            ui.label(
+                                                RichText::new("Warm-up stopped").small().weak(),
+                                            );
                                         }
                                     });
                                 });
