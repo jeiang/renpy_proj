@@ -1,0 +1,15 @@
+# A minimal main menu. The harness needs a screen named main_menu with a Start button.
+init python:
+    # Without gui.rpy no theme asks for a screen based main menu: ask for it.
+    layout.screen_main_menu()
+
+screen main_menu():
+    tag menu
+    add Solid("#202830")
+    vbox:
+        xalign 0.5
+        yalign 0.5
+        spacing 24
+        text "SYNTH OBF" size 72 xalign 0.5 color "#e8e8e8"
+        textbutton "Start" action Start() xalign 0.5 text_size 40
+        textbutton "Quit" action Quit(confirm=False) xalign 0.5 text_size 40

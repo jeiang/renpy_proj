@@ -134,5 +134,5 @@ Each milestone is a GitHub issue labelled `build`. Gates are the harness tiers f
 | Later | **Strangler:** move Python subsystems to Rust in the order profiling gives. Also build-phase optimisations such as zero-copy IOSurface video. | Each move passes the full corpus gate on all three desktops. |
 
 ## Known gaps
-- No large Ren'Py 8.4+ game in the corpus (TheStormWithinUs 8.5.3 is small), no obfuscated game, and no 4K Ren'Py 8 game: see [the corpus-gaps ticket](https://github.com/jeiang/renpy_proj/issues/18). SynthUHD (synthetic, 4K stills and 60 fps movies) covers the 4K paths in the harness, but it is not a real game.
+- No large Ren'Py 8.4+ game in the corpus (TheStormWithinUs 8.5.3 is small), no real obfuscated game (SynthObf is a stock-runnable stand-in with a non-default RPA key and a custom archive; rpyc layout changes and encryption are not covered), and no 4K Ren'Py 8 game: see [the corpus-gaps ticket](https://github.com/jeiang/renpy_proj/issues/18). SynthUHD (synthetic, 4K stills and 60 fps movies) covers the 4K paths in the harness, but it is not a real game.
 - Linux GPU, video and streaming are measured (harness/M4-status.md, harness/M5-status.md). Windows on a real GPU (D3D12, D3D11VA video, streaming encoders) is not measured yet: see the Windows GPU verification ticket.

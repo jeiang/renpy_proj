@@ -38,6 +38,7 @@ GAMES = {
     "SynthObf": ("obf", None, []),
     "SynthUHD": ("uhd", None, []),
     "SynthBig": ("big", None, []),
+    "SynthObfEngine": ("obfengine", None, []),
     "Synth7": ("py7", None, []),
     "Synth7Patch": ("py7patch", None, []),
 }
@@ -124,6 +125,21 @@ def check_compat(run_dir, game):
     if not any(e["kind"] == "skip" and e["file"] and "un.rpyc" in e["file"] for e in ev):
         problems.append("un.rpyc was not skipped (no `skip` event)")
     return problems
+
+
+def check_engine_copy(run_dir):
+    """Problems (list of strings) of the player report of SynthObfEngine. The game folder ships an engine copy: urp must
+    report it once as `game-engine-copy` (severity info). Urp must not load it; the import of that copy raises, so a
+    passing run also shows that nothing imported it."""
+    _, pre = reports(run_dir)
+    if pre is None:
+        return ["no preflight report in the probe launch"]
+    entries = [u for u in pre.get("unsupported", []) if u.get("feature") == "game-engine-copy"]
+    if len(entries) != 1:
+        return ["expected one game-engine-copy entry, found %d" % len(entries)]
+    if entries[0].get("severity") != "info":
+        return ["game-engine-copy has severity %r, expected info" % entries[0].get("severity")]
+    return []
 
 
 # ---------------------------------------------------------------- the patch game
@@ -215,6 +231,12 @@ def main():
                 pargs += ["--seed-data", seed]
             rc = gate(pargs)
             row["player"] = "pass" if rc == 0 else "FAIL"
+            if g == "SynthObfEngine":
+                probs = check_engine_copy(out / g / "player")
+                for p in probs:
+                    say("%s engine copy: %s" % (g, p))
+                if probs:
+                    row["player"] = "FAIL"
             if g.startswith("Synth7"):
                 probs = check_compat(out / g / "player", g)
                 row["compat"] = "pass" if not probs else "FAIL"
