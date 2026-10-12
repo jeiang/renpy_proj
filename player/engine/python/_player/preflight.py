@@ -115,6 +115,24 @@ def detect_engine(basedir):
     return version, "renpy/__init__.py" + note, pymajor
 
 
+def game_engine_copy(basedir, bundled_version):
+    """Unsupported-feature entry for a game that ships its own Ren'Py engine in `renpy/`, or None.
+
+    urp never imports that copy. It runs the engine bundled in the player (`bundled_version`), so a change in the
+    copy has no effect in urp. The copy may also differ from the stock release, which stock Ren'Py runs."""
+
+    if not os.path.isfile(os.path.join(basedir, "renpy", "__init__.py")):
+        return None
+
+    engine, source, _ = detect_engine(basedir)
+    shipped = "version %s, from %s" % (engine, source) if engine else source
+    return {
+        "feature": "game-engine-copy",
+        "severity": "info",
+        "detail": "The game folder ships its own Ren'Py engine (%s). It may differ from the stock release. urp does not load it: it runs its bundled Ren'Py %s, so changes in the game's renpy/ folder have no effect in urp." % (shipped, bundled_version),
+    }
+
+
 # ---------------------------------------------------------------- features
 
 
@@ -382,6 +400,10 @@ def build_report(settings, savedir, record, files, features, errors):
 
     if features["models_3d"]:
         unsupported.append({"feature": "model-displayable", "severity": "info", "detail": "The game uses 3D model or Model() displayables: " + "; ".join(features["evidence"] + features["model_files"][:3])})
+
+    engine_copy = game_engine_copy(settings["basedir"], renpy.version_only)
+    if engine_copy:
+        unsupported.append(engine_copy)
 
     if any(f["kind"] == "save" and f["unresolved"] for f in files):
         names = sorted({k for f in files for k in f["unresolved"]})
