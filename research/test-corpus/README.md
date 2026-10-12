@@ -92,3 +92,7 @@ research/test-corpus/lint_released.sh      # outside nix develop; saves and toke
 - Video is the common workload: 746 to 1231 movie uses per game, at 1080p60 or 1440p60, in VP9 and Theora. Theora has no hardware decode path (see [gpu-media](../gpu-media/README.md)), so every route needs a fast software fallback.
 - No custom shaders and no obfuscation appear here. That lowers the near-term cost of route (a) and the wgpu route, but gives no evidence about the wider game population.
 - `lint` against a released copy is a cheap, headless first compatibility gate: it loads every script and proves the `.rpyc` files load. Any new player should pass the same gate before visual checks.
+
+## Obfuscation stand-in (SynthObf)
+
+No real obfuscated game is in the corpus. `harness/testgames/obf/` is a synthetic stand-in (issue #18). It runs on stock Ren'Py 8.5.3 without an engine patch. Scripts sit in an RPA-3 archive with a non-default XOR key. Images sit in a custom `XRPA-1.0` archive that a game-local loader reads. The stand-in passes the stock gate and the player gate, with the same plan (`route`, `saveresume`, `probe`, `lint`). Its checks prove that the player reads a non-default RPA key and a second archive format. They do not prove that the player reads real obfuscated games. Known gaps: rpyc slot-layout changes, custom pickle opcodes and encryption layers.
