@@ -12,20 +12,9 @@ use std::process::Command;
 
 use anyhow::{Context, Result, bail};
 
-const USAGE: &str = "usage: urp patches <game> list|validate|apply-test [--json] [--data <dir>]\n       urp patches <game> accept <id> [--data <dir>]";
+use library::Library;
 
-fn game_key_of(game: &str) -> Result<String> {
-    let path = Path::new(game)
-        .canonicalize()
-        .with_context(|| format!("game path not found: {game}"))?;
-    let path = if path.extension().is_some_and(|e| e == "app") {
-        path.join("Contents/Resources/autorun/game")
-    } else {
-        path
-    };
-    let (base, gamedir) = vfs::resolve_game(&path);
-    Ok(vfs::game_key(&base, &gamedir))
-}
+const USAGE: &str = "usage: urp patches <game> list|validate|apply-test [--json] [--data <dir>]\n       urp patches <game> accept <id> [--data <dir>]";
 
 fn is_fingerprint(name: &str) -> bool {
     name.len() == 16 && name.bytes().all(|b| b.is_ascii_hexdigit())
@@ -93,7 +82,8 @@ pub fn run(args: &[String], data: &Path, exe: &Path) -> Result<i32> {
         [game, sub, rest @ ..] => (game, sub, rest),
         _ => bail!("{USAGE}"),
     };
-    let key = game_key_of(game)?;
+    let target = Library::load(data)?.game_ref(game)?;
+    let key = target.key.clone();
     if sub == "accept" {
         let [id] = rest else { bail!("{USAGE}") };
         return accept(data, &key, id);
@@ -151,7 +141,7 @@ pub fn run(args: &[String], data: &Path, exe: &Path) -> Result<i32> {
         "apply-test" => {
             let mut cmd = Command::new(exe);
             // Headless: the child only loads the script, so it needs no window or audio device.
-            cmd.arg(game)
+            cmd.arg(&target.path)
                 .arg("--data")
                 .arg(data)
                 .env("PLAYER_HEADLESS", "1");

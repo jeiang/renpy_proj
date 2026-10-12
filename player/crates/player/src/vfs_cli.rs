@@ -5,16 +5,9 @@ use std::io::{IsTerminal, Write};
 use std::path::Path;
 
 use anyhow::{Context, Result, bail};
-use library::mods;
+use library::{Library, mods};
 
 const USAGE: &str = "usage: urp mods <game> list [--json]\n       urp mods <game> enable <mod>...   (appended: highest priority)\n       urp mods <game> disable <mod>...\n       urp mods <game> order <mod>...    (enabled mods, lowest priority first)\n       urp mods <game> install <folder | archive> [--name <name>] [--yes]\n       urp mods <game> remove <mod>...   (deletes the mod folder)";
-
-/// The key of a user game path, equal to the one the running player computes.
-pub fn game_key_of(game: &str) -> Result<String> {
-    let path = Path::new(game);
-    library::resolve_game(path)?;
-    Ok(library::game_key(path))
-}
 
 /// Asks y/N on stderr. Only called on a terminal.
 fn confirm(question: &str) -> Result<bool> {
@@ -91,7 +84,7 @@ pub fn run(args: &[String], data: &Path) -> Result<i32> {
     let [game, sub, rest @ ..] = args else {
         bail!("{USAGE}")
     };
-    let key = game_key_of(game)?;
+    let key = Library::load(data)?.game_ref(game)?.key;
 
     match sub.as_str() {
         "list" => {
