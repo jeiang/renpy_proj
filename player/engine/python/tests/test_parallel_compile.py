@@ -167,8 +167,8 @@ class ParallelCompile(unittest.TestCase):
         script, script_files, plan = self.plan(files)
         lists = plan.waves[0].workers(2)
         self.assertEqual(len(lists), 2)
-        sizes = sorted(sum(i[4] for i in items) for items in lists)
-        self.assertLess(sizes[1] - sizes[0], 400)
+        # The big file is alone on one worker; the four small ones share the other.
+        self.assertEqual(sorted(sorted(i[1] for i in items) for items in lists), [["a"], ["b", "c", "d", "e"]])
         self.assertEqual(sorted(i[1] for items in lists for i in items), ["a", "b", "c", "d", "e"])
 
         for items in lists:
