@@ -166,9 +166,11 @@ export LD_LIBRARY_PATH=$FF/lib
 export LIBCLANG_PATH=/usr/lib64
 unset CFLAGS
 # engine/build.py compiles with a bare `cc` and ignores CFLAGS. The nix gcc wrapper makes PIE objects by
-# default; this image's gcc does not, and the Rust linker builds a PIE. A `cc` shim adds -fPIC.
+# default; this image's gcc does not, and the Rust linker builds a PIE. A `cc` shim adds -fPIC. It must be the
+# gcc-toolset gcc that is first on PATH, not /usr/bin/gcc (GCC 8): `c++` (the UnRAR build) is the toolset g++,
+# and only the toolset driver links the libstdc++_nonshared.a its newer symbols need.
 mkdir -p "$CACHE/shim"
-printf '#!/bin/sh\nexec /usr/bin/gcc -fPIC "$@"\n' > "$CACHE/shim/cc"; chmod +x "$CACHE/shim/cc"
+printf '#!/bin/sh\nexec %s -fPIC "$@"\n' "$(command -v gcc)" > "$CACHE/shim/cc"; chmod +x "$CACHE/shim/cc"
 export PATH=$CACHE/shim:$PATH
 rm -rf "$PLAYER/build-out/engine/stamp.txt"
 (cd "$PLAYER" && cargo build --release -p player)
