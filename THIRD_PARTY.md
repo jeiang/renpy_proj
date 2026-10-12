@@ -3,7 +3,7 @@
 The player itself is licensed under MIT OR Apache-2.0 (`LICENSE-MIT`, `LICENSE-APACHE`).
 It uses the software below. This file lists what the source tree and the binary packages carry.
 It is not legal advice. Full licence texts are in `player/packaging/licences/`. Binary packages
-(macOS app, Linux AppImage and tarball, Windows zip) ship these files in a `licenses/` folder (the macOS app
+(macOS app, Linux tarball, Windows zip) ship these files in a `licenses/` folder (the macOS app
 uses `Contents/Resources/licenses/`).
 
 This program contains free software licensed under a number of licenses, including the GNU Lesser General Public License (FFmpeg).
@@ -97,13 +97,21 @@ The player embeds a static CPython 3.12.8 built by `player/crates/pyhost/cpython
 Copyright (c) 2001 Python Software Foundation; All Rights Reserved. Licence: `player/packaging/licences/CPython-LICENSE.txt`.
 The build changes no CPython source. It links these libraries statically (on macOS libffi is the system library): libffi (MIT), expat (MIT), zlib (Zlib), bzip2 (BSD-style), xz/liblzma (0BSD / public domain), OpenSSL (Apache-2.0).
 
-## UnRAR (RARLAB licence, freeware)
+## UnRAR (freeware licence), RAR extraction
 
-Builds with the cargo feature `rar` (the default; Nix package `urp`; every release package) contain the UnRAR source code by
-Alexander L. Roshal, compiled in through the `unrar` crate. The player uses it to extract RAR archives only. The licence allows free
-distribution inside other software but forbids using the code to create RAR-compatible archivers or to re-create the RAR compression
-algorithm, and it is **not** an open source licence. Full text: `player/packaging/licences/UnRAR-LICENSE.txt` (shipped in every package).
-Builds without the feature (`--no-default-features --features wayland`, Nix package `urp-norar`) do not contain it.
+The `unrar` Rust crate (MIT OR Apache-2.0, feature `rar` of `player`, on by default) compiles Alexander Roshal's UnRAR source (`unrar_sys`) into
+the player so that `urp mods <game> install` can read `.rar` archives. UnRAR only extracts. The licence below allows use and
+distribution in any software, free of charge, but not the development of RAR-compatible archivers or re-creation of the RAR
+compression algorithm; it is not an open-source licence, so a build without RAR is available
+(`cargo build --no-default-features --features wayland`; the Nix package `urp-norar`). Every release package includes RAR and carries this notice.
+Full text: `player/packaging/licences/UnRAR-LICENSE.txt`. Copyright Alexander L. Roshal.
+
+> UnRAR source code may be used in any software to handle RAR archives without limitations free of charge, but cannot be used to develop RAR (WinRAR) compatible archiver and to re-create RAR compression algorithm, which is proprietary. Distribution of modified UnRAR source code in separate form or as a part of other software is permitted, provided that full text of this paragraph, starting from "UnRAR source code" words, is included in license, or in documentation if license is not available, and in source code comments of resulting package.
+
+## Archive crates (mod install)
+
+`zip` (MIT), `tar` (MIT OR Apache-2.0), `flate2` (MIT OR Apache-2.0, pure-Rust backend), `sevenz-rust2` (Apache-2.0, with `lzma-rust2`), `zstd` (MIT; the bundled Zstandard C library is BSD-3-Clause, taken under BSD),
+`xz2` (MIT OR Apache-2.0; `lzma-sys` bundles liblzma from XZ Utils, 0BSD or public domain). Their texts are in `RUST_DEPENDENCIES.md`.
 
 ## Rust crates
 
