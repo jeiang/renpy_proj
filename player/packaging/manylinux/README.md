@@ -13,10 +13,14 @@ player/packaging/manylinux/build.sh [CACHE_DIR]     # CACHE_DIR defaults to ~/.c
 Output (gitignored, under `player/build-out`):
 
 ```
-player/build-out/manylinux/player-linux-x86_64/player        binary, RUNPATH $ORIGIN/lib, interpreter /lib64/ld-linux-x86-64.so.2
-player/build-out/manylinux/player-linux-x86_64/lib/          LGPL FFmpeg 7.1, dav1d, libva, libva-drm, libz
-player/build-out/manylinux/player-linux-x86_64.tar.gz
+player/build-out/manylinux/urp-linux-x86_64/urp        binary, RUNPATH $ORIGIN/lib, interpreter /lib64/ld-linux-x86-64.so.2
+player/build-out/manylinux/urp-linux-x86_64/lib/          LGPL FFmpeg 7.1, dav1d, libva, libva-drm, libz
+player/build-out/manylinux/urp-linux-x86_64.tar.gz
 ```
+
+`player/packaging/appimage.sh` then turns the directory into `urp-linux-x86_64.AppImage` (AppDir: `AppRun`, `urp.desktop`, a generated icon,
+`usr/bin/urp` with `usr/bin/lib/` so the RUNPATH `$ORIGIN/lib` still resolves, the notices in `usr/share/licenses/urp/`). It pins `appimagetool` 1.9.1 by
+SHA-256. The AppImage uses the tool's embedded static type2 runtime (no `libfuse2`). Without FUSE: `--appimage-extract-and-run`.
 
 | File | Role |
 |---|---|

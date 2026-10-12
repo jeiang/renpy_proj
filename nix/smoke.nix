@@ -1,7 +1,7 @@
-# checks.<system>.urp-smoke: the built binary, copied out of the store into a temp dir, runs a synthetic
+# checks.<system>.urp-smoke and urp-norar-smoke: the built binary, copied out of the store into a temp dir, runs a synthetic
 # game with a clean environment (nothing from the build shell).
-{ pkgs, urp }:
-pkgs.runCommand "urp-smoke" { } ''
+{ pkgs, urp, name ? "urp-smoke" }:
+pkgs.runCommand name { } ''
   work=$(mktemp -d)
   cp ${urp}/bin/urp $work/urp
   chmod u+w $work/urp

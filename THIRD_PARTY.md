@@ -3,7 +3,7 @@
 The player itself is licensed under MIT OR Apache-2.0 (`LICENSE-MIT`, `LICENSE-APACHE`).
 It uses the software below. This file lists what the source tree and the binary packages carry.
 It is not legal advice. Full licence texts are in `player/packaging/licences/`. Binary packages
-(macOS app, Linux tarball, Windows zip) ship these files in a `licenses/` folder (the macOS app
+(macOS app, Linux AppImage and tarball, Windows zip) ship these files in a `licenses/` folder (the macOS app
 uses `Contents/Resources/licenses/`).
 
 This program contains free software licensed under a number of licenses, including the GNU Lesser General Public License (FFmpeg).
@@ -96,6 +96,14 @@ libaom is BSD-2-Clause with the AOM Patent License 1.0 (https://aomedia.googleso
 The player embeds a static CPython 3.12.8 built by `player/crates/pyhost/cpython/build.sh`.
 Copyright (c) 2001 Python Software Foundation; All Rights Reserved. Licence: `player/packaging/licences/CPython-LICENSE.txt`.
 The build changes no CPython source. It links these libraries statically (on macOS libffi is the system library): libffi (MIT), expat (MIT), zlib (Zlib), bzip2 (BSD-style), xz/liblzma (0BSD / public domain), OpenSSL (Apache-2.0).
+
+## UnRAR (RARLAB licence, freeware)
+
+Builds with the cargo feature `rar` (the default; Nix package `urp`; every release package) contain the UnRAR source code by
+Alexander L. Roshal, compiled in through the `unrar` crate. The player uses it to extract RAR archives only. The licence allows free
+distribution inside other software but forbids using the code to create RAR-compatible archivers or to re-create the RAR compression
+algorithm, and it is **not** an open source licence. Full text: `player/packaging/licences/UnRAR-LICENSE.txt` (shipped in every package).
+Builds without the feature (`--no-default-features --features wayland`, Nix package `urp-norar`) do not contain it.
 
 ## Rust crates
 

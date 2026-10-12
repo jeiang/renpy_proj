@@ -36,21 +36,32 @@
       };
       # The pure player package is built for the two platforms of the M4 gate.
       playerSystems = [ "aarch64-darwin" "x86_64-linux" ];
+      # `urp` carries the UnRAR licence (freeware, not free software), which check-meta rejects in
+      # nixpkgs.legacyPackages. The player packages therefore come from a nixpkgs import that admits that one
+      # package by name. Same nixpkgs revision, so every dependency is the same derivation as in legacyPackages.
+      playerPkgs = system: import nixpkgs {
+        inherit system;
+        config.allowUnfreePredicate = pkg: nixpkgs.lib.getName pkg == "urp";
+      };
       playerPackages = system:
         let
-          pkgs = nixpkgs.legacyPackages.${system};
+          pkgs = playerPkgs system;
           sources = import ./nix/sources.nix { inherit pkgs; };
           cpython = import ./nix/cpython.nix { inherit pkgs sources; };
-        in
-        {
-          player-cpython = cpython;
-          urp = import ./nix/player.nix {
-            inherit pkgs sources cpython;
+          mkUrp = rar: import ./nix/player.nix {
+            inherit pkgs sources cpython rar;
             ffmpegLgpl = ffmpegLgpl pkgs;
             renpySrc = renpy-src;
             renpyRev = renpy-src.rev;
           };
-          default = (playerPackages system).urp;
+        in
+        rec {
+          player-cpython = cpython;
+          # Default cargo features: RAR support (UnRAR, unfree-redistributable).
+          urp = mkUrp true;
+          # `--no-default-features --features wayland`: no UnRAR, free software only.
+          urp-norar = mkUrp false;
+          default = urp;
         };
     in
     {
@@ -62,9 +73,13 @@
         } // nixpkgs.lib.optionalAttrs (builtins.elem system playerSystems) (playerPackages system));
 
       checks = nixpkgs.lib.genAttrs playerSystems (system:
-        let pkgs = nixpkgs.legacyPackages.${system}; in
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+          packages = playerPackages system;
+        in
         {
-          urp-smoke = import ./nix/smoke.nix { inherit pkgs; urp = (playerPackages system).urp; };
+          urp-smoke = import ./nix/smoke.nix { inherit pkgs; urp = packages.urp; name = "urp-smoke"; };
+          urp-norar-smoke = import ./nix/smoke.nix { inherit pkgs; urp = packages.urp-norar; name = "urp-norar-smoke"; };
         });
 
       devShells = forAllSystems (system:

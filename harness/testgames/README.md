@@ -218,7 +218,7 @@ ALSA, udev, the Vulkan loader and X11 to the host, so the packages above are nee
 export HARNESS_DISPLAY=xvfb
 harness/testgames/fetch.sh
 FFMPEG_SYNTH=/tmp/ffmpeg-synth python3 harness/testgames/build.py
-python3 harness/testgames/run.py --no-build --player-bin "$PWD/player/build-out/manylinux/player-linux-x86_64/player"
+python3 harness/testgames/run.py --no-build --player-bin "$PWD/player/build-out/manylinux/urp-linux-x86_64/urp"
 ```
 
 `run.py` runs stock and then the player for all seven games at the synth tier (lint, probe, route, saveresume) and exits 0

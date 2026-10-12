@@ -41,7 +41,7 @@ set -euo pipefail
 dir=${1:?usage: check-no-nix-store.sh <package-dir>}
 [ -d "$dir" ] || { echo "check-no-nix-store: $dir is not a directory" >&2; exit 1; }
 allow=${NIX_STORE_ALLOW:-^$}
-DATA_DECISIONS=$'^(player|libcrypto\\.3\\.dylib) /nix/store/[a-z0-9]{32}-openssl[^/]*/(etc/ssl(/certs|/private|/engines-3|/ct_log_list\\.cnf)?|lib/(engines-3|ossl-modules))$\tOpenSSL default folders: the CA file is set at runtime (SSL_CERT_FILE), the rest is optional
+DATA_DECISIONS=$'^(urp|libcrypto\\.3\\.dylib) /nix/store/[a-z0-9]{32}-openssl[^/]*/(etc/ssl(/certs|/private|/engines-3|/ct_log_list\\.cnf)?|lib/(engines-3|ossl-modules))$\tOpenSSL default folders: the CA file is set at runtime (SSL_CERT_FILE), the rest is optional
 ^lib(av[a-z]+|sw[a-z]+)\\.[0-9]+\\.dylib /nix/store/[a-z0-9]{32}-ffmpeg-[^/]*(/.*)?$\tFFmpeg build configuration text, never opened
 ^libgnutls\\.[0-9]+\\.dylib /nix/store/[a-z0-9]{32}-gnutls-[^/]*/etc/gnutls/config$\tGnuTLS optional config file, skipped when missing
 ^lib(gnutls|intl|zvbi)\\.[0-9]+\\.dylib /nix/store/[a-z0-9]{32}-[^/]+/share/locale$\tMessage catalogs, English when missing
@@ -52,8 +52,9 @@ bad=0 info=0 unreviewed=0
 decide() { # prints the decision for "<name> <path>", or nothing
     local line
     while IFS= read -r line; do
-        [[ "$1" =~ ${line%%$'\t'*} ]] && { printf '%s' "${line#*$'\t'}"; return; }
+        [[ "$1" =~ ${line%%$'\t'*} ]] && { printf '%s' "${line#*$'\t'}"; return 0; }
     done <<<"$DATA_DECISIONS"
+    return 0  # no match: print nothing (without this, set -e ends the script silently)
 }
 while IFS= read -r f; do
     hits=$(strings -a "$f" | grep -Eo '/nix/store/[a-z0-9]{32}-[^ "<>]*' | sort -u || true)
