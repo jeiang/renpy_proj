@@ -64,6 +64,22 @@ The user reports about 94 s. This run measured 138 s on artemis for the same ste
 
 The urp cold data dir holds the same four compiled files (`game/mod/Gallery`, `Overrides`, `Scenes`, `Vars`).
 
+## Change: accept the Ren'Py 8.3 `.rpyc` digest
+
+Patch `0011-rpyc-legacy-digest.patch` changes the stale check in `renpy/script.py`. A game `.rpyc` is loaded when its stored digest equals `md5(source + b"_2025-07-06")` (8.5.3) or `md5(source)` (8.3.4). The player cache accepts only the 8.5.3 digest, because urp writes that cache. An edited `.rpy` matches neither digest, so it is compiled again. The patch adds no runtime event, because no existing event kind describes this decision.
+
+Measured on artemis with a urp build from this branch. Each run used a copy of the Wartribe game, a fresh data directory, and a private Xvfb with a clean environment.
+
+| Run | Loading script | Cache after the run |
+|---|---|---|
+| Cold, unchanged game | 2953 ms | 3 analysis files, no per-script `.rpyc` |
+| Cold, `game/loadcorrections.rpy` edited | 2957 ms | Only `rpyc/game/loadcorrections.rpyc` added |
+| Warm, same data directory after the edit | 1795 ms | Reused |
+
+Before the change, the cold step took 138268 ms on the same game.
+
+The SynthStory gate (`harness/testgames/run.py --games SynthStory`, run on artemis with the urp build from this branch) passed for both stock and player. Stock: pass. Player: pass.
+
 ## Caveats
 
 - Wartribe stock is the game's own Ren'Py 8.3.4 engine, not 8.5.3. The stock cold case is not like-for-like with urp (8.5.3). A stock 8.5.3 cold run on Wartribe was not done.
@@ -81,7 +97,7 @@ Upstream facts used (not copied into this repo):
 
 - Ren'Py 8.5.3 `renpy/script.py` sets `RPYC_MAGIC = b"_2025-07-06"` (line 55) and computes the stale-check digest as `md5(source + RPYC_MAGIC)` (lines 911 and 1025).
 - Ren'Py 8.3.4 uses `md5(source)` for the same check.
-- urp redirects the compiled cache with `config.player_cache_dir` (`player/engine/patches/0006-player-cache-redirect.patch`). The cache path is `<data>/cache/<game key>/<BUILD_FINGERPRINT>/rpyc/<slot>/<name>`. A candidate is used only when its stored digest equals `md5(source + RPYC_MAGIC)`.
+- urp redirects the compiled cache with `config.player_cache_dir` (`player/engine/patches/0006-player-cache-redirect.patch`). The cache path is `<data>/cache/<game key>/<BUILD_FINGERPRINT>/rpyc/<slot>/<name>`. A cache candidate is used only when its stored digest equals `md5(source + RPYC_MAGIC)`. A game `.rpyc` is also used when its stored digest equals `md5(source)` (`player/engine/patches/0011-rpyc-legacy-digest.patch`).
 
 The format background and the unrpyc study are in `research/rpyc-loading/README.md`.
 
@@ -100,7 +116,7 @@ The stock 8.5.3 run uses `run-series.sh` with `stock853-wrap.sh` in place of the
 
 ## Implications for the route decision
 
-- The cold step (94 s reported, 138 s measured) is an upstream cost of the 8.5.3 format check. It is paid once per data directory and per urp build. It is not a loop, and the warm path is fast.
+- The cold step (94 s reported, 138 s measured) is an upstream cost of the 8.5.3 format check when a game ships no `.rpyc` that matches its source. It is paid once per data directory and per urp build. A game with 8.3 `.rpyc` files no longer pays it (see Change). The warm path is fast.
 - Warm launches are fast. The route decision does not need a change to make later launches faster.
-- Reusing the shipped 8.3.4 `.rpyc` would remove the cold cost. It would also skip upstream's invalidation rule, and the AST compatibility is not tested. That is a risk of wrong behaviour, not only a speed gain. Keep it as a follow-up with a test plan. Do not ship it without a compatibility study.
+- Reusing the shipped 8.3 `.rpyc` removes the cold cost on 8.3 games. Upstream 8.5.3 never loads such a file when the source is present, so this change is the first to do so. The risk is AST compatibility between 8.3 and 8.5.3 output. This is verified for Wartribe and the SynthStory gate only. Check a game's behaviour after an engine update.
 - Shipping a pre-built cache per game would remove the cost for users. It needs a build step per game and per engine version. That is a packaging decision.
