@@ -2,7 +2,7 @@
 # Builds the three packages (build.yml), regenerates the Rust licence notices with cargo about, writes SHA-256
 # checksums and creates a DRAFT GitHub Release. Publish the draft by hand after you have looked at it.
 #   macOS: ad hoc signed .app in a zip. No Developer ID yet, so Gatekeeper asks the user to allow it.
-#   Linux: manylinux_2_28 tarball.
+#   Linux: manylinux_2_28 AppImage (the tarball in package-linux is a CI artifact only).
 #   Windows: zip.
 # Checks (clippy, tests, synthetic corpus) are not repeated here: ci.yml already ran them on the tagged commit.
 name: release
@@ -64,7 +64,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir dist
-          cp artifacts/package-linux/urp-linux-x86_64.tar.gz "dist/urp-$TAG-linux-x86_64-manylinux_2_28.tar.gz"
+          cp artifacts/package-linux/urp-linux-x86_64.AppImage "dist/urp-$TAG-linux-x86_64.AppImage"
           cp artifacts/package-macos/urp-macos-arm64.zip "dist/urp-$TAG-macos-arm64.zip"
           cp artifacts/package-windows/urp-windows-x86_64.zip "dist/urp-$TAG-windows-x86_64.zip"
           cp artifacts/notices/RUST_DEPENDENCIES.md "dist/urp-$TAG-rust-dependency-licences.md"

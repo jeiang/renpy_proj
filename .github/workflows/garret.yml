@@ -45,7 +45,11 @@ jobs:
           extra_nix_config: |
             extra-substituters = ${{ env.GARRET_SUBSTITUTER }}
             extra-trusted-public-keys = ${{ env.GARRET_PUBLIC_KEY }}
-      - name: Build the player
-        run: nix build .#packages.${{ matrix.system }}.urp --print-build-logs
-      - name: Push the closure to garret
-        run: nix run "$GARRET_CLIENT" -- --config .ci/garret.toml push ./result
+      - name: Build the player, with and without RAR support
+        run: |
+          nix build .#packages.${{ matrix.system }}.urp --print-build-logs --out-link result-urp
+          nix build .#packages.${{ matrix.system }}.urp-norar --print-build-logs --out-link result-urp-norar
+      - name: Push the closures to garret
+        run: |
+          nix run "$GARRET_CLIENT" -- --config .ci/garret.toml push ./result-urp
+          nix run "$GARRET_CLIENT" -- --config .ci/garret.toml push ./result-urp-norar
