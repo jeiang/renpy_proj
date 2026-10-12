@@ -590,22 +590,21 @@ impl App {
             }
             if !unmatched.is_empty() {
                 ui.label("Unmatched");
-                egui::Grid::new("patch-unmatched")
-                    .striped(true)
-                    .spacing([14.0, 4.0])
-                    .show(ui, |ui| {
-                        for u in &unmatched {
-                            ui.monospace(format!("{}:{}", show(&u["file"]), show(&u["line"])));
-                            ui.label(show(&u["patch"]));
-                            ui.add(
-                                egui::Label::new(
-                                    RichText::new(show(&u["reason"])).color(Color32::LIGHT_RED),
-                                )
-                                .wrap(),
-                            );
-                            ui.end_row();
-                        }
+                for (n, u) in unmatched.iter().enumerate() {
+                    ui.horizontal(|ui| {
+                        ui.monospace(format!("{}:{}", show(&u["file"]), show(&u["line"])));
+                        ui.label(show(&u["patch"]));
                     });
+                    ui.indent(n, |ui| {
+                        ui.add(
+                            egui::Label::new(
+                                RichText::new(show(&u["reason"])).color(Color32::LIGHT_RED),
+                            )
+                            .wrap(),
+                        );
+                    });
+                    ui.add_space(4.0);
+                }
             }
             if !applied.is_empty() {
                 ui.label("Applied");
