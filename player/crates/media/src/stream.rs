@@ -464,6 +464,14 @@ impl Media {
             out[done * 2..(done + pad) * 2].fill(0.0);
             st.audio_read_samples += pad as i64;
             rv += pad;
+            if st.audio_read_samples >= st.audio_duration {
+                // The known end is reached. Frames still queued lie past it and would never
+                // be read, so drop them. Otherwise `drained()` never becomes true.
+                st.audio_finished = true;
+                st.audio_q.clear();
+                st.audio_out_index = 0;
+                st.audio_queue_samples = 0;
+            }
         }
         rv
     }
