@@ -411,3 +411,62 @@ fn tabs_switch_and_mods_tab_enables_reorders_and_removes() {
     assert!(h.query_by_label("Install mod from file...").is_none());
     h.get_by_label("Validate");
 }
+
+/// A zip with one top folder `<name>/game/script.rpy`, as a user would download it.
+fn game_archive(env: &Env, name: &str) -> PathBuf {
+    use std::io::Write;
+    let path = env.root.join(format!("{name}.zip"));
+    let mut z = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
+    z.start_file(
+        format!("{name}/game/script.rpy"),
+        zip::write::SimpleFileOptions::default(),
+    )
+    .unwrap();
+    z.write_all(b"label start:\n").unwrap();
+    z.finish().unwrap();
+    path
+}
+
+#[test]
+fn imported_archive_appears_in_the_library() {
+    let env = env();
+    let mut h = harness(app_for(&env));
+
+    h.state_mut()
+        .perform(Action::ImportFrom(game_archive(&env, "Beta")));
+    settle(&mut h, "import", |a| a.message.starts_with("imported "));
+
+    assert_eq!(h.state().message, "imported Beta: 2 games in the library");
+    let lib = Library::load(&env.data).unwrap();
+    assert!(lib.games.iter().any(|g| g.name == "Beta"));
+    let games = env.root.join("games");
+    assert!(games.join("Beta/game/script.rpy").is_file());
+}
+
+#[test]
+fn import_over_an_existing_game_shows_the_error_and_writes_nothing() {
+    let env = env();
+    let mut h = harness(app_for(&env));
+
+    // `Alpha` already exists in the scanned folder.
+    h.state_mut()
+        .perform(Action::ImportFrom(game_archive(&env, "Alpha")));
+    settle(&mut h, "import error", |a| {
+        a.message.contains("already exists")
+    });
+
+    assert!(h.state().message.contains("already exists"));
+    h.get_by_label_contains("already exists");
+    assert_eq!(Library::load(&env.data).unwrap().games.len(), 1);
+    let leftovers = std::fs::read_dir(env.root.join("games"))
+        .unwrap()
+        .filter(|e| {
+            e.as_ref()
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .starts_with(".importing")
+        })
+        .count();
+    assert_eq!(leftovers, 0);
+}

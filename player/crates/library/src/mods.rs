@@ -12,6 +12,8 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 use serde::Serialize;
 
+pub(crate) use archive::Format;
+pub(crate) use install::{Inspected, extract_tree, inspect};
 pub use install::{
     InstallPlan, Layout, MAX_UNPACKED_BYTES, archive_formats, install, plan_install,
 };

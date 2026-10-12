@@ -1981,6 +1981,7 @@ name = "library"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bzip2",
  "egui",
  "egui-wgpu",
  "egui-winit",
@@ -2924,6 +2925,7 @@ dependencies = [
  "encode",
  "engine",
  "gfx",
+ "libc",
  "library",
  "media",
  "patches",
