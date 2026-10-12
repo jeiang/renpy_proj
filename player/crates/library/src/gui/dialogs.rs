@@ -57,6 +57,9 @@ impl App {
             if ui.button("Add folder...").clicked() {
                 actions.push(Action::AddFolder);
             }
+            if ui.button("Import archive...").clicked() {
+                actions.push(Action::ImportArchive);
+            }
             ui.add_space(10.0);
             ui.strong("Renderer");
             ui.horizontal(|ui| {
