@@ -1,5 +1,5 @@
-//! `urp <game-dir> [--data <dir>] [--logdir <dir>] [--harness-script <file>] [ren'py args]`, plus the
-//! library subcommands `scan`, `list`, `library`, `settings`, `report`, `mods`, `serve`, and the library window (no arguments).
+//! `urp <game | key | path> [--data <dir>] [--logdir <dir>] [--harness-script <file>] [ren'py args]`, plus the
+//! library subcommands `scan`, `import`, `list`, `library`, `settings`, `report`, `mods`, `serve`, and the library window (no arguments).
 //! Contract: player/CONTRACTS.md.
 
 mod library_cli;
@@ -12,9 +12,9 @@ mod vfs_cli;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
-use library::{Library, resolve_game};
+use library::Library;
 
-const USAGE: &str = "usage: urp <game-dir | game/ | .app> [--data <dir>] [--logdir <dir>] \
+const USAGE: &str = "usage: urp <game | key | path> [--data <dir>] [--logdir <dir>] \
 [--harness-script <file>] [--renderer <name>] [ren'py args, for example lint]";
 
 /// Absolute form of a user path that may not exist yet (`--data`, `--logdir`).
@@ -30,7 +30,7 @@ fn py_path(p: &Path) -> String {
 }
 
 fn build_argv(args: Vec<String>) -> Result<Vec<String>> {
-    let mut game: Option<PathBuf> = None;
+    let mut game: Option<String> = None;
     let mut data: Option<String> = None;
     let mut renderer_given = false;
     let mut boot = vec!["urp".to_string()];
@@ -62,14 +62,14 @@ fn build_argv(args: Vec<String>) -> Result<Vec<String>> {
             }
             "-h" | "--help" => bail!("{USAGE}\n{SUBCOMMANDS}"),
             // The first bare argument is the game; everything after it that is not ours goes to Ren'Py.
-            _ if game.is_none() && !a.starts_with('-') => game = Some(PathBuf::from(a)),
+            _ if game.is_none() && !a.starts_with('-') => game = Some(a),
             _ => rest.push(a),
         }
     }
     let game = game.with_context(|| USAGE.to_string())?;
+    let data = data.map_or_else(library::default_data_dir, PathBuf::from);
     // The renderer of `urp settings` applies unless the command line names one.
     if !renderer_given {
-        let data = data.map_or_else(library::default_data_dir, PathBuf::from);
         match library::Settings::load(&data) {
             Ok(library::Settings {
                 renderer: Some(r), ..
@@ -81,8 +81,16 @@ fn build_argv(args: Vec<String>) -> Result<Vec<String>> {
             Err(e) => eprintln!("warning: ignoring the settings: {e:#}"),
         }
     }
+    // A game named in the library resolves through it. A game folder on disk works without one.
+    let lib = match Library::load(&data) {
+        Ok(lib) => lib,
+        Err(e) => {
+            eprintln!("warning: ignoring the library: {e:#}");
+            Library::default()
+        }
+    };
     boot.push("--game".into());
-    boot.push(py_path(&resolve_game(&game)?));
+    boot.push(py_path(&lib.game_ref(&game)?.path));
     boot.extend(rest);
     Ok(boot)
 }
@@ -90,6 +98,7 @@ fn build_argv(args: Vec<String>) -> Result<Vec<String>> {
 const SUBCOMMANDS: &str = "\
        urp                                   open the library window
        urp scan [<folder>...] [--data <dir>]   add folders to the library and rescan
+       urp import <archive> [--folder <folder>] [--data <dir>] [--json]   import a game archive into a library folder
        urp list [--data <dir>]            list the games in the library
        urp report <game> [--data <dir>]   pre-flight report of a game
        urp patches <game> list|validate|apply-test [--json] | accept <id>   port patches of a game
@@ -144,6 +153,60 @@ fn cmd_scan(args: Vec<String>) -> Result<i32> {
         lib.folders.len(),
         Library::path(&data).display()
     );
+    Ok(0)
+}
+
+fn cmd_import(args: Vec<String>) -> Result<i32> {
+    const IMPORT_USAGE: &str =
+        "usage: urp import <archive> [--folder <folder>] [--data <dir>] [--json]";
+    let (rest, data) = take_data(args)?;
+    let mut archive = None;
+    let mut folder = None;
+    let mut json = false;
+    let mut it = rest.into_iter();
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--folder" => {
+                let v = it
+                    .next()
+                    .with_context(|| format!("--folder needs a value\n{IMPORT_USAGE}"))?;
+                folder = Some(PathBuf::from(absolute(&v)?));
+            }
+            "--json" => json = true,
+            _ if archive.is_none() && !a.starts_with('-') => archive = Some(PathBuf::from(a)),
+            _ => bail!("{IMPORT_USAGE}"),
+        }
+    }
+    let archive = archive.with_context(|| IMPORT_USAGE.to_string())?;
+    let mut lib = Library::load(&data)?;
+    let folder = match folder {
+        Some(f) => f,
+        None => lib
+            .folders
+            .first()
+            .cloned()
+            .context("the library has no folder; pass --folder <folder>")?,
+    };
+    let plan = library::import::plan_import(&folder, &archive)?;
+    let dest = library::import::import(&plan)?;
+    // The new game's folder is in the library from now on, so `urp list` shows the game.
+    lib.add_folders(std::slice::from_ref(&folder.canonicalize()?))?;
+    lib.save(&data)?;
+    if json {
+        let out = serde_json::json!({
+            "name": plan.name,
+            "key": library::game_key(&dest),
+            "path": dest,
+            "folder": folder,
+            "layout": plan.layout.describe(),
+            "files": plan.files.len(),
+            "unpacked_bytes": plan.unpacked_bytes,
+        });
+        println!("{}", serde_json::to_string_pretty(&out)?);
+    } else {
+        println!("{}", dest.display());
+        eprintln!("imported {} ({} files)", plan.name, plan.files.len());
+    }
     Ok(0)
 }
 
@@ -210,9 +273,41 @@ fn default_ca_bundle() {
 #[cfg(not(target_os = "macos"))]
 fn default_ca_bundle() {}
 
+/// Writing to a closed pipe ends the process quietly, as it does for other Unix tools. Rust sets SIGPIPE
+/// to ignore, so `println!` would panic instead. Only the library commands reset it: `serve` writes to
+/// sockets and needs the ignore.
+#[cfg(unix)]
+fn reset_sigpipe() {
+    // SAFETY: called in `main` before any thread starts. SIG_DFL is a valid disposition.
+    unsafe { libc::signal(libc::SIGPIPE, libc::SIG_DFL) };
+}
+
+#[cfg(not(unix))]
+fn reset_sigpipe() {}
+
 fn main() -> Result<()> {
     default_ca_bundle();
     let mut args: Vec<String> = std::env::args().skip(1).collect();
+    // The library commands print to pipes that may close early (`urp list | head`). Those end quietly.
+    if matches!(
+        args.first().map(String::as_str),
+        Some(
+            "scan"
+                | "list"
+                | "patches"
+                | "upgrade"
+                | "library"
+                | "settings"
+                | "import"
+                | "mods"
+                | "report"
+                | "help"
+                | "-h"
+                | "--help"
+        )
+    ) {
+        reset_sigpipe();
+    }
     // No game and no subcommand (only `--data <dir>` at most): the library window.
     let window_data = match args.as_slice() {
         [] => Some(library::default_data_dir()),
@@ -226,6 +321,7 @@ fn main() -> Result<()> {
     } else {
         match args[0].as_str() {
             "scan" => cmd_scan(args.split_off(1))?,
+            "import" => cmd_import(args.split_off(1))?,
             "list" => cmd_list(args.split_off(1))?,
             "patches" => {
                 args.remove(0);
