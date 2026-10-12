@@ -1,7 +1,7 @@
 //! The library window: egui on winit and wgpu (Metal on macOS). No Python runs in this process. Playing a
 //! game starts `urp <game> --data <data>` as a child process.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::process::Child;
 use std::sync::{Arc, mpsc};
@@ -24,6 +24,7 @@ use crate::launch::{Serve, spawn_player, spawn_serve};
 use crate::mods::{self, InstallPlan, ModEntry};
 use crate::settings::Settings;
 use crate::status::{ModsInfo, Preflight, mods_info, preflight};
+use crate::warm;
 
 mod dialogs;
 mod patches;
@@ -34,6 +35,8 @@ mod tests;
 use patches::Report;
 
 const REFRESH: Duration = Duration::from_secs(2);
+/// Warm-ups that run at the same time. Each one loads a game's scripts once, so two is enough to hide the wait.
+const WARM_JOBS: usize = 2;
 
 /// Opens the library window and runs until it closes. `player` is the executable that `Play` starts.
 pub fn run_window(data: PathBuf, player: PathBuf) -> Result<()> {
@@ -121,6 +124,8 @@ struct SettingsDraft {
     height: String,
     fps: String,
     kbps: String,
+    /// Whether added games are prepared in the background (`warm.enabled`).
+    warm: bool,
     error: String,
 }
 
@@ -133,6 +138,7 @@ impl SettingsDraft {
             height: s.stream.size.1.to_string(),
             fps: s.stream.fps.to_string(),
             kbps: s.stream.kbps.to_string(),
+            warm: s.warm.enabled,
             error: String::new(),
         }
     }
@@ -148,6 +154,7 @@ impl SettingsDraft {
         )?;
         s.set("stream.fps", &self.fps)?;
         s.set("stream.kbps", &self.kbps)?;
+        s.set("warm.enabled", if self.warm { "true" } else { "false" })?;
         s.save(data)
     }
 }
@@ -188,6 +195,9 @@ struct App {
     status: HashMap<String, (Option<Preflight>, ModsInfo)>,
     status_at: Instant,
     running: Vec<(String, Child)>,
+    /// Games waiting for a background warm-up, and the warm-up drivers that run now.
+    warm_queue: VecDeque<Game>,
+    warm_running: Vec<(String, Child)>,
     streams: Vec<(String, Serve)>,
     icons: HashMap<PathBuf, Option<egui::TextureHandle>>,
     message: String,
@@ -217,6 +227,8 @@ impl App {
             status: HashMap::new(),
             status_at: Instant::now(),
             running: Vec::new(),
+            warm_queue: VecDeque::new(),
+            warm_running: Vec::new(),
             streams: Vec::new(),
             icons: HashMap::new(),
             message: String::new(),
@@ -373,6 +385,7 @@ impl App {
                     self.refresh_status();
                 }
                 Msg::Imported(result) => {
+                    let before = self.game_keys();
                     self.message = match result {
                         Ok((name, folder)) => match self
                             .library
@@ -387,6 +400,7 @@ impl App {
                         },
                         Err(e) => e,
                     };
+                    self.queue_warm(&before);
                     self.refresh_status();
                 }
                 Msg::Patches { key, sub, result } => {
@@ -418,6 +432,61 @@ impl App {
         match self.library.save(&self.data) {
             Ok(()) => format!("{} games in the library", self.library.games.len()),
             Err(e) => format!("{e:#}"),
+        }
+    }
+
+    fn game_keys(&self) -> HashSet<String> {
+        self.library.games.iter().map(|g| g.key.clone()).collect()
+    }
+
+    /// Whether a background warm-up of the game is queued or running.
+    fn is_preparing(&self, key: &str) -> bool {
+        self.warm_queue.iter().any(|g| g.key == key)
+            || self.warm_running.iter().any(|(k, _)| k == key)
+    }
+
+    /// Queues the games that a library change brought in, then starts what the warm-up slots allow.
+    fn queue_warm(&mut self, before: &HashSet<String>) {
+        let added: Vec<Game> = self
+            .library
+            .games
+            .iter()
+            .filter(|g| !before.contains(&g.key) && !self.is_preparing(&g.key))
+            .cloned()
+            .collect();
+        self.warm_queue.extend(added);
+        self.pump_warm();
+    }
+
+    /// Starts queued warm-ups while fewer than `WARM_JOBS` run. Turning the setting off drops the queue.
+    fn pump_warm(&mut self) {
+        if self.warm_queue.is_empty() || self.warm_running.len() >= WARM_JOBS {
+            return;
+        }
+        let settings = match Settings::load(&self.data) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("urp: warm-up skipped: {e:#}");
+                self.warm_queue.clear();
+                return;
+            }
+        };
+        if !settings.warm.enabled {
+            self.warm_queue.clear();
+            return;
+        }
+        while self.warm_running.len() < WARM_JOBS {
+            let Some(game) = self.warm_queue.pop_front() else {
+                break;
+            };
+            let targets = warm::warm_targets(&settings, std::slice::from_ref(&game));
+            if targets.is_empty() {
+                continue;
+            }
+            match warm::spawn(&self.player, &targets, &self.data) {
+                Ok(child) => self.warm_running.push((game.key, child)),
+                Err(e) => eprintln!("urp: warm-up of {} not started: {e:#}", game.name),
+            }
         }
     }
 
@@ -471,6 +540,9 @@ impl App {
                 }
             }
         });
+        self.warm_running
+            .retain_mut(|(_, child)| child.try_wait().is_ok_and(|st| st.is_none()));
+        self.pump_warm();
         if let Some(m) = done.pop() {
             self.message = m;
         }
@@ -487,6 +559,7 @@ impl App {
         match action {
             Action::Play(i) => {
                 let g = self.library.games[i].clone();
+                self.warm_queue.retain(|q| q.key != g.key);
                 match spawn_player(&self.player, &g.path, &self.data) {
                     Ok(child) => {
                         self.message = format!("Started {}", g.name);
@@ -540,6 +613,7 @@ impl App {
                     .set_title("Add a folder that holds Ren'Py games")
                     .pick_folder()
                 {
+                    let before = self.game_keys();
                     self.message = match self
                         .library
                         .add_folders(&[dir])
@@ -548,6 +622,7 @@ impl App {
                         Ok(()) => format!("{} games in the library", self.library.games.len()),
                         Err(e) => format!("{e:#}"),
                     };
+                    self.queue_warm(&before);
                     self.refresh_status();
                 }
             }
@@ -589,8 +664,10 @@ impl App {
                 });
             }
             Action::Rescan => {
+                let before = self.game_keys();
                 self.library.rescan();
                 self.message = self.save_library();
+                self.queue_warm(&before);
                 self.refresh_status();
             }
             Action::Select(key) => self.select(key),

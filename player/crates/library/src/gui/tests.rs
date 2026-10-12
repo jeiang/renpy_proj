@@ -289,6 +289,28 @@ fn settings_save_writes_the_edited_port() {
 }
 
 #[test]
+fn settings_save_turns_the_background_warm_up_off() {
+    let env = env();
+    let mut h = harness(app_for(&env));
+
+    click(&mut h, "Settings");
+    assert!(h.state().settings.as_ref().is_some_and(|d| d.warm));
+    // The modal fades in over its first frames. Let it settle, or the click lands on a stale position.
+    h.run_steps(5);
+    h.get_by_role_and_label(
+        egui::accesskit::Role::CheckBox,
+        "Prepare added games in the background, so their first launch is faster",
+    )
+    .click();
+    h.run_steps(2);
+    assert!(h.state().settings.as_ref().is_some_and(|d| !d.warm));
+    click(&mut h, "Save");
+
+    assert!(h.state().settings.is_none());
+    assert!(!Settings::load(&env.data).unwrap().warm.enabled);
+}
+
+#[test]
 fn settings_invalid_port_keeps_the_dialog_open_and_saves_nothing() {
     let env = env();
     let mut h = harness(app_for(&env));
