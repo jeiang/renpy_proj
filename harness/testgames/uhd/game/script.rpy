@@ -26,9 +26,9 @@ image movie av1 = Movie(play="movies/av1.webm", size=(1920, 1080))
 init -1 python:
     # Tolerances: mean absolute difference per channel (0..255) between the decoded still and its reference.
     # Measured values are recorded in harness/testgames/README.md (Results). Keep the limits above the measured values.
-    TOL_WEBP = 4.0
-    TOL_AVIF = 4.0
-    TOL_A_WEBP = 6.0
+    TOL_WEBP = 1.0
+    TOL_AVIF = 1.0
+    TOL_A_WEBP = 1.0
     SAMPLE_N = 8
 
     # Still formats: name, file, reference PNG, tolerance.
