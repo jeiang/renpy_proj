@@ -223,11 +223,13 @@ mod tests {
         s.set("warm.enabled", "false").unwrap();
         assert!(warm_targets(&s, &added).is_empty());
         s.set("warm.enabled", "true").unwrap();
-        let on = warm_targets(&s, &added);
-        assert_eq!(
-            on,
+        // Unsupported platforms (Windows) never warm, whatever the setting says.
+        let expected = if SUPPORTED {
             vec![PathBuf::from("/games/a"), PathBuf::from("/games/b")]
-        );
+        } else {
+            Vec::new()
+        };
+        assert_eq!(warm_targets(&s, &added), expected);
     }
 
     #[cfg(unix)]
