@@ -28,6 +28,8 @@ use crate::status::{ModsInfo, Preflight, mods_info, preflight};
 mod dialogs;
 mod patches;
 mod tabs;
+#[cfg(test)]
+mod tests;
 
 use patches::Report;
 
