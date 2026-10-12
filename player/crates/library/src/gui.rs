@@ -66,6 +66,7 @@ enum Action {
     /// Opens the picker for a folder (true) or an archive file (false).
     PickMod(bool),
     PlanInstall(PathBuf),
+    ImportFrom(PathBuf),
     CommitInstall,
     Patches(&'static str),
     AcceptPatch(String),
@@ -556,13 +557,15 @@ impl App {
                     .copied()
                     .map(|s| s.trim_start_matches('.'))
                     .collect();
-                let Some(archive) = rfd::FileDialog::new()
+                if let Some(archive) = rfd::FileDialog::new()
                     .set_title("Import a game archive")
                     .add_filter("Game archives", exts.as_slice())
                     .pick_file()
-                else {
-                    return;
-                };
+                {
+                    self.perform(Action::ImportFrom(archive));
+                }
+            }
+            Action::ImportFrom(archive) => {
                 let folder = match self.library.folders.first().cloned() {
                     Some(f) => f,
                     None => match rfd::FileDialog::new()
