@@ -143,6 +143,20 @@ fn check_kind(e: &Entry) -> Result<()> {
     }
 }
 
+/// What a source holds, after inspection (see `inspect`).
+pub(crate) struct Inspected {
+    /// The folder or archive (absolute).
+    pub source: PathBuf,
+    pub format: Format,
+    /// The source's file or folder name without its archive suffix.
+    pub stem: String,
+    pub layout: Layout,
+    /// Destination paths relative to the target folder, `/`-separated, sorted.
+    pub files: Vec<String>,
+    /// Sum of the sizes the source declares for `files`.
+    pub unpacked_bytes: u64,
+}
+
 /// Inspects a folder or an archive (`.zip`, `.tar.gz`/`.tgz`, `.tar.xz`, `.tar.zst`, `.tar`, `.7z`, `.rar`)
 /// and returns what `install` would write. Reads only; creates nothing under `data`.
 pub fn plan_install(data: &Path, key: &str, source: &Path) -> Result<InstallPlan> {
@@ -150,6 +164,30 @@ pub fn plan_install(data: &Path, key: &str, source: &Path) -> Result<InstallPlan
 }
 
 fn plan_with_limit(data: &Path, key: &str, source: &Path, limit: u64) -> Result<InstallPlan> {
+    let ins = inspect(source, limit)?;
+    // The default name may be invalid (for example from `.zip`) or already taken. Planning still succeeds so the
+    // caller can rename: `set_name` and `install` reject a bad or existing name.
+    let name = if check_name(&ins.stem).is_ok() {
+        ins.stem.clone()
+    } else {
+        "mod".to_string()
+    };
+    Ok(InstallPlan {
+        data: data.to_path_buf(),
+        key: key.to_string(),
+        name,
+        source: ins.source,
+        layout: ins.layout,
+        files: ins.files,
+        unpacked_bytes: ins.unpacked_bytes,
+        format: ins.format,
+        limit,
+    })
+}
+
+/// Walks `source` (a folder or an archive), checks every entry, and works out the layout and the destination
+/// files. Reads only. Refuses sources that unpack to more than `limit` bytes.
+pub(crate) fn inspect(source: &Path, limit: u64) -> Result<Inspected> {
     let source = source
         .canonicalize()
         .with_context(|| format!("not found: {}", source.display()))?;
@@ -200,25 +238,13 @@ fn plan_with_limit(data: &Path, key: &str, source: &Path, limit: u64) -> Result<
         .collect();
     files.sort();
     files.dedup();
-
-    // The default name may be invalid (for example from `.zip`) or already taken. Planning still succeeds so the
-    // caller can rename: `set_name` and `install` reject a bad or existing name.
-    let name = if check_name(stem).is_ok() {
-        stem
-    } else {
-        "mod"
-    }
-    .to_string();
-    Ok(InstallPlan {
-        data: data.to_path_buf(),
-        key: key.to_string(),
-        name,
+    Ok(Inspected {
         source,
+        format,
+        stem: stem.to_string(),
         layout,
         files,
         unpacked_bytes: total,
-        format,
-        limit,
     })
 }
 
@@ -252,9 +278,29 @@ pub fn install(plan: &InstallPlan) -> Result<()> {
 }
 
 fn extract(plan: &InstallPlan, tmp: &Path) -> Result<()> {
+    extract_tree(
+        &plan.source,
+        plan.format,
+        &plan.layout,
+        &plan.files,
+        plan.limit,
+        tmp,
+    )
+}
+
+/// Writes the files of `source` under `root`, placed by `layout`. Fails when what is written is not `files`
+/// (the source changed since it was inspected).
+pub(crate) fn extract_tree(
+    source: &Path,
+    format: Format,
+    layout: &Layout,
+    files: &[String],
+    limit: u64,
+    root: &Path,
+) -> Result<()> {
     let mut written: Vec<String> = Vec::new();
-    let mut budget = plan.limit;
-    walk(&plan.source, plan.format, false, &mut budget, &mut |e| {
+    let mut budget = limit;
+    walk(source, format, false, &mut budget, &mut |e| {
         check_kind(e)?;
         let Some(comps) = components(&e.path)? else {
             return Ok(Want::Skip);
@@ -262,8 +308,8 @@ fn extract(plan: &InstallPlan, tmp: &Path) -> Result<()> {
         if e.kind == Kind::Dir {
             return Ok(Want::Skip);
         }
-        let dest = destination(&plan.layout, &comps);
-        let mut path = tmp.to_path_buf();
+        let dest = destination(layout, &comps);
+        let mut path = root.to_path_buf();
         path.extend(&dest);
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)
@@ -274,8 +320,8 @@ fn extract(plan: &InstallPlan, tmp: &Path) -> Result<()> {
     })?;
     written.sort();
     written.dedup();
-    if written != plan.files {
-        bail!("{} changed since it was inspected", plan.source.display());
+    if written != files {
+        bail!("{} changed since it was inspected", source.display());
     }
     Ok(())
 }
