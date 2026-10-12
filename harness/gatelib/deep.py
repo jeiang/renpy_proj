@@ -8,7 +8,8 @@ error. The check then
 * turns each error record into `errors/<id>/` (error.json, the save files that reproduce it, the traceback),
 * sorts each error: `python2` (Ren'Py 7 game, the compat module's `classify` knows the pattern), `game-bug` (the stock
   engine, same seed, raises the same error at the same place) or `player-bug` (anything else, and every error of a
-  Ren'Py 8 game), and marks it patchable or not (a patch replaces a PyCode node: `patch_target`).
+  Ren'Py 8 game, and marks it patchable or not (a patch replaces a PyCode node: `patch_target`).
+* reports a seed that ends `stuck` (the driver gave up on a loop) as a warning, or as a failure when the game has a driver.
 
 Options (command line, a per-game key of corpus.toml wins): deep_seeds (1,2,3), deep_minutes (30), deep_stall (stall
 seconds without a new script line, 300), deep_save_gap (0 = save before every PyCode node).
@@ -187,7 +188,7 @@ def check_deep(ctx):
     gap = float(_num(ctx, "deep_save_gap", 0))
     budget = int(minutes * 60)
     key = ctx.key
-    runs, problems = [], []
+    runs, problems, warnings = [], [], []
     all_lines, all_labels = set(), set()
     found = {}   # error key -> record
     total_lines = total_labels = 0
@@ -212,6 +213,9 @@ def check_deep(ctx):
             problems.append("%s: error: no deep-done line (%s); %s" % (name, r.get("aborted") or "stopped early", run["error_evidence"]))
             if r.get("traceback"):   # boot failure: no driver, only the engine's traceback
                 run["boot_traceback"] = r["traceback"][:3000]
+        if reason == "stuck":   # the driver gave up: a loop came back 3 times and nothing new ran (not a play to the budget)
+            msg = "%s: ended stuck: a loop came back and no new label or script line ran; the seed did not play to its budget" % name
+            (problems if ctx.game.get("driver") else warnings).append(msg)
         lj = _read_json(ctx.out / name / "deep" / "lines.json")
         if lj:
             all_lines |= set(lj["lines"])
@@ -263,6 +267,7 @@ def check_deep(ctx):
         errors.append({k2: rec.get(k2) for k2 in ("id", "class", "class_reason", "patchable", "unpatchable_reason", "seeds", "exception", "node", "pre_save", "error_save")})
     cov_game = {"lines_hit": len(all_lines), "lines_total": total_lines, "labels_hit": len(all_labels), "labels_total": total_labels,
                 "seconds": round(sum((r["coverage"] or {}).get("elapsed_s", 0) for r in runs), 1)}
-    return {"check": "deep", "status": "fail" if problems else "pass", "problems": problems, "runs": runs,
+    status = "fail" if problems else "warn" if warnings else "pass"
+    return {"check": "deep", "status": status, "problems": problems, "warnings": warnings, "runs": runs,
             "coverage": cov_game, "errors": errors,
             "by_class": {c: len([x for x in errors if x["class"] == c]) for c in sorted({x["class"] for x in errors})}}

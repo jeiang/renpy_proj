@@ -17,6 +17,8 @@ def markdown(summary, results):
         probs = r.get("problems") or ([r["error"]] if r.get("error") else []) or ([r["reason"]] if r.get("reason") else [])
         if probs:
             L.append("**%s**: %s" % (n, "; ".join(probs)))
+        for w in (r.get("warnings") or []):
+            L.append("**%s** warning: %s" % (n, w))
     for n, r in results.items():
         for row in (r.get("self_diff") or []):
             L.append("- route self diff `%s`: %s" % (row["shot"], _diffrow(row)))
