@@ -16,7 +16,8 @@ compiled as plain Python 3 and replaces `code.source` and `code.bytecode`. The n
 
 Environment: `PLAYER_PATCHES_APPLY_TEST=1` (set by `player patches <game> apply-test`) prints a
 summary, writes nothing else and exits after the patches are applied, before init and before any
-window. The exit code is 0 when every patch matched, 1 otherwise.
+window. The exit code is 0 when every patch matched, 1 otherwise. `PLAYER_PATCHES_APPLY_TEST=json` prints the
+`results` dict as one JSON line instead (`player patches <game> apply-test --json`).
 """
 
 import hashlib
@@ -167,6 +168,13 @@ def on_script_loaded(settings):
 
     for u in results["unmatched"]:
         sys.stderr.write("player patches: not applied: %s: %s\n" % (u["patch"], u["reason"]))
+
+    if apply_test and os.environ.get("PLAYER_PATCHES_APPLY_TEST") == "json":
+        # `player patches <game> apply-test --json`: the results dict as one line.
+        print(json.dumps(results))
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os._exit(0 if not results["unmatched"] and not results["errors"] else 1)
 
     if apply_test:
         print("fingerprint: %s" % results["fingerprint"])
