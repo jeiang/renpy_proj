@@ -117,6 +117,7 @@ nix shell nixpkgs#python312 nixpkgs#grim nixpkgs#ffmpeg -c python3 harness/gate.
 - **Launch.** The environment is a whitelist (`HOME`, `USER`, `LANG`, `NIX_LD`, `NIX_LD_LIBRARY_PATH`, a clean `PATH`, `XDG_RUNTIME_DIR`, `WAYLAND_DISPLAY`, `DISPLAY` of XWayland, the user D-Bus address for gamemode). Every game process, stock and player, starts as `gamemoderun <argv>`. The clone is `cp -a --reflink=auto`. The machine lock is the same `/tmp/renpy_proj.run.lock` directory with an owner file. The hygiene hash covers `~/.renpy` (Ren'Py's Linux save root) in place of `~/Library/RenPy`. Ren'Py 7 still gets `--savedir`.
 - **Corpus.** On Linux a `linux_<key>` entry of a game in `corpus.toml` replaces `<key>`. The four M4 games point at `~/Projects/renpy_proj-remote/corpus/<copy>`. SecretIsland and WaifuAcademy run their own `<Game>.sh` (`linux_engine = "bundled"`); BlackRose and HaremHotel use the Ren'Py 7.7.3 and 7.4.11 SDKs, fetched into the gitignored `research/test-corpus/sdk/` with `curl -fL https://www.renpy.org/dl/<v>/renpy-<v>-sdk.tar.bz2 | tar -xj -C research/test-corpus/sdk`.
 - **Stock engines are dynamic ELF files.** NixOS needs `nix-ld` (`NIX_LD`, `NIX_LD_LIBRARY_PATH` are passed through).
+- **Opt-in stock wrapper.** `HARNESS_STOCK_WRAPPER=steam-run` runs each stock engine inside `steam-run`'s FHS sandbox (`steam-run` must be on `PATH`). It is off by default. Only stock launches are wrapped; the player's launch path is unchanged. The run's `res` records `stock_wrapper`. Any other value is an error.
 
 ## Deep runs and the upgrade pass (M6)
 
