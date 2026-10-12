@@ -267,7 +267,8 @@ def _scan_in_background(settings, fp, cache, snippets):
 
     report.begin()
 
-    if hasattr(os, "fork"):
+    # No fork on macOS: a child of a process with Cocoa or Metal threads can crash in the ObjC runtime.
+    if hasattr(os, "fork") and sys.platform != "darwin":
         try:
             pid = os.fork()
         except OSError:
