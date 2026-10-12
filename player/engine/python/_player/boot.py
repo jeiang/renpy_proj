@@ -288,6 +288,14 @@ def predefined_searchpath(commondir):
     if "RENPY_SEARCHPATH" in os.environ:
         searchpath.extend(os.environ["RENPY_SEARCHPATH"].split("::"))
 
+    # Imports before this list existed (path_to_common runs before main assigns config.searchpath) built the
+    # importer index while the game files were unknown, leaving it empty. Drop it: the next import rebuilds it.
+    import renpy.importer
+
+    for finder in sys.meta_path:
+        if isinstance(finder, renpy.importer.RenpyImporter):
+            finder.invalidate_caches()
+
     return searchpath
 
 
