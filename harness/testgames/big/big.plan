@@ -1,0 +1,21 @@
+# Route for the big game. The chain runs through all 120 generated files: the route stays at the start of the chain (the
+# first menus are taken by the harness auto-picker, the first choice of each menu moves forward). The load test is the
+# launch itself: lint and the first probe read and compile every generated file.
+# Ops: cmd TEXT | wait TOKEN | settle SECS | shot NAME [volatile] | note TEXT | quit
+cmd auto on
+cmd click on
+wait menu True
+cmd click off
+settle 3
+shot 01-menu
+cmd start
+after_start
+cmd advance-to 1
+wait advance-done
+settle 2
+shot 02-first-label
+cmd advance-to 40
+wait advance-done
+settle 2
+shot 03-chain-40
+quit
