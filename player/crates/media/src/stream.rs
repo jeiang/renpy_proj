@@ -1668,3 +1668,99 @@ mod loop_clock_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod wav_decode_tests {
+    use super::*;
+    use std::io::{Read, Seek, SeekFrom};
+    use std::time::{Duration, Instant};
+
+    /// A file as a decode source. The decoder only needs read, seek and size.
+    struct FileSource(std::fs::File);
+
+    impl ByteSource for FileSource {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            self.0.read(buf)
+        }
+        fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
+            self.0.seek(pos)
+        }
+        fn size(&mut self) -> std::io::Result<u64> {
+            Ok(self.0.metadata()?.len())
+        }
+    }
+
+    /// A canonical 16-bit PCM WAV file. The `fmt ` chunk has no channel mask, so the decoder
+    /// leaves the frame's channel layout unspecified.
+    fn pcm_wav(rate: u32, channels: u16, samples: &[i16]) -> Vec<u8> {
+        let data_len = (samples.len() * 2) as u32;
+        let mut b = Vec::with_capacity(44 + data_len as usize);
+        b.extend_from_slice(b"RIFF");
+        b.extend_from_slice(&(36 + data_len).to_le_bytes());
+        b.extend_from_slice(b"WAVEfmt ");
+        b.extend_from_slice(&16u32.to_le_bytes());
+        b.extend_from_slice(&1u16.to_le_bytes());
+        b.extend_from_slice(&channels.to_le_bytes());
+        b.extend_from_slice(&rate.to_le_bytes());
+        b.extend_from_slice(&(rate * u32::from(channels) * 2).to_le_bytes());
+        b.extend_from_slice(&(channels * 2).to_le_bytes());
+        b.extend_from_slice(&16u16.to_le_bytes());
+        b.extend_from_slice(b"data");
+        b.extend_from_slice(&data_len.to_le_bytes());
+        for s in samples {
+            b.extend_from_slice(&s.to_le_bytes());
+        }
+        b
+    }
+
+    /// A mono 48 kHz WAV of a 0.5 s, 440 Hz tone at half scale, read through the same
+    /// `Media` path the game uses. The output is interleaved stereo at 48 kHz.
+    #[test]
+    fn mono_wav_decodes_to_stereo_frames() {
+        set_params(48_000, false);
+        let tone: Vec<i16> = (0..24_000)
+            .map(|i| {
+                let phase = 2.0 * std::f64::consts::PI * 440.0 * f64::from(i) / 48_000.0;
+                (0.5 * 32767.0 * phase.sin()) as i16
+            })
+            .collect();
+        let path =
+            std::env::temp_dir().join(format!("renpy_wav_decode_{}.wav", std::process::id()));
+        std::fs::write(&path, pcm_wav(48_000, 1, &tone)).unwrap();
+        let file = std::fs::File::open(&path).unwrap();
+        let media = Media::open(Box::new(FileSource(file)), "tone.wav".into(), 0.0, 0.0, 0);
+        let _ = std::fs::remove_file(&path);
+
+        let deadline = Instant::now() + Duration::from_secs(20);
+        let mut buf = vec![0f32; 2048];
+        let (mut frames, mut peak) = (0usize, 0f32);
+        loop {
+            let (ready, finished, queued) = {
+                let st = media.sh.st.lock();
+                (st.ready, st.audio_finished, !st.audio_q.is_empty())
+            };
+            if finished && !queued {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "decoder did not finish after {frames} frames"
+            );
+            if !ready {
+                std::thread::sleep(Duration::from_millis(1));
+                continue;
+            }
+            let n = media.read_audio(&mut buf);
+            frames += n;
+            peak = buf[..n * 2].iter().fold(peak, |p, s| p.max(s.abs()));
+            if n == 0 {
+                std::thread::sleep(Duration::from_millis(1));
+            }
+        }
+        assert!(
+            (23_000..=25_000).contains(&frames),
+            "decoded {frames} stereo frames, want about 24000"
+        );
+        assert!(peak > 0.1, "peak {peak} too low for a 0.5 amplitude tone");
+    }
+}
