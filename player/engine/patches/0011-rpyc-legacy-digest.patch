@@ -1,0 +1,61 @@
+# Reason: Ren'Py 8.3.4 wrote a game .rpyc with the digest md5(source). Ren'Py 8.5.3 expects md5(source + b"_2025-07-06") and treats every shipped .rpyc as stale, so an 8.3 game with loose .rpy files was recompiled on the first launch (138 s on Wartribe Academy). When the .rpy bytes are unchanged, the 8.3 .rpyc matches its source, so the game .rpyc is accepted with either digest. The player cache is written by urp and keeps the 8.5.3 digest only. A changed .rpy matches neither digest and is compiled again. The legacy digest applies only to games that ship a Ren'Py 8 runtime (lib/py3-*). Ren'Py 7 .rpyc files also store md5(source) but use another pickle format, so they are still recompiled.
+
+diff --git a/renpy/script.py b/renpy/script.py
+--- a/renpy/script.py
++++ b/renpy/script.py
+@@ -59,6 +59,16 @@
+ RPYC2_HEADER = b"RENPY RPC2"
+ 
+ 
++# Ren'Py 7 (Python 2) .rpyc files also store md5(source), but their pickles use another format, so
++# the 8.3 digest is trusted only for games that ship a Ren'Py 8 runtime (lib/py3-*).
++def renpy_8_game():
++    lib = os.path.join(renpy.config.basedir, "lib")
++    try:
++        return any(name.startswith("py3-") for name in os.listdir(lib))
++    except OSError:
++        return False
++
++
+ # The name of the obsolete and new bytecode cache files.
+ OLD_BYTECODE_FILE = "cache/bytecode.rpyb"
+ BYTECODE_FILE = "cache/bytecode-{}{}.rpyb".format(sys.version_info.major, sys.version_info.minor)
+@@ -1054,6 +1064,7 @@
+             rpycfn = dir + "/" + fn + compiled
+             rpyfn = None  # prevent the spurious warning.
+             rpydigest = None
++            rpylegacydigest = None
+ 
+             rpyfns = []
+ 
+@@ -1073,7 +1084,10 @@
+                 source, rpyfn = rpyfns[0]
+ 
+                 with renpy.vfs.open(rpyfn, "rb") as f:
+-                    rpydigest = hashlib.md5(f.read() + RPYC_MAGIC).digest()
++                    rpysource = f.read()
++
++                rpydigest = hashlib.md5(rpysource + RPYC_MAGIC).digest()
++                rpylegacydigest = hashlib.md5(rpysource).digest() if renpy_8_game() else None
+             else:
+                 source = source_extensions[-1]
+                 rpyfn = dir + "/" + fn + source_extensions[-1]
+@@ -1096,11 +1110,14 @@
+                 data, stmts = None, None
+ 
+                 if not force_compile:
+-                    for candidate, candidate_digest, candidate_path in (
+-                        (cachefn, cachedigest, cachefn),
+-                        (rpycfn, rpycdigest, None),
++                    # Ren'Py 8.3 stored md5(source) without the magic. A game .rpyc with that digest still
++                    # matches its source, so it is used. The player cache is written by urp and always carries
++                    # the 8.5.3 digest.
++                    for candidate, candidate_digest, candidate_path, accepted in (
++                        (cachefn, cachedigest, cachefn, (rpydigest,)),
++                        (rpycfn, rpycdigest, None, (rpydigest, rpylegacydigest)),
+                     ):
+-                        if candidate_digest is None or candidate_digest != rpydigest:
++                        if candidate_digest is None or candidate_digest not in accepted:
+                             continue
+ 
+                         try:
