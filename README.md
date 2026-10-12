@@ -51,7 +51,7 @@ Gitignored inputs and how to get them are in [docs/LOCAL-FILES.md](docs/LOCAL-FI
 
 ```sh
 urp <game>                 # run a game: <game> is a folder with game/ inside, or the game/ folder
-urp                        # open the library window
+urp                        # open the library window: games on the left; Overview, Mods and Patches for the selected game; Settings
 urp scan <folder>...       # add folders to the library
 urp library remove <game|folder>   # drop a game or folder from the library (files stay)
 urp mods <game> install <folder|archive>   # install a mod from a folder, .zip, .tar.gz, .tar.xz, .tar.zst, .7z or .rar
