@@ -104,7 +104,7 @@ const SUBCOMMANDS: &str = "\
        urp patches <game> list|validate|apply-test [--json] | accept <id>   port patches of a game
        urp upgrade <game> [--errors <dir>] [--data <dir>] ...   AI upgrade pass (maintainers; see player/CONTRACTS.md, M6)
        urp mods <game> list [--json] | enable|disable|order <mod>... | remove <mod>...
-       urp mods <game> install <folder|archive> [--name <n>] [--yes]   install a mod (zip, tar.gz, tar.xz, tar.zst, 7z, rar) and enable it
+       urp mods <game> install <folder|archive> [--name <n>] [--yes]   install a mod (zip, tar.gz, tar.xz, tar.bz2, tar.zst, 7z, rar) and enable it
        urp library folders | remove <game|folder> [--data <dir>]   scanned folders; drop a game or folder from the library
        urp settings get [<key>] | set <key> <value> [--data <dir>]   renderer, stream.port|size|fps|kbps
        urp serve <game> [--bind <addr>] [--port <n>] [--size <WxH>] [--fps <n>] [--kbps <n>]

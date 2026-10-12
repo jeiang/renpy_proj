@@ -191,6 +191,27 @@ mod tests {
     }
 
     #[test]
+    fn tar_bz2_archive_with_one_top_folder_imports_the_game() {
+        let (t, folder) = setup();
+        let mut enc = bzip2::write::BzEncoder::new(Vec::new(), bzip2::Compression::fast());
+        enc.write_all(&tar_bytes(&[(
+            "Game-2.0/game/script.rpy",
+            b"label start:\n",
+        )]))
+        .unwrap();
+        let archive = put(t.path(), "Game-2.0.tar.bz2", &enc.finish().unwrap());
+        let plan = plan_import(&folder, &archive).unwrap();
+        assert_eq!(plan.name, "Game-2.0");
+        assert_eq!(plan.files, vec!["game/script.rpy"]);
+        let dir = import(&plan).unwrap();
+        assert_eq!(dir, folder.join("Game-2.0"));
+        assert_eq!(
+            std::fs::read(folder.join("Game-2.0/game/script.rpy")).unwrap(),
+            b"label start:\n"
+        );
+    }
+
+    #[test]
     fn loose_files_archive_is_named_after_the_archive() {
         let (t, folder) = setup();
         let archive = put(

@@ -157,7 +157,7 @@ pub(crate) struct Inspected {
     pub unpacked_bytes: u64,
 }
 
-/// Inspects a folder or an archive (`.zip`, `.tar.gz`/`.tgz`, `.tar.xz`, `.tar.zst`, `.tar`, `.7z`, `.rar`)
+/// Inspects a folder or an archive (`.zip`, `.tar.gz`/`.tgz`, `.tar.xz`/`.txz`, `.tar.bz2`/`.tbz2`, `.tar.zst`/`.tzst`, `.tar`, `.7z`, `.rar`)
 /// and returns what `install` would write. Reads only; creates nothing under `data`.
 pub fn plan_install(data: &Path, key: &str, source: &Path) -> Result<InstallPlan> {
     plan_with_limit(data, key, source, MAX_UNPACKED_BYTES)
@@ -491,11 +491,18 @@ mod tests {
             e.finish().unwrap()
         };
         let zst = zstd::encode_all(tar.as_slice(), 1).unwrap();
+        let bz2 = {
+            let mut e = bzip2::write::BzEncoder::new(Vec::new(), bzip2::Compression::fast());
+            e.write_all(&tar).unwrap();
+            e.finish().unwrap()
+        };
         for (file, stem) in [
             ("a.tar.gz", "a"),
             ("b.TGZ", "b"),
             ("c.tar.xz", "c"),
             ("d.tar.zst", "d"),
+            ("f.tar.bz2", "f"),
+            ("g.tbz2", "g"),
             ("e.tar", "e"),
         ] {
             let bytes = match file
@@ -508,6 +515,7 @@ mod tests {
                 "gz" | "tgz" => &gz,
                 "xz" => &xz,
                 "zst" => &zst,
+                "bz2" | "tbz2" => &bz2,
                 _ => &tar,
             };
             let src = put(d.path(), file, bytes);

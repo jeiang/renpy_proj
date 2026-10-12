@@ -77,9 +77,9 @@ Gitignored inputs and how to get them are in [docs/LOCAL-FILES.md](docs/LOCAL-FI
 urp <game>                 # run a game. <game> is a game key, a game folder path, or a game name from the library
 urp                        # open the library window: games on the left; Overview, Mods and Patches for the selected game; Settings
 urp scan <folder>...       # add folders to the library
-urp import <archive> [--folder <folder>]   # unpack a .zip, .tar.gz, .tar.xz, .tar.zst, .7z or .rar game into a library folder
+urp import <archive> [--folder <folder>]   # unpack a .zip, .tar.gz, .tar.xz, .tar.bz2, .tar.zst, .7z or .rar game into a library folder
 urp library remove <game|folder>   # drop a game or folder from the library (files stay)
-urp mods <game> install <folder|archive>   # install a mod from a folder, .zip, .tar.gz, .tar.xz, .tar.zst, .7z or .rar
+urp mods <game> install <folder|archive>   # install a mod from a folder, .zip, .tar.gz, .tar.xz, .tar.bz2, .tar.zst, .7z or .rar
 urp mods <game> list|enable|disable|order|remove ...
 urp settings set stream.fps 30             # also: renderer, stream.port, stream.size, stream.kbps
 urp serve <game>           # run headless and stream to a browser on the LAN (prints a URL)
