@@ -1,0 +1,41 @@
+# Route for the 4K game. One shot per still and per movie. The movie frames are identical to the reference content only
+# in the sense that the decoders and the time of the first frame differ between engines, so the movie shots are volatile
+# (compared, reported, never failing).
+# Ops: cmd TEXT | wait TOKEN | settle SECS | shot NAME [volatile] | note TEXT | quit
+cmd auto on
+cmd click on
+wait menu True
+cmd click off
+settle 3
+shot 01-menu
+cmd start
+after_start
+cmd advance-to 1
+wait advance-done
+settle 2
+shot 02-bg-png
+cmd advance-to 2
+wait advance-done
+settle 2
+shot 03-bg-webp
+cmd advance-to 3
+wait advance-done
+settle 2
+shot 04-bg-avif
+cmd advance-to 4
+wait advance-done
+settle 2
+shot 05-sprite-png
+cmd advance-to 5
+wait advance-done
+settle 2
+shot 06-sprite-webp
+cmd advance-to 6
+wait advance-done
+settle 3
+shot 07-movie-vp9-fullscreen volatile
+cmd advance-to 7
+wait advance-done
+settle 3
+shot 08-movie-av1-1080p volatile
+quit
