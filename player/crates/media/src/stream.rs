@@ -952,10 +952,8 @@ impl Decoder {
             if !self.swr.is_null() {
                 ffi::swr_free(&mut self.swr);
             }
-            let mut in_layout = (*f).ch_layout;
-            if in_layout.order == ffi::AVChannelOrder::AV_CHANNEL_ORDER_UNSPEC {
-                ffi::av_channel_layout_default(&mut in_layout, in_layout.nb_channels);
-            }
+            // The frame's layout is already specified (decode_audio fills it in). `convert` passes the frame unchanged, so swr must use the same layout.
+            let in_layout = (*f).ch_layout;
             let mut out_layout: ffi::AVChannelLayout = std::mem::zeroed();
             ffi::av_channel_layout_default(&mut out_layout, 2);
             let r = ffi::swr_alloc_set_opts2(
@@ -1077,6 +1075,14 @@ impl Decoder {
                     }
                     self.set_audio_finished();
                     return;
+                }
+                // swr rejects a frame whose layout differs from the one it was set up with.
+                // PCM WAV and other decoders leave the layout unspecified, so fill it in first.
+                unsafe {
+                    if (*self.aframe).ch_layout.order == ffi::AVChannelOrder::AV_CHANNEL_ORDER_UNSPEC {
+                        let n = (*self.aframe).ch_layout.nb_channels;
+                        ffi::av_channel_layout_default(&mut (*self.aframe).ch_layout, n);
+                    }
                 }
                 if !self.ensure_swr(self.aframe) {
                     self.set_audio_finished();
