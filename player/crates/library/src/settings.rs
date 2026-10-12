@@ -30,6 +30,20 @@ impl Default for StreamDefaults {
     }
 }
 
+/// Background warm-up of games after they are added (`urp warm`; see `warm`).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct WarmSettings {
+    /// Off means added games are not prepared in the background; their first launch is cold.
+    pub enabled: bool,
+}
+
+impl Default for WarmSettings {
+    fn default() -> Self {
+        WarmSettings { enabled: true }
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Settings {
@@ -37,15 +51,17 @@ pub struct Settings {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub renderer: Option<String>,
     pub stream: StreamDefaults,
+    pub warm: WarmSettings,
 }
 
 /// The keys `get` and `set` know.
-pub const KEYS: [&str; 5] = [
+pub const KEYS: [&str; 6] = [
     "renderer",
     "stream.port",
     "stream.size",
     "stream.fps",
     "stream.kbps",
+    "warm.enabled",
 ];
 
 /// `WxH` as in `urp serve --size`.
@@ -94,6 +110,7 @@ impl Settings {
             "stream.size" => format!("{}x{}", self.stream.size.0, self.stream.size.1),
             "stream.fps" => self.stream.fps.to_string(),
             "stream.kbps" => self.stream.kbps.to_string(),
+            "warm.enabled" => self.warm.enabled.to_string(),
             _ => bail!("unknown setting {key:?} (keys: {})", KEYS.join(", ")),
         })
     }
@@ -127,6 +144,13 @@ impl Settings {
                     self.stream.fps = n;
                 } else {
                     self.stream.kbps = n;
+                }
+            }
+            "warm.enabled" => {
+                self.warm.enabled = match value.trim() {
+                    "true" => true,
+                    "false" => false,
+                    _ => bail!("warm.enabled wants true or false, got {value:?}"),
                 }
             }
             _ => bail!("unknown setting {key:?} (keys: {})", KEYS.join(", ")),
@@ -172,6 +196,18 @@ mod tests {
         let partial = Settings::load(d.path()).unwrap();
         assert_eq!(partial.stream.fps, 24);
         assert_eq!(partial.stream.port, 8080);
+    }
+
+    #[test]
+    fn warm_is_on_by_default_and_can_be_turned_off() {
+        let d = tempfile::tempdir().unwrap();
+        assert!(Settings::load(d.path()).unwrap().warm.enabled);
+        let mut s = Settings::default();
+        s.set("warm.enabled", "false").unwrap();
+        s.save(d.path()).unwrap();
+        assert!(!Settings::load(d.path()).unwrap().warm.enabled);
+        assert_eq!(s.get("warm.enabled").unwrap(), "false");
+        assert!(s.set("warm.enabled", "maybe").is_err());
     }
 
     #[test]

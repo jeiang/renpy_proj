@@ -104,6 +104,12 @@ impl App {
                     ui.add(egui::TextEdit::singleline(&mut d.kbps).desired_width(80.0));
                     ui.end_row();
                 });
+            ui.add_space(10.0);
+            ui.strong("Background warm-up");
+            ui.checkbox(
+                &mut d.warm,
+                "Prepare added games in the background, so their first launch is faster",
+            );
             if !d.error.is_empty() {
                 ui.add_space(6.0);
                 ui.label(RichText::new(&d.error).color(Color32::LIGHT_RED));

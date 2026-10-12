@@ -363,6 +363,12 @@ def main():
         _player.vfs.install(basedir, data, key, [os.path.relpath(os.path.join(gamedir, "cache"), basedir)])
     # --- end vfs
 
+    # bytecode slice (begin): atomic bytecode save, and the warm-up stop marker (see _player/bytecode.py).
+    import _player.bytecode
+
+    _player.bytecode.install()
+    # bytecode slice (end)
+
     import renpy.bootstrap
 
     renpy.__main__ = sys.modules[__name__]
