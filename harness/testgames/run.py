@@ -36,6 +36,8 @@ GAMES = {
     "SynthText": ("text", None, []),
     "SynthView": ("view", None, []),
     "SynthObf": ("obf", None, []),
+    "SynthUHD": ("uhd", None, []),
+    "SynthBig": ("big", None, []),
     "Synth7": ("py7", None, []),
     "Synth7Patch": ("py7patch", None, []),
 }
