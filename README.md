@@ -88,7 +88,7 @@ urp serve <game>           # run headless and stream to a browser on the LAN (pr
 `urp --help` lists all commands (`list`, `library`, `settings`, `report`, `patches`, `mods`, `upgrade`). Your save data and caches go to the player's
 own data folder. The player never writes into the game folder.
 
-Adding a game (`urp scan`, `urp import`, or Add folder and Import archive in the window) starts a background warm-up of that game. The warm-up fills the same caches that a launch uses, so the first `urp <game>` starts faster. It runs at low priority, with at most two games at a time. The window shows **Preparing** while a game waits or warms. `urp <game>` and `urp serve <game>` stop a warm-up of the same game and do not wait for it. A warm-up that stops early leaves no unusable cache: the next launch rebuilds what it could not reuse. Turn warm-up off with `urp settings set warm.enabled false`. Warm-up is not available on Windows.
+Adding a game (`urp scan`, `urp import`, or Add folder and Import archive in the window) starts a background warm-up of that game. The warm-up runs the game's headless load and stops once Ren'Py has written the bytecode caches, so the first `urp <game>` starts faster. It runs at low priority, with at most two games at a time. The window shows **Preparing** while a game waits or warms. `urp <game>` and `urp serve <game>` stop a warm-up of the same game and do not wait for it to finish. A warm-up that stops before the bytecode save leaves no bytecode cache, and the next launch loads the scripts itself. Turn warm-up off with `urp settings set warm.enabled false`. Warm-up is not available on Windows.
 
 ## Test
 
