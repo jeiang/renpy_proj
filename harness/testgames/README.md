@@ -15,6 +15,8 @@ The real-game gate stays manual on the Mac and on artemis (user decision). Issue
 | `text/` | `SynthText` | Ren'Py 8.5.3 | Kerning, ligatures, right-to-left text (Hebrew, Arabic, mixed lines), outlines, very large and very small text, variable fonts (needs `fetch.sh fonts`; the game falls back to DejaVu Sans without them), text tags, ruby, justify. |
 | `view/` | `SynthView` | Ren'Py 8.5.3 | Viewport padding: an odd screen size (1277x719) and a view that is smaller than the window, so the letterbox bars have odd width. A flat pattern with 1 px frames, colour bars, a circle and corner markers shows any off-by-one. |
 | `aniso/` | `SynthAniso` | Ren'Py 8.5.3 | Anisotropic textures (`gl_anisotropic`), the existing A/B game. CI runs the six-shot plan `ci.plan`. It has no menu, so its tier is `route` only. |
+| `obf/` | `SynthObf` | Ren'Py 8.5.3 | Stand-in for an obfuscated game (issue #18). Scripts sit in `game/scripts.rpa`, an RPA-3 archive with a non-default XOR key. Images sit in `game/data.rpx`, a custom `XRPA-1.0` archive. A game-local `zz_loader.rpe.py` registers the second format. Stock reads both. It is not real obfuscation: rpyc layout changes, custom pickle opcodes and encryption layers are not covered. Built by `obf/build.py`. |
+| `obfengine/` | `SynthObfEngine` | Ren'Py 8.5.3 | The `obf` game plus a copy of the engine in the game folder (`renpy/`). The copy's `__init__.py` is modified on purpose and raises on import, so a run that imports it fails. Stock and urp must both pass. The player report must carry a `game-engine-copy` entry (info): urp does not load the copy. Built by `obfengine/build.py`, which reuses `obf/build.py`. |
 | `py7/` | `Synth7` | Ren'Py 7.4.11 (Python 2) | Python 2 `.rpyc` files compiled by the 7.4.11 SDK at build time. See [Ren'Py 7](#renpy-7-games). |
 | `py7patch/` | `Synth7Patch` | Ren'Py 7.4.11 (Python 2) | A port patch (patch library): one node that only Python 2 runs, and the patch that replaces it. |
 | `py7ai/` | `Synth7AI` | Ren'Py 7.4.11 (Python 2) | A node with `string.join`, which Python 3 lacks and no compat rule covers. No patch is committed: the M6 end-to-end proof (`urp upgrade`) writes it. |
@@ -115,6 +117,8 @@ and on the player, and `Synth7` and `Synth7Patch` pass the compat report checks.
 | SynthMedia | pass | pass | - |
 | SynthText | pass | pass | - |
 | SynthView | pass | pass | - |
+| SynthObf | pass | pass | - |
+| SynthObfEngine | pass | pass | - |
 | Synth7 | pass | pass | pass |
 | Synth7Patch | pass | pass | pass |
 

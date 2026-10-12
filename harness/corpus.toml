@@ -103,6 +103,26 @@ plan = "route"
 probe_lines = 40
 save_after = 20
 resume_lines = 10
+[games.SynthObf]
+source = "harness/testgames/build/obf"
+renpy = "8.5.3"
+base = "."
+engine = "sdk-853"
+linux_engine = "sdk-853-linux"
+plan = "route"
+probe_lines = 40
+save_after = 20
+resume_lines = 10
+[games.SynthObfEngine]
+source = "harness/testgames/build/obfengine"
+renpy = "8.5.3"
+base = "."
+engine = "sdk-853"
+linux_engine = "sdk-853-linux"
+plan = "route"
+probe_lines = 40
+save_after = 20
+resume_lines = 10
 [games.SynthMedia]
 source = "harness/testgames/build/media"
 renpy = "8.5.3"
