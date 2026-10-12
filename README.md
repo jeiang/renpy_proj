@@ -53,10 +53,14 @@ Gitignored inputs and how to get them are in [docs/LOCAL-FILES.md](docs/LOCAL-FI
 urp <game>                 # run a game: <game> is a folder with game/ inside, or the game/ folder
 urp                        # open the library window
 urp scan <folder>...       # add folders to the library
+urp library remove <game|folder>   # drop a game or folder from the library (files stay)
+urp mods <game> install <folder|archive>   # install a mod from a folder, .zip, .tar.gz, .tar.xz, .tar.zst, .7z or .rar
+urp mods <game> list|enable|disable|order|remove ...
+urp settings set stream.fps 30             # also: renderer, stream.port, stream.size, stream.kbps
 urp serve <game>           # run headless and stream to a browser on the LAN (prints a URL)
 ```
 
-`urp --help` lists all commands (`list`, `report`, `patches`, `mods`, `upgrade`). Your save data and caches go to the player's
+`urp --help` lists all commands (`list`, `library`, `settings`, `report`, `patches`, `mods`, `upgrade`). Your save data and caches go to the player's
 own data folder. The player never writes into the game folder.
 
 ## Moving from renpy-player
