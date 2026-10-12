@@ -15,6 +15,8 @@ The real-game gate stays manual on the Mac and on artemis (user decision). Issue
 | `text/` | `SynthText` | Ren'Py 8.5.3 | Kerning, ligatures, right-to-left text (Hebrew, Arabic, mixed lines), outlines, very large and very small text, variable fonts (needs `fetch.sh fonts`; the game falls back to DejaVu Sans without them), text tags, ruby, justify. |
 | `view/` | `SynthView` | Ren'Py 8.5.3 | Viewport padding: an odd screen size (1277x719) and a view that is smaller than the window, so the letterbox bars have odd width. A flat pattern with 1 px frames, colour bars, a circle and corner markers shows any off-by-one. |
 | `aniso/` | `SynthAniso` | Ren'Py 8.5.3 | Anisotropic textures (`gl_anisotropic`), the existing A/B game. CI runs the six-shot plan `ci.plan`. It has no menu, so its tier is `route` only. |
+| `uhd/` | `SynthUHD` | Ren'Py 8.5.3 | 3840x2160 stills in PNG, WebP and AVIF, each checked in the game against a lossless reference (`game/reference/`). A 1600x2160 alpha sprite. Movies at 60 fps: VP9 + Opus (20 s) and AV1 (4 s). A 1920x1080 `Movie` displayable. Output about 18 MB. Not in CI (see Results). |
+| `big/` | `SynthBig` | Ren'Py 8.5.3 | Generated load test: 56,860 lines in 122 `.rpy` files, written by `big/build.py` (the `.rpy` files are not committed). A 3000-entry store table, menus, and a translation block. Checks load and save time. |
 | `py7/` | `Synth7` | Ren'Py 7.4.11 (Python 2) | Python 2 `.rpyc` files compiled by the 7.4.11 SDK at build time. See [Ren'Py 7](#renpy-7-games). |
 | `py7patch/` | `Synth7Patch` | Ren'Py 7.4.11 (Python 2) | A port patch (patch library): one node that only Python 2 runs, and the patch that replaces it. |
 | `py7ai/` | `Synth7AI` | Ren'Py 7.4.11 (Python 2) | A node with `string.join`, which Python 3 lacks and no compat rule covers. No patch is committed: the M6 end-to-end proof (`urp upgrade`) writes it. |
@@ -117,6 +119,43 @@ and on the player, and `Synth7` and `Synth7Patch` pass the compat report checks.
 | SynthView | pass | pass | - |
 | Synth7 | pass | pass | pass |
 | Synth7Patch | pass | pass | pass |
+
+### SynthUHD and SynthBig (artemis, issue #18)
+
+Stock SDK 8.5.3 and the player from main (`530205b`, the prebuilt Linux package). The branch player was not built. The gate ran
+under Xvfb with lavapipe (`HARNESS_DISPLAY=xvfb`) with `--diff-mean 0.01 --diff-pct 1.0`, the CI values.
+
+SynthUHD, `run.py --games SynthUHD` (run 3, load average about 1.6 at launch):
+
+| check | stock | player |
+|---|---|---|
+| lint | pass, 4018 s | pass, 32 s |
+| probe | pass, 6.9 s | pass, 13.5 s |
+| route | pass, 533 s, 8 shots, self diff worst mean 0.00281 | pass, 107 s, 8 shots, self diff worst mean 0.01668 (shot 07, movie, volatile) |
+| saveresume | pass, 50 s | pass, 82 s |
+
+The stock lint took 4018 s. The lint limit is 900 s and the check still passed. An earlier stock lint of the same game took 499 s
+under load about 20. The cause of the difference is not known.
+
+SynthUHD video check, player only (`gate.py run --engine player --game SynthUHD --tier full --only video`, one headless sway
+slot): pass. Presented 62.1 fps (nominal 60.0), decoded 60.0 fps, 32 late frames, A/V offset max 14 ms, drift 0 ms.
+
+SynthBig, `run.py --games SynthBig` (load average 17 to 22 during the run, one sample):
+
+| check | stock | player |
+|---|---|---|
+| lint | pass, 529.0 s, 28,815 dialogue blocks | pass, 7.4 s |
+| probe | pass, 15.0 s, boot stage 0.8 s | pass, 10.5 s, boot stage 4.02 s |
+| route | pass, 51.8 s, 3 shots, exact | pass, 42.4 s |
+| saveresume | pass, 22.9 s, save 16,796 bytes | pass, 17.2 s, save 16,793 bytes |
+
+Load time is the probe boot stage. The 4.02 s player value is one sample under load. Repeat it on an idle host before you use it
+as a load-time figure.
+
+CI: SynthUHD is not in the CI synth job. Its stock lint, route and save/resume checks took about 75 minutes in run 3, and the
+job limit is 90 minutes for all games. `.github/workflows/ci.yml` names the games for the build step (11) and the run step (9)
+and leaves SynthUHD out. Run it by hand: `python3 harness/testgames/build.py uhd`, then `run.py --games SynthUHD`. SynthBig is in
+CI. Its CI time has not been measured on a GitHub runner.
 
 ## Build
 

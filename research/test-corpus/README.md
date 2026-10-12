@@ -66,7 +66,7 @@ Earlier Ren'Py 7 games: AHouseInTheRift 7.6.1, AstralLust 7.8.2, Harem_Hotel 7.4
 ## Gaps
 
 - **8.4/8.5: a known gap, deferred.** Few games exist on the newest engines yet. The only one is TheStormWithinUs (8.5.3), which is small with few scripts. Large 8.4+ games will be added later, as they appear.
-- **No 4K video in a Ren'Py 8 game.** AstralLust (Ren'Py 7, VP9 3840×2160 60 fps) is the only official 4K game. The user will find another for later checks.
+- **No 4K video in a Ren'Py 8 game.** AstralLust (Ren'Py 7, VP9 3840×2160 60 fps) is the only official 4K game. SynthUHD (8.5.3, synthetic) covers 4K stills and 60 fps video in the harness, but it is not a real game. The user will find a real 4K Ren'Py 8 game for later checks.
 - **No obfuscated game.** The user owns none; they must be found online. This is low priority.
 - **Only one macOS-native Ren'Py 8 build** (Ripples). The PC builds run on macOS only through a matching SDK.
 
