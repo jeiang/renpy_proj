@@ -82,6 +82,9 @@ def checks_for(gid):
 
 # The gate's command-line defaults for a game that sets no key in corpus.toml.
 GATE_DEFAULTS = {"probe_lines": 60, "save_after": 30, "resume_lines": 20}
+# Probe lengths for games whose script is shorter than the gate default. Advancing past the last line returns to
+# the main menu, so the probe would never print advance-done. Synth7Trust has 8 say lines.
+PROBE_LINES_OVERRIDE = {"Synth7Trust": 6}
 
 
 def load_games(include_optional):
@@ -99,7 +102,7 @@ def load_games(include_optional):
             "source": REPO / src,
             "renpy": g.get("renpy", ""),
             "plan_src": g.get("plan"),
-            "probe_lines": g.get("probe_lines", GATE_DEFAULTS["probe_lines"]),
+            "probe_lines": PROBE_LINES_OVERRIDE.get(gid, g.get("probe_lines", GATE_DEFAULTS["probe_lines"])),
             "save_after": g.get("save_after", GATE_DEFAULTS["save_after"]),
             "resume_lines": g.get("resume_lines", GATE_DEFAULTS["resume_lines"]),
             "stages": g.get("stages", {}),

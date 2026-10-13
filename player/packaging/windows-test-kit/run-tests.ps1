@@ -32,6 +32,9 @@ if ($PSVersionTable.PSVersion.Major -lt 5) {
     exit 2
 }
 if ($Exe -eq '') { $Exe = [System.IO.Path]::Combine($Kit, 'urp', 'urp.exe') }
+# Windows uses System.Drawing for screenshots and CIM for hardware facts. The Linux test runs use grim and the
+# environment facts only. The OS decides, so the same runner file works on both.
+$OnWindows = ([System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT)
 $HarnessRpy = [System.IO.Path]::Combine($Kit, 'harness', 'zz_harness.rpy')
 $Results = [System.IO.Path]::Combine($Kit, 'results')
 $Work = [System.IO.Path]::Combine($Kit, 'work')
@@ -156,7 +159,9 @@ function Wait-Line($ctx, [string]$token, [int]$from, [double]$seconds, [bool]$ga
         while ($idx -lt $lines.Count) {
             $l = [string]$lines[$idx]
             $idx++
-            if ($l -eq $token -or $l.StartsWith($token + ' ')) { return ($idx - 1) }
+            if ($l -eq $token -or $l.StartsWith($token + ' ')) {
+                return ($idx - 1)
+            }
             if ($l.StartsWith('cmd-error') -and -not $token.StartsWith('cmd-error')) {
                 throw ('the game reported: ' + $l)
             }
@@ -170,6 +175,11 @@ function Wait-Line($ctx, [string]$token, [int]$from, [double]$seconds, [bool]$ga
         }
         Start-Sleep -Milliseconds 200
     }
+}
+
+# Waits for a state line from the cursor $ctx.Seen, then moves the cursor past it. Each state line is matched once.
+function Wait-State($ctx, [string]$token, [double]$seconds, [bool]$gap) {
+    $ctx.Seen = (Wait-Line $ctx $token $ctx.Seen $seconds $gap) + 1
 }
 
 # Writes one command to cmd.txt. The game deletes the file once it has read the command.
@@ -194,9 +204,9 @@ function Run-Cmd($ctx, [string]$text) {
     if ($parts.Count -gt 1) { $rest = $parts[1] }
     if ($verb -eq 'movie') { throw 'the kit plans do not use movie commands' }
     Update-Progress $ctx.Progress
-    $ctx.Mark = $ctx.Progress.Lines.Count
+    $sent = $ctx.Progress.Lines.Count
     Send-Cmd $ctx $text
-    $null = Wait-Line $ctx ('cmd-ack ' + $text) $ctx.Mark (Get-Limit $ctx.Game 'ack') $false
+    $null = Wait-Line $ctx ('cmd-ack ' + $text) $sent (Get-Limit $ctx.Game 'ack') $false
     if ($verb -eq 'start') {
         $token = 'label start'; $key = 'start'
     } elseif ($verb -eq 'jump') {
@@ -208,7 +218,7 @@ function Run-Cmd($ctx, [string]$text) {
     } else {
         $token = 'cmd-done ' + $text; $key = 'done'
     }
-    $null = Wait-Line $ctx $token $ctx.Mark (Get-Limit $ctx.Game $key) $false
+    $null = Wait-Line $ctx $token $sent (Get-Limit $ctx.Game $key) $false
 }
 
 function Wait-Op($ctx, [string]$token) {
@@ -220,10 +230,16 @@ function Wait-Op($ctx, [string]$token) {
     } else {
         $secs = Get-Limit $g 'save'; $gap = $false
     }
-    $null = Wait-Line $ctx $token $ctx.Mark $secs $gap
+    Wait-State $ctx $token $secs $gap
 }
 
 function Save-Shot([string]$Path) {
+    if (-not $OnWindows) {
+        # Linux test runs: grim captures the sway output of the slot (WAYLAND_DISPLAY is set by slotrun.py).
+        & grim $Path
+        if ($LASTEXITCODE -ne 0) { throw 'grim failed' }
+        return
+    }
     Add-Type -AssemblyName System.Drawing
     Add-Type -AssemblyName System.Windows.Forms
     $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
@@ -252,7 +268,6 @@ function Take-Shot($ctx, [string]$arg) {
 
 function Quit-Player($ctx) {
     Update-Progress $ctx.Progress
-    $ctx.Mark = $ctx.Progress.Lines.Count
     Send-Cmd $ctx 'quit'
     $secs = Get-Limit $ctx.Game 'quit'
     if (-not $ctx.Proc.WaitForExit([int]($secs * 1000))) {
@@ -358,12 +373,20 @@ function Stop-Proc($p) {
     }
 }
 
-function Open-Stage($g, [string]$stage, [string]$SrcBase, [string]$DataDir, [string]$SavesDir, [string[]]$RenpyArgs, [bool]$Harness) {
+function Open-Stage($g, [string]$stage, [string]$SrcBase, [string]$DataDir, [string[]]$RenpyArgs, [bool]$Harness) {
     $base = PathJoin @($Work, $g.id, $stage)
     Copy-Tree $SrcBase $base
     New-Dir $DataDir
     New-Dir ([System.IO.Path]::Combine($DataDir, 'logs'))
+    $SavesDir = PathJoin @($DataDir, 'saves')
     New-Dir $SavesDir
+    # The patch library is kept per game (see Stage-PatchSeed) and copied into every stage that loads it.
+    $patchSrc = PathJoin @($Data, $g.id, 'patches')
+    if (Test-Path -LiteralPath $patchSrc) {
+        $patchDst = PathJoin @($DataDir, 'patches')
+        New-Dir $patchDst
+        Copy-Item -Path (PathJoin @($patchSrc, '*')) -Destination $patchDst -Recurse -Force
+    }
     $hz = PathJoin @($Work, ('hz-' + $g.id + '-' + $stage))
     New-Dir $hz
     $name = $g.id + '-' + $stage
@@ -372,7 +395,7 @@ function Open-Stage($g, [string]$stage, [string]$SrcBase, [string]$DataDir, [str
     $ctx = @{
         Game = $g; Stage = $stage; Name = $name; Base = $base; Data = $DataDir; Hz = $hz
         Progress = (New-Progress ([System.IO.Path]::Combine($hz, 'progress.txt')))
-        Mark = 0; Notes = (New-Object System.Collections.ArrayList); Warn = $false; Proc = $null
+        Seen = 0; Notes = (New-Object System.Collections.ArrayList); Warn = $false; Proc = $null
         Out = ($logBase + '.out.txt'); Err = ($logBase + '.err.txt')
     }
     $argList = @($base, '--data', $DataDir, '--logdir', ([System.IO.Path]::Combine($DataDir, 'logs')), '--harness-script', $HarnessRpy)
@@ -484,7 +507,7 @@ function Src-Of($g) {
 
 function Stage-Lint($g) {
     $dataDir = PathJoin @($Data, $g.id, 'lint')
-    $ctx = Open-Stage $g 'lint' (Src-Of $g) $dataDir (PathJoin @($Data, 'saves', $g.id, 'lint')) @('lint') $false
+    $ctx = Open-Stage $g 'lint' (Src-Of $g) $dataDir @('lint') $false
     try {
         $bootSec = Get-Limit $g 'lint-boot'
         $t0 = [DateTime]::UtcNow
@@ -559,7 +582,7 @@ function Stage-PatchSeed($g) {
         if (-not $h.Success) { throw 'no node hash in the apply-test output' }
         $hash = $h.Groups[1].Value
         $seedText = ([System.IO.File]::ReadAllText($seedSrc)).Replace('sha1:0000000000', $hash)
-        $dst = PathJoin @($Data, $g.id, 'probe', 'patches', $fp)
+        $dst = PathJoin @($Data, $g.id, 'patches', $fp)
         New-Dir $dst
         [System.IO.File]::WriteAllText((PathJoin @($dst, 'patch.toml')), $seedText, $Utf8)
         $script:SeedOk[$g.id] = $true
@@ -573,7 +596,7 @@ function Stage-Probe($g) {
     if ($g.id -eq 'Synth7Patch' -and -not $script:SeedOk[$g.id]) { throw 'skipped: the patch seed did not run' }
     $dataDir = PathJoin @($Data, $g.id, 'probe')
     $ops = Read-Ops ([System.IO.Path]::Combine($Kit, 'plans', 'probe.plan.tmpl')) ([string]$g.probe_lines)
-    $ctx = Open-Stage $g 'probe' (Src-Of $g) $dataDir (PathJoin @($Data, 'saves', $g.id, 'probe')) @() $true
+    $ctx = Open-Stage $g 'probe' (Src-Of $g) $dataDir @() $true
     try {
         $null = Wait-Line $ctx 'boot' 0 (Get-Limit $g 'boot') $false
         Run-Ops $ctx $ops
@@ -589,7 +612,7 @@ function Stage-Route($g) {
     $planPath = [System.IO.Path]::Combine($Kit, $g.plan)
     $ops = Read-Ops $planPath ''
     $dataDir = PathJoin @($Data, $g.id, 'route')
-    $ctx = Open-Stage $g 'route' (Src-Of $g) $dataDir (PathJoin @($Data, 'saves', $g.id, 'route')) @() $true
+    $ctx = Open-Stage $g 'route' (Src-Of $g) $dataDir @() $true
     try {
         $null = Wait-Line $ctx 'boot' 0 (Get-Limit $g 'boot') $false
         Run-Ops $ctx $ops
@@ -603,13 +626,12 @@ function Stage-Route($g) {
 }
 
 function Stage-Resume($g) {
-    $saves = PathJoin @($Data, 'saves', $g.id)
     $src = Src-Of $g
     $ops1 = @(
         'cmd auto on', 'cmd click on', 'wait menu True', 'cmd start',
         ('cmd advance-to ' + $g.save_after), 'wait advance-done', 'cmd save kit-slot', 'quit'
     )
-    $ctx1 = Open-Stage $g 'resume-1' $src (PathJoin @($Data, $g.id, 'resume-1')) $saves @() $true
+    $ctx1 = Open-Stage $g 'resume-1' $src (PathJoin @($Data, $g.id, 'resume-1')) @() $true
     try {
         $null = Wait-Line $ctx1 'boot' 0 (Get-Limit $g 'boot') $false
         Run-Ops $ctx1 $ops1
@@ -617,14 +639,21 @@ function Stage-Resume($g) {
     } finally {
         Close-Stage $ctx1
     }
-    $written = @(Get-ChildItem -LiteralPath $saves -Recurse -File -ErrorAction SilentlyContinue)
+    # The player writes saves under <data>\saves. Only *.save files count: persistent is written on every run.
+    $saves1 = PathJoin @($Data, $g.id, 'resume-1', 'saves')
+    $written = @(Get-ChildItem -LiteralPath $saves1 -Recurse -File -Filter '*.save' -ErrorAction SilentlyContinue)
     if ($written.Count -eq 0) { throw 'the save did not write a file' }
+
+    # The resume run starts with its own data dir, so it gets a copy of the first run's saves.
+    $saves2 = PathJoin @($Data, $g.id, 'resume-2', 'saves')
+    New-Dir $saves2
+    Copy-Item -Path (PathJoin @($saves1, '*')) -Destination $saves2 -Recurse -Force
 
     $ops2 = @(
         'cmd auto on', 'cmd click on', 'wait menu True', 'cmd load kit-slot',
         ('cmd advance ' + $g.resume_lines), 'wait advance-done', 'quit'
     )
-    $ctx2 = Open-Stage $g 'resume-2' $src (PathJoin @($Data, $g.id, 'resume-2')) $saves @() $true
+    $ctx2 = Open-Stage $g 'resume-2' $src (PathJoin @($Data, $g.id, 'resume-2')) @() $true
     try {
         $null = Wait-Line $ctx2 'boot' 0 (Get-Limit $g 'boot') $false
         Run-Ops $ctx2 $ops2
@@ -727,7 +756,6 @@ function Run-Check($g, [string]$name) {
     elseif ($name -eq 'patch') { $problems = @(Check-Patch $r) }
     elseif ($name -eq 'engine-copy') { $problems = @(Check-EngineCopy $r) }
     else { $problems = @('unknown check ' + $name) }
-    $sw = [System.Diagnostics.Stopwatch]::StartNew()
     if ($problems.Count -eq 0) {
         Add-Row $g.id ('check:' + $name) 'PASS' 'report matches' 0 ''
     } else {
@@ -737,26 +765,32 @@ function Run-Check($g, [string]$name) {
 
 function Get-SystemInfo($exePath) {
     $lines = New-Object System.Collections.ArrayList
-    [void]$lines.Add('computer: ' + $env:COMPUTERNAME)
-    try {
-        $os = Get-CimInstance Win32_OperatingSystem
-        [void]$lines.Add('os: ' + $os.Caption + ' ' + $os.Version)
-        [void]$lines.Add('ram_gb: ' + [Math]::Round($os.TotalVisibleMemorySize / 1MB, 1))
-    } catch { [void]$lines.Add('os: unavailable') }
-    try {
-        $cpu = Get-CimInstance Win32_Processor | Select-Object -First 1
-        [void]$lines.Add('cpu: ' + $cpu.Name + ' (' + $cpu.NumberOfLogicalProcessors + ' logical)')
-    } catch { [void]$lines.Add('cpu: unavailable') }
-    try {
-        $gpus = @(Get-CimInstance Win32_VideoController | ForEach-Object { [string]$_.Name })
-        [void]$lines.Add('gpu: ' + ($gpus -join '; '))
-    } catch { [void]$lines.Add('gpu: unavailable') }
+    [void]$lines.Add('computer: ' + [System.Environment]::MachineName)
+    if ($OnWindows) {
+        try {
+            $os = Get-CimInstance Win32_OperatingSystem
+            [void]$lines.Add('os: ' + $os.Caption + ' ' + $os.Version)
+            [void]$lines.Add('ram_gb: ' + [Math]::Round($os.TotalVisibleMemorySize / 1MB, 1))
+        } catch { [void]$lines.Add('os: unavailable') }
+        try {
+            $cpu = Get-CimInstance Win32_Processor | Select-Object -First 1
+            [void]$lines.Add('cpu: ' + $cpu.Name + ' (' + $cpu.NumberOfLogicalProcessors + ' logical)')
+        } catch { [void]$lines.Add('cpu: unavailable') }
+        try {
+            $gpus = @(Get-CimInstance Win32_VideoController | ForEach-Object { [string]$_.Name })
+            [void]$lines.Add('gpu: ' + ($gpus -join '; '))
+        } catch { [void]$lines.Add('gpu: unavailable') }
+    } else {
+        [void]$lines.Add('os: ' + [System.Environment]::OSVersion.VersionString)
+        [void]$lines.Add('cpu: ' + [System.Environment]::ProcessorCount + ' logical')
+        [void]$lines.Add('gpu: not queried on this platform')
+    }
     [void]$lines.Add('WGPU_BACKEND: ' + $env:WGPU_BACKEND)
     [void]$lines.Add('powershell: ' + $PSVersionTable.PSVersion.ToString())
     try {
         $h = Get-FileHash -LiteralPath $exePath -Algorithm SHA256
-        [void]$lines.Add('urp.exe sha256: ' + $h.Hash)
-    } catch { [void]$lines.Add('urp.exe sha256: unavailable') }
+        [void]$lines.Add(([System.IO.Path]::GetFileName($exePath)) + ' sha256: ' + $h.Hash)
+    } catch { [void]$lines.Add(([System.IO.Path]::GetFileName($exePath)) + ' sha256: unavailable') }
     return ($lines -join "`r`n") + "`r`n"
 }
 
@@ -781,7 +815,7 @@ function Write-Summary([string]$Stamp, [string]$SysText) {
     [System.IO.File]::WriteAllText([System.IO.Path]::Combine($Results, 'system.txt'), $SysText, $Utf8)
     $json = @{
         run = $Stamp
-        computer = $env:COMPUTERNAME
+        computer = [System.Environment]::MachineName
         counts = @{ pass = $pass; warn = $warn; fail = $fail }
         rows = @($script:Rows | ForEach-Object { $_ })
     } | ConvertTo-Json -Depth 6
@@ -823,12 +857,12 @@ Log ('urp Windows test kit, started ' + $stamp)
 
 $manifest = (Get-Content -Raw -LiteralPath $gamesJson) | ConvertFrom-Json
 $games = @($manifest.games)
-$only = @()
-if ($Only -ne '') { $only = @($Only -split ',' | ForEach-Object { $_.Trim() }) }
+$onlyIds = @()
+if ($Only -ne '') { $onlyIds = @($Only -split ',' | ForEach-Object { $_.Trim() }) }
 
 try {
     foreach ($g in $games) {
-        if ($only.Count -gt 0 -and -not ($only -contains $g.id)) { continue }
+        if ($onlyIds.Count -gt 0 -and -not ($onlyIds -contains $g.id)) { continue }
         Log ('--- ' + $g.id + ' (' + $g.folder + ', Ren''Py ' + $g.renpy + ')')
         $null = Invoke-Stage $g 'lint' 'Stage-Lint'
         if ($g.id -eq 'Synth7Patch') {
@@ -871,7 +905,7 @@ foreach ($d in @($Work, $Data)) {
     if (Test-Path -LiteralPath $d) { Remove-Item -LiteralPath $d -Recurse -Force -ErrorAction SilentlyContinue }
 }
 
-$zipName = 'results-' + $env:COMPUTERNAME + '-' + $stampEnd + '.zip'
+$zipName = 'results-' + [System.Environment]::MachineName + '-' + $stampEnd + '.zip'
 $zipPath = [System.IO.Path]::Combine($Kit, $zipName)
 if (Test-Path -LiteralPath $zipPath) { Remove-Item -LiteralPath $zipPath -Force }
 Compress-Archive -Path ([System.IO.Path]::Combine($Results, '*')) -DestinationPath $zipPath
