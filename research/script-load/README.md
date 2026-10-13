@@ -146,3 +146,33 @@ Times are `Loading script took` in ms. "Cold" is an empty data folder. "Warm" is
   - The Synth7 and Synth7Patch compat checks pass without changing `check_compat`.
 - Also in this change: the lexer keeps its compiled regexps in a dict (0013) and `Node.name` has no `match` statement (0014). Both are pure speed-ups of load. `.rpyc` files are written to a temporary name and renamed (0015).
 - Gate (`harness/testgames/run.py`, stock and player, SynthStory, SynthMedia, SynthText, SynthView, SynthAniso, SynthObf, SynthBig, SynthObfEngine, Synth7, Synth7Patch): all pass. SynthUHD was not run (not in CI).
+
+## Parallel compile of loose script files (engine patch 0016)
+
+Results (same machine and method; the player build of this branch; ms for `Loading script`):
+
+| Game | Cold, lazy compile only | Cold, with workers | Warm, lazy compile only | Warm, with workers |
+|---|---|---|---|---|
+| SynthBig | 1742 to 1770 | 736 to 742 | 177 | 186 to 188 |
+| Harem Hotel (RPA only: nothing to compile) | 4721 to 4801 | 4749 to 4757 | 4716 to 4794 | 4735 to 4775 |
+| Wartribe Academy scripts | 5180 to 5212 | 2142 to 2187 | 780 to 789 | 806 to 814 |
+
+Against stock (before the lazy compile): SynthBig 3052 to 736 ms cold, Wartribe scripts 8227 to 2142 ms cold. The warm launch pays 10 to 25 ms for reading and hashing the sources to learn that nothing needs a compile.
+
+Choice of method, with measurements (host Python 3.12 on artemis unless noted):
+
+| Option | Result |
+|---|---|
+| (a) forked workers that write the `.rpyc` files | SynthBig load 1510 ms serial, 409 ms with workers. A fork costs about 10 ms. The load then reads the `.rpyc` files as it does on every warm launch, so nothing is pickled back. **Chosen.** |
+| (a) spawned workers (urp as the interpreter) | A fresh interpreter needs about 160 ms to import renpy before it parses anything. Not needed on Linux. It is the way to get a parallel compile on Windows, which has no fork. Not done. |
+| (b) subinterpreters with their own GIL | `import renpy.cslots`, `astsupport`, `lexersupport`, `pydict` and `style` all fail in an isolated interpreter with "module does not support loading in subinterpreters". Cython single-phase modules cannot be used. |
+| (c) lexer in Rust | The parser calls the lexer from 100 or more methods (`match`, `word`, `simple_expression`). A token stream would need a new parser. Parse is 76 percent of a lazy cold load, and the Python parser would stay serial. |
+
+How it works:
+- `renpy/scriptscan.py` reads the text of each `.rpy`. A file that has a `python early` block or sets a config value that the parser reads (`keyword_after_python`, `check_conflicting_properties`, `check_translate_none`, `munge_in_strings`) is a barrier.
+- Waves: the files that need a compile go to workers in waves. A wave ends at a barrier, or at a compiled file with no source. The next wave is forked when the load has loaded the barrier. So a custom statement that an early block registers is known to the files after it. A test registers one and uses it in a later file.
+- The load itself is unchanged and runs in file order, so node order, init priorities, the namemap, the duplicate label check and cross-file jumps are those of a serial load.
+- One part of a compiled file depends on the files before it: translate identifiers are unique across the script. Wartribe has two files that start with the same license text. Each worker reports its identifiers. A clash removes that file's `.rpyc`, and the load compiles it again in order.
+- At most four workers, and two cores stay free. They are reaped when the load ends or stops. `RENPY_PARALLEL_COMPILE=N` sets the number (0 turns it off). With nothing to compile, the plan only reads and hashes the sources.
+- Fork safety: forks happen in `Script.load_script`, before the interface (window, audio) is created. macOS stays serial: forking after Cocoa or Metal threads exist can crash, and no Mac launch proved it safe.
+- Check of equality: `player/engine/python/tests/script_equiv.py` loads a game twice (serial, then workers) and compares every node with its state, `next` links, init code, namemap, labels, duplicate labels, parse errors, and the list of compiled files. Generated node names are compared by rank, because they carry the compile time. Equal on SynthBig (46945 nodes), Wartribe, DOF-Ep3 and TheStormWithinUs. The host engine parses Wartribe with 1062 errors (the style data is not set up), so that result is weaker; the equal result there covers the files that parse.
