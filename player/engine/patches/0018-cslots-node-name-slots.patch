@@ -1,0 +1,32 @@
+# Reason: CObject.__setstate__ hands a Ren'Py 7 node's "name" to setattr, which runs the Node.name property setter for every node that is unpickled. The setter's job is to write three cslots (_name, name_version, name_serial), so for a class with a _name slot this writes those slots through their cslot setters, in the same order and with the same test as the setter's first case. The whole path stays inside the original try, so an AttributeError (for example a missing filename) still drops the name as before. Patch 0014 keeps the setter for every other caller. Classes without a _name slot take the setattr path unchanged.
+
+diff --git a/renpy/cslots.pyx b/renpy/cslots.pyx
+--- a/renpy/cslots.pyx
++++ b/renpy/cslots.pyx
+@@ -283,7 +283,25 @@
+ 
+         if name:
+             try:
+-                setattr(self, "name", name)
++                name_slot = cslot_setters.get("_name", None)
++
++                if name_slot is None:
++                    setattr(self, "name", name)
++
++                elif (
++                    isinstance(name, (tuple, list))
++                    and len(name) == 3
++                    and name[0] == self.filename
++                    and isinstance(name[1], int)
++                    and isinstance(name[2], int)
++                ):
++                    # The first case of the Node.name setter (renpy/ast.py), written to the slots directly.
++                    name_slot(self, None)
++                    cslot_setters["name_version"](self, name[1])
++                    cslot_setters["name_serial"](self, name[2])
++
++                else:
++                    name_slot(self, name)
+             except AttributeError:
+                 pass
+ 
