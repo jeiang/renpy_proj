@@ -1,4 +1,4 @@
-"""Tests for engine patch 0017: player defaults config.defer_tl_scripts to True.
+"""Tests for engine patch 0018: player defaults config.defer_tl_scripts to True.
 
 Deferred translation scripts are not loaded at start, but renpy.translation.known_languages() still lists every
 tl/<lang> folder, and a game that sets `define config.defer_tl_scripts = False` gets the eager load back.
