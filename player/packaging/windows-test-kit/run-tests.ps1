@@ -462,6 +462,13 @@ function Add-Row([string]$Game, [string]$Stage, [string]$Status, [string]$Detail
     Log ('{0,-5} {1,-14} {2,-16} {3}' -f $Status, $Game, $Stage, $Detail)
 }
 
+# The reason a stage is expected to fail for this game, or $null. games.json sets xfail; see build-kit.py.
+function Get-XFailReason($g, [string]$Stage) {
+    if ($null -eq $g.xfail) { return $null }
+    if (@($g.xfail.stages) -contains $Stage) { return [string]$g.xfail.reason }
+    return $null
+}
+
 # Runs one stage function. The function sets $script:Detail and $script:Warn, and throws on failure.
 function Invoke-Stage($g, [string]$Stage, [string]$Fn) {
     $script:Current = $null
@@ -484,6 +491,16 @@ function Invoke-Stage($g, [string]$Stage, [string]$Fn) {
     $sw.Stop()
     if ($script:Current -and $script:Current.Notes.Count -gt 0) {
         $detail = $detail + ' [' + (($script:Current.Notes | ForEach-Object { [string]$_ }) -join '; ') + ']'
+    }
+    $xfailReason = Get-XFailReason $g $Stage
+    if ($null -ne $xfailReason) {
+        if ($status -eq 'FAIL') {
+            $status = 'XFAIL'
+            $detail = 'expected to fail (' + $xfailReason + '): ' + $detail
+        } else {
+            $status = 'XPASS'
+            $detail = 'expected to fail (' + $xfailReason + ') but the stage passed: ' + $detail
+        }
     }
     Add-Row $g.id $Stage $status $detail $sw.Elapsed.TotalSeconds $tail
     return $status
@@ -802,7 +819,9 @@ function Write-Summary([string]$Stamp, [string]$SysText) {
     $pass = @($script:Rows | Where-Object { $_.status -eq 'PASS' }).Count
     $warn = @($script:Rows | Where-Object { $_.status -eq 'WARN' }).Count
     $fail = @($script:Rows | Where-Object { $_.status -eq 'FAIL' }).Count
-    [void]$sum.Add(('PASS ' + $pass + ', WARN ' + $warn + ', FAIL ' + $fail))
+    $xfail = @($script:Rows | Where-Object { $_.status -eq 'XFAIL' }).Count
+    $xpass = @($script:Rows | Where-Object { $_.status -eq 'XPASS' }).Count
+    [void]$sum.Add(('PASS ' + $pass + ', WARN ' + $warn + ', FAIL ' + $fail + ', XFAIL ' + $xfail + ', XPASS ' + $xpass))
     [void]$sum.Add('')
     foreach ($r in $script:Rows) {
         $d = ([string]$r.detail) -replace "`r?`n", ' | '
@@ -877,11 +896,11 @@ try {
         }
         if ($null -ne $g.probe_lines) {
             $probeStatus = Invoke-Stage $g 'probe' 'Stage-Probe'
-            if ($probeStatus -ne 'FAIL') {
+            if ($probeStatus -eq 'PASS' -or $probeStatus -eq 'WARN' -or $probeStatus -eq 'XPASS') {
                 foreach ($c in @($g.checks)) { Run-Check $g ([string]$c) }
             } else {
                 foreach ($c in @($g.checks)) {
-                    Add-Row $g.id ('check:' + [string]$c) 'SKIP' 'the probe stage failed' 0 ''
+                    Add-Row $g.id ('check:' + [string]$c) 'SKIP' 'the probe stage did not pass' 0 ''
                 }
             }
         }

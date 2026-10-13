@@ -85,6 +85,14 @@ GATE_DEFAULTS = {"probe_lines": 60, "save_after": 30, "resume_lines": 20}
 # Probe lengths for games whose script is shorter than the gate default. Advancing past the last line returns to
 # the main menu, so the probe would never print advance-done. Synth7Trust has 8 say lines.
 PROBE_LINES_OVERRIDE = {"Synth7Trust": 6}
+# Stages expected to fail for a game. The runner reports them as XFAIL, or XPASS if they pass. Synth7AI has no
+# committed patch, so its script fails on string.join until `urp upgrade` writes one (harness/testgames/README.md).
+XFAIL = {
+    "Synth7AI": {
+        "stages": ["probe", "route", "save-resume"],
+        "reason": "no committed patch: string.join fails until urp upgrade writes one",
+    },
+}
 
 
 def load_games(include_optional):
@@ -265,6 +273,7 @@ def main():
                 "stages": g["stages"],
                 "after_start": g["after_start"],
                 "checks": checks_for(g["id"]),
+                "xfail": XFAIL.get(g["id"]),
             })
         (root / "games.json").write_text(
             json.dumps({"games": games_json}, indent=2) + "\n")

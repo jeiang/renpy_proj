@@ -46,11 +46,16 @@ For each test game, the runner:
 Games that need a probe do not run the compatibility checks unless the
 probe passed. A SKIP row says why.
 
+XFAIL means a step that the kit expects to fail did fail. XPASS means that
+step passed. Neither counts as a failure. Only FAIL counts. Synth7AI is an
+expected failure: it has no patch yet, because its script is the input for
+urp upgrade.
+
 
 What you will get back
 ----------------------
 
-- summary.txt: one line per step, with PASS, FAIL, WARN, or SKIP.
+- summary.txt: one line per step, with PASS, FAIL, WARN, SKIP, XFAIL, or XPASS.
 - results.json: the same data in machine-readable form.
 - system.txt: the Windows version and the urp.exe checksum.
 - run.log: the full run log.
