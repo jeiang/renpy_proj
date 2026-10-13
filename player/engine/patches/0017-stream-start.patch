@@ -1,0 +1,600 @@
+# Reason: PROTOTYPE, off unless RENPY_STREAM_START=1 (research/stream-start). The compiled file of a loose script gets a third slot that holds the file without the bodies of its pure labels, and a side file with the bodies. A launch that streams loads the third slot, and loads a body when its label first executes, when a lookup needs one of its nodes, or in a background thread after the first frames. Without the flag the only changes are the empty-dict checks in Label.execute, Script.lookup and Script.has_label.
+
+diff --git a/renpy/streamload.py b/renpy/streamload.py
+new file mode 100644
+--- /dev/null
++++ b/renpy/streamload.py
+@@ -0,0 +1,357 @@
++# Player patch: streamed start (investigation prototype, off unless RENPY_STREAM_START=1).
++#
++# The compiled file of a loose script gets a third slot that holds the file without the bodies of its "pure" labels, and
++# a side file (`<name>.rpyc.sbody`) that holds the bodies, one compressed pickle each. A launch that streams loads the
++# third slot. The labels stay in the namemap with empty blocks. The body of a label is loaded when the label first
++# executes, when a lookup needs one of its nodes, or by a background thread that starts once the first frames are drawn.
++#
++# A label is pure when nothing in its body takes part in init time: no init priority, no python early, no statement
++# that creates a store. Everything else is loaded at start, as before.
++
++import os
++import sys
++import threading
++import time
++import zlib
++
++import renpy
++from renpy.compat.pickle import loads, dumps
++
++# A body with fewer nodes than this stays in the skeleton: the file access costs more than the unpickle.
++MIN_BODY_NODES = 8
++
++SBODY_SUFFIX = ".sbody"
++
++
++def compat_active():
++    """
++    True for a Ren'Py 7 game. The Python 2 compatibility module reads the PyCode objects of every file when finish_load
++    runs (`_player.compat.hooks`) and scans all game Python after the load, so it needs the whole script at load time.
++    """
++
++    module = sys.modules.get("_player.compat")
++
++    return bool(module is not None and getattr(module, "active", False))
++
++
++def write_enabled():
++    """True when compiling a file should also write the split slot and side file."""
++
++    return os.environ.get("RENPY_STREAM_START", "0") == "1" and not compat_active()
++
++
++def enabled():
++    """True when this launch loads bodies later (the flag, a plain run, and the lazy compile that streaming builds on)."""
++
++    args = renpy.game.args
++
++    return (
++        write_enabled()
++        and args.command == "run"
++        and not args.compile
++        and not getattr(args, "warp", None)
++        and os.environ.get("RENPY_LAZY_COMPILE", "1") != "0"
++    )
++
++
++class Entry(object):
++    __slots__ = ("path", "offset", "length", "count")
++
++    def __init__(self, path, offset, length, count):
++        self.path = path
++        self.offset = offset
++        self.length = length
++        self.count = count
++
++
++def pure_nodes(label):
++    """
++    Returns the flat list of the nodes in the block of `label` if none of them takes part in init time, else None.
++    """
++
++    ast = renpy.ast
++
++    nodes = []
++
++    for i in label.block:
++        i.get_children(nodes.append)
++
++    # A user statement is fine when it has no init priority (the get_init test below): play, stop, queue, window, pause...
++    skip = (ast.Init, ast.EarlyPython, ast.Testcase)
++
++    for n in nodes:
++        if isinstance(n, skip):
++            return None
++
++        if n.get_init() is not None:
++            return None
++
++        if getattr(n, "store", "store") != "store":
++            return None
++
++    return nodes
++
++
++class Split(object):
++    """The result of split(): `skeleton` is the pickle for slot 3, `sidecar` the bytes of the side file."""
++
++    def __init__(self, skeleton, sidecar):
++        self.skeleton = skeleton
++        self.sidecar = sidecar
++
++
++def split(data, stmts, digest, filename):
++    """
++    Splits the top-level statements `stmts` of a compiled file. `data` is the rpyc data dict, `digest` the 16 byte md5
++    that the rpyc file ends with. Returns a Split, or None when no label qualifies. The statements are unchanged on return.
++    """
++
++    ast = renpy.ast
++
++    bodies = []
++
++    for node in stmts:
++        if type(node) is ast.Label and node.block and isinstance(node.name, str):
++            nodes = pure_nodes(node)
++
++            if nodes is not None and len(nodes) >= MIN_BODY_NODES:
++                bodies.append((node, nodes))
++
++    if not bodies:
++        return None
++
++    blob = bytearray(digest)
++    index = {}
++    nested = {}
++
++    for label, nodes in bodies:
++        serials = [n.name[2] for n in nodes if isinstance(n.name, tuple) and len(n.name) == 3 and isinstance(n.name[2], int)]
++
++        if not serials:
++            continue
++
++        raw = zlib.compress(dumps(label.block, bad_reduction_name="<%s body %s>" % (filename, label.name)), 1)
++
++        index[label.name] = (len(blob), len(raw), min(serials), max(serials), len(nodes))
++        blob += raw
++
++        for n in nodes:
++            if type(n) is ast.Label and isinstance(n.name, str):
++                nested[n.name] = label.name
++
++    if not index:
++        return None
++
++    lazy = {"digest": digest, "bodies": index, "nested": nested, "filename": filename}
++    data = dict(data)
++    data["lazy"] = lazy
++
++    saved = []
++
++    try:
++        for label, _nodes in bodies:
++            if label.name in index:
++                saved.append((label, label.block))
++                label.block = []
++
++        skeleton = dumps((data, stmts), bad_reduction_name="<%s skeleton>" % filename)
++    finally:
++        for label, block in saved:
++            label.block = block
++
++    return Split(skeleton, bytes(blob))
++
++
++def sidecar_path(rpyc_path):
++    return rpyc_path + SBODY_SUFFIX
++
++
++def sidecar_ok(data, rpyc_path):
++    """True if the side file next to `rpyc_path` is the one that the slot 3 `data` was written with."""
++
++    lazy = data.get("lazy") if isinstance(data, dict) else None
++
++    if not lazy or rpyc_path is None:
++        return False
++
++    try:
++        with open(sidecar_path(rpyc_path), "rb") as f:
++            return f.read(len(lazy["digest"])) == lazy["digest"]
++    except OSError:
++        return False
++
++
++def register(script, all_stmts, lazy, rpyc_path):
++    """Called by Script.finish_load for a file that was loaded from slot 3."""
++
++    path = sidecar_path(rpyc_path)
++    bodies = lazy["bodies"]
++    ranges = script.lazy_ranges.setdefault(lazy["filename"], [])
++
++    for node in all_stmts:
++        if type(node) is renpy.ast.Label:
++            info = bodies.get(node.name)
++
++            if info is not None:
++                offset, length, lo, hi, count = info
++                script.lazy_bodies[node.name] = Entry(path, offset, length, count)
++                ranges.append((lo, hi, node.name))
++
++    script.lazy_nested.update(lazy["nested"])
++
++
++def resolve(script, key):
++    """
++    Called when a lookup misses `key`. Loads the body that holds the node or label named `key`, if one is waiting.
++    Returns True if a body was loaded.
++    """
++
++    if not script.lazy_bodies:
++        return False
++
++    owner = None
++
++    if isinstance(key, str):
++        owner = script.lazy_nested.get(key)
++
++        if owner is not None and owner in script.lazy_bodies:
++            load_body(script, owner)
++            return True
++
++        return False
++
++    if isinstance(key, tuple) and len(key) >= 3 and isinstance(key[2], int):
++        loaded = False
++
++        for lo, hi, name in list(script.lazy_ranges.get(key[0], ())):
++            if lo <= key[2] <= hi and name in script.lazy_bodies:
++                load_body(script, name)
++                loaded = True
++
++                if key in script.namemap:
++                    break
++
++        return loaded
++
++    return False
++
++
++def load_body(script, name):
++    """Loads the body of the label `name`, and does for its nodes what Script.finish_load does for a file."""
++
++    with script.load_lock:
++        entry = script.lazy_bodies.pop(name, None)
++
++        if entry is None:
++            return
++
++        start = time.time()
++
++        with open(entry.path, "rb") as f:
++            f.seek(entry.offset)
++            raw = f.read(entry.length)
++
++        block = loads(zlib.decompress(raw))
++
++        label = script.namemap[name]
++
++        renpy.ast.chain_block(block, label.next)
++        label.next = block[0]
++        label.block = block
++
++        all_stmts = []
++
++        for i in block:
++            i.get_children(all_stmts.append)
++
++        script.translator.take_translates(all_stmts)
++        script.translator.chain_translates()
++
++        persistent = renpy.game.persistent
++
++        if persistent is not None:
++            seen = persistent._seen_translates
++
++            for n in all_stmts:
++                if isinstance(n, (renpy.ast.Translate, renpy.ast.TranslateSay)) and n.language is None:
++                    if (n.identifier in seen) or (renpy.astsupport.hash64(n.identifier) in seen):
++                        renpy.game.seen_translates_count += 1
++
++        script.select_lazy_pycode(block, all_stmts)
++        script.update_bytecode()
++
++        for node in all_stmts:
++            script.namemap[node] = node
++            node.early_execute()
++
++        if script.all_stmts is not None:
++            script.all_stmts.extend(all_stmts)
++
++        script.need_analysis.extend(all_stmts)
++        script.need_compress.extend(all_stmts)
++
++        script.analyze()
++        script.compress()
++
++        took = (time.time() - start) * 1000.0
++
++        script.stream_loaded += 1
++        script.stream_ms += took
++        script.stream_max_ms = max(script.stream_max_ms, took)
++
++        if threading.current_thread() is threading.main_thread():
++            script.stream_sync += 1
++            script.stream_sync_ms += took
++
++
++def load_all(script):
++    """Loads every body that is still waiting."""
++
++    for name in list(script.lazy_bodies):
++        load_body(script, name)
++
++
++def start(script):
++    """Starts the background thread that loads the waiting bodies once the first frames are drawn."""
++
++    if not script.lazy_bodies:
++        return
++
++    t = threading.Thread(target=run_thread, args=(script,), name="stream-load")
++    t.daemon = True
++    t.start()
++
++
++def run_thread(script):
++    waited = 0.0
++
++    # Let the main thread draw its first frames (the menu) without competing for the GIL.
++    while renpy.game.script is script and waited < 15.0:
++        interface = renpy.game.interface
++
++        if interface is not None and len(interface.frame_times) >= 5:
++            break
++
++        time.sleep(0.05)
++        waited += 0.05
++
++    begin = time.time()
++
++    for name in list(script.lazy_bodies):
++        if renpy.game.script is not script:
++            return
++
++        try:
++            load_body(script, name)
++        except Exception:
++            import traceback
++
++            traceback.print_exc()
++            return
++
++        time.sleep(0)
++
++    renpy.display.log.write(
++        "Streamed script: %d bodies, %.0f ms of loading (largest %.0f ms), %.1f s after the first frames; %d bodies (%.0f ms) loaded by the game thread"
++        % (script.stream_loaded, script.stream_ms, script.stream_max_ms, time.time() - begin, script.stream_sync, script.stream_sync_ms)
++    )
+diff --git a/renpy/script.py b/renpy/script.py
+--- a/renpy/script.py
++++ b/renpy/script.py
+@@ -37,6 +37,8 @@
+ 
+ import renpy
+ import renpy.vfs  # Player patch: virtual renpy/common files.
++import renpy.streamload  # Player patch: streamed start.
++import threading
+ 
+ from renpy.compat.pickle import loads, dumps
+ 
+@@ -269,6 +271,20 @@
+         # A set of languages to load.
+         self.load_languages = set()
+ 
++        # Player patch: streamed start (renpy.streamload). Labels whose bodies are not loaded yet, by label name; the
++        # serial ranges of those bodies by file name; the labels nested in them by name. Empty when nothing streams.
++        self.stream = renpy.streamload.enabled()
++        self.lazy_bodies = {}
++        self.lazy_ranges = {}
++        self.lazy_nested = {}
++        self.pending_lazy = None
++        self.load_lock = threading.RLock()
++        self.stream_loaded = 0
++        self.stream_ms = 0.0
++        self.stream_max_ms = 0.0
++        self.stream_sync = 0
++        self.stream_sync_ms = 0.0
++
+     def choose_backupdir(self):
+         if renpy.mobile:
+             return None
+@@ -685,7 +701,9 @@
+ 
+         initcode = []
+ 
+-        stmts = self.finish_load(stmts, initcode, False)
++        # Player patch: the thread that loads label bodies shares update_bytecode and the namemap.
++        with self.load_lock:
++            stmts = self.finish_load(stmts, initcode, False)
+ 
+         initcode.sort(key=lambda i: i[0])
+ 
+@@ -828,6 +846,12 @@
+         if self.all_stmts is not None:
+             self.all_stmts.extend(all_stmts)
+ 
++        # Player patch: the labels of this file whose bodies stay in the side file (set by load_appropriate_file).
++        pending, self.pending_lazy = self.pending_lazy, None
++
++        if pending is not None:
++            renpy.streamload.register(self, all_stmts, pending[0], pending[1])
++
+         self.need_analysis.extend(all_stmts)
+         self.need_compress.extend(all_stmts)
+ 
+@@ -995,6 +1019,14 @@
+                     bad_reduction_name=f"<{fn} transformed rpyc data>",
+                 )
+ 
++                split = None
++
++                if renpy.streamload.write_enabled() and rpycfn is not None:
++                    with renpy.vfs.open(fullfn, "rb") as fullf:
++                        split = renpy.streamload.split(
++                            data, stmts, hashlib.md5(fullf.read() + RPYC_MAGIC).digest(), renpy.lexer.elide_filename(fullfn)
++                        )
++
+                 if not renpy.macapp and rpycfn is not None:
+                     try:
+                         os.makedirs(os.path.dirname(rpycfn), exist_ok=True)
+@@ -1010,11 +1042,23 @@
+                                 self.write_rpyc_data(f, 1, pickle_data_before_static_transforms)
+                                 self.write_rpyc_data(f, 2, pickle_data_after_static_transforms)
+ 
++                                if split is not None:
++                                    self.write_rpyc_data(f, 3, split.skeleton)
++
+                                 with renpy.vfs.open(fullfn, "rb") as fullf:
+                                     rpydigest = hashlib.md5(fullf.read() + RPYC_MAGIC).digest()
+ 
+                                 self.write_rpyc_md5(f, rpydigest)
+ 
++                            if split is not None:
++                                sidecar = renpy.streamload.sidecar_path(rpycfn)
++                                sidecar_tmp = "{}.{}.tmp".format(sidecar, os.getpid())
++
++                                with open(sidecar_tmp, "wb") as f:
++                                    f.write(split.sidecar)
++
++                                os.replace(sidecar_tmp, sidecar)
++
+                             os.replace(temporary, rpycfn)
+                         except BaseException:
+                             try:
+@@ -1039,8 +1083,12 @@
+                 else:
+                     f = renpy.loader.load(fn, tl=False)
+ 
++                # Player patch: a launch that streams reads slot 3 (the file without the bodies of its pure labels) of a
++                # file in the player cache.
++                streaming = self.stream and self.loading_script and rpyc_path is not None
++
+                 with f:
+-                    for slot in [2, 1]:
++                    for slot in [3, 2, 1] if streaming else [2, 1]:
+                         try:
+                             bindata = self.read_rpyc_data(f, slot)
+ 
+@@ -1051,6 +1099,12 @@
+                                     print(f"Failed to load {fn}: {e}")
+                                     raise
+ 
++                                if slot == 3 and not renpy.streamload.sidecar_ok(data, rpyc_path):
++                                    data = None
++                                    stmts = None
++                                    f.seek(0)
++                                    continue
++
+                                 break
+ 
+                         except Exception:
+@@ -1077,6 +1131,9 @@
+                     if slot < 2:
+                         self.static_transforms(stmts)
+ 
++                    if slot == 3:
++                        data["lazy_path"] = rpyc_path
++
+                     renpy.parser.deferred_parse_errors = data.get(
+                         "deferred_parse_errors", None
+                     ) or collections.defaultdict(list)
+@@ -1219,6 +1276,9 @@
+                 + " does not share a key with at least one .rpyc file. To fix, delete all .rpyc files, or rerun Ren'Py with the --lock option."
+             )
+ 
++        if data.get("lazy") is not None:
++            self.pending_lazy = (data["lazy"], data.get("lazy_path"))
++
+         self.finish_load(stmts, initcode, filename=lastfn)  # type: ignore
+ 
+         self.digest.update(digest)  # type: ignore
+@@ -1454,6 +1514,10 @@
+ 
+         rv = self.namemap.get(label, None)
+ 
++        # Player patch: a node or label inside a body that is not loaded yet.
++        if (rv is None) and self.lazy_bodies and renpy.streamload.resolve(self, label):
++            rv = self.namemap.get(label, None)
++
+         if (rv is None) and (renpy.config.missing_label_callback is not None):
+             label = renpy.config.missing_label_callback(label)
+             rv = self.namemap.get(label, None)
+@@ -1476,7 +1540,14 @@
+ 
+         label = renpy.config.label_overrides.get(label, label)
+ 
+-        return label in self.namemap
++        if label in self.namemap:
++            return True
++
++        # Player patch: a node or label inside a body that is not loaded yet.
++        if self.lazy_bodies and renpy.streamload.resolve(self, label):
++            return label in self.namemap
++
++        return False
+ 
+     def lookup_or_none(self, label):
+         """
+diff --git a/renpy/ast.py b/renpy/ast.py
+--- a/renpy/ast.py
++++ b/renpy/ast.py
+@@ -1172,6 +1172,12 @@
+             self.next = next
+ 
+     def execute(self):
++        # Player patch: streamed start. The body of this label may still be in the side file.
++        script = renpy.game.script
++
++        if script.lazy_bodies and self.name in script.lazy_bodies:
++            renpy.streamload.load_body(script, self.name)
++
+         next_node(self.next)
+         statement_name("label")
+ 
+@@ -1190,6 +1196,23 @@
+     def restructure(self, callback):
+         callback(self.block)
+ 
++    def predict(self):
++        # Player patch: no prediction through a label whose body is not loaded.
++        script = renpy.game.script
++
++        if script.lazy_bodies and self.name in script.lazy_bodies:
++            return []
++
++        return super().predict()
++
++    def scry(self):
++        script = renpy.game.script
++
++        if script.lazy_bodies and self.name in script.lazy_bodies:
++            renpy.streamload.load_body(script, self.name)
++
++        return super().scry()
++
+ 
+ class Python(Node):
+     code: PyCode
+diff --git a/renpy/main.py b/renpy/main.py
+--- a/renpy/main.py
++++ b/renpy/main.py
+@@ -581,6 +581,9 @@
+         renpy.translation.init_translation()
+         log_clock("Init translation")
+ 
++        # Player patch: streamed start. Load the label bodies that are still in the side files, in the background.
++        renpy.streamload.start(renpy.game.script)
++
+         # Start things running.
+         restart = None
+ 
+diff --git a/renpy/translation/__init__.py b/renpy/translation/__init__.py
+--- a/renpy/translation/__init__.py
++++ b/renpy/translation/__init__.py
+@@ -115,6 +115,9 @@
+         Return the number of dialogue blocks in the game.
+         """
+ 
++        # Player patch: streamed start. The count needs every label body.
++        renpy.streamload.load_all(renpy.game.script)
++
+         return len(self.default_translates)
+ 
+     def take_translates(self, nodes: list[renpy.ast.Node]):
