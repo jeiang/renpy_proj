@@ -121,3 +121,48 @@ The stock 8.5.3 run uses `run-series.sh` with `stock853-wrap.sh` in place of the
 - Warm launches are fast. The route decision does not need a change to make later launches faster.
 - Reusing the shipped 8.3 `.rpyc` removes the cold cost on 8.3 games. Upstream 8.5.3 never loads such a file when the source is present, so this change is the first to do so. The risk is AST compatibility between 8.3 and 8.5.3 output. This is verified for Wartribe and the SynthStory gate only. Check a game's behaviour after an engine update.
 - Shipping a pre-built cache per game would remove the cost for users. It needs a build step per game and per engine version. That is a packaging decision.
+
+## Lazy compilation of Python blocks (engine patches 0012 to 0015)
+
+Machine: artemis, slot 5, exclusive lock, load average below 2 for the runs in the tables (three rounds each, builds alternated).
+Times are `Loading script took` in ms. "Cold" is an empty data folder. "Warm" is the second launch on it.
+
+| Game | Cold before | Cold after | Warm before | Warm after |
+|---|---|---|---|---|
+| SynthBig (Ren'Py 8, 126 loose `.rpy`) | 3052 to 3059 | 1756 to 1770 | 364 to 367 | 177 |
+| Harem Hotel (Ren'Py 7.4.11, RPA only) | 7660 to 7844 | 4721 to 4801 | 7682 to 7701 | 4716 to 4794 |
+| Wartribe Academy scripts (Ren'Py 8, 18 loose `.rpy`, no `.rpyc`, no media) | 8227 to 9090 | 5180 to 5212 | 944 to 952 | 780 to 789 |
+
+- An earlier Harem Hotel warm run at load average 2 or more gave 6072 ms against 5198 ms. Quiet reruns show no regression: warm is 4.7 s against 7.7 s.
+- What changed:
+  - `update_bytecode` no longer compiles expressions (their results were thrown away; the work only filled the cache) or `$` and `python:` statements in label bodies. A block compiles when it first runs.
+  - Init blocks, `python early`, `define`, `default`, screens, `lint`, `compile`, `renpy.load_string` and `RENPY_LAZY_COMPILE=0` stay eager.
+  - Warm launches skip the unmarshal of every cached block.
+- Bytecode cache: stock saves it after init only. Blocks that compile later are saved when the game exits. At save the entries of blocks that never ran are copied from the old cache (`Script.carry_deferred_bytecode`), so a run that executes little does not shrink the cache. The player's atomic save (`_player/bytecode.py`) calls it.
+- Errors: stock reports a syntax error in any block as a load error (`errors.txt`). A deferred block raises the same `ParseError` message at its first run; a unit test compares the two messages. Init blocks keep the load error.
+- Ren'Py 7: the Python 2 rewrite and the syntax fixer run in the deferred compile.
+  - `syntax` events appear when a block first compiles. Sites found earlier are replayed at start.
+  - The `rewrite` events come from the scan of all game Python. It runs in a forked child (a thread on macOS and where there is no fork) when no saved result exists, so the events come while the game runs.
+  - The Synth7 and Synth7Patch compat checks pass without changing `check_compat`.
+- Also in this change: the lexer keeps its compiled regexps in a dict (0013) and `Node.name` has no `match` statement (0014). Both are pure speed-ups of load. `.rpyc` files are written to a temporary name and renamed (0015).
+- Gate (`harness/testgames/run.py`, stock and player, SynthStory, SynthMedia, SynthText, SynthView, SynthAniso, SynthObf, SynthBig, SynthObfEngine, Synth7, Synth7Patch): all pass. SynthUHD was not run (not in CI).
+
+## Parallel compile of loose script files (engine patch 0016)
+
+Choice of method, with measurements (host Python 3.12 on artemis unless noted):
+
+| Option | Result |
+|---|---|
+| (a) forked workers that write the `.rpyc` files | SynthBig load 1510 ms serial, 409 ms with workers. A fork costs about 10 ms. The load then reads the `.rpyc` files as it does on every warm launch, so nothing is pickled back. **Chosen.** |
+| (a) spawned workers (urp as the interpreter) | A fresh interpreter needs about 160 ms to import renpy before it parses anything. Not needed on Linux. It is the way to get a parallel compile on Windows, which has no fork. Not done. |
+| (b) subinterpreters with their own GIL | `import renpy.cslots`, `astsupport`, `lexersupport`, `pydict` and `style` all fail in an isolated interpreter with "module does not support loading in subinterpreters". Cython single-phase modules cannot be used. |
+| (c) lexer in Rust | The parser calls the lexer from 100 or more methods (`match`, `word`, `simple_expression`). A token stream would need a new parser. Parse is 76 percent of a lazy cold load, and the Python parser would stay serial. |
+
+How it works:
+- `renpy/scriptscan.py` reads the text of each `.rpy`. A file that has a `python early` block or sets a config value that the parser reads (`keyword_after_python`, `check_conflicting_properties`, `check_translate_none`, `munge_in_strings`) is a barrier.
+- Waves: the files that need a compile go to workers in waves. A wave ends at a barrier, or at a compiled file with no source. The next wave is forked when the load has loaded the barrier. So a custom statement that an early block registers is known to the files after it. A test registers one and uses it in a later file.
+- The load itself is unchanged and runs in file order, so node order, init priorities, the namemap, the duplicate label check and cross-file jumps are those of a serial load.
+- One part of a compiled file depends on the files before it: translate identifiers are unique across the script. Wartribe has two files that start with the same license text. Each worker reports its identifiers. A clash removes that file's `.rpyc`, and the load compiles it again in order.
+- At most four workers, and two cores stay free. They are reaped when the load ends or stops. `RENPY_PARALLEL_COMPILE=N` sets the number (0 turns it off). With nothing to compile, the plan only reads and hashes the sources.
+- Fork safety: forks happen in `Script.load_script`, before the interface (window, audio) is created. macOS stays serial: forking after Cocoa or Metal threads exist can crash, and no Mac launch proved it safe.
+- Check of equality: `player/engine/python/tests/script_equiv.py` loads a game twice (serial, then workers) and compares every node with its state, `next` links, init code, namemap, labels, duplicate labels, parse errors, and the list of compiled files. Generated node names are compared by rank, because they carry the compile time. Equal on SynthBig (46945 nodes), Wartribe, DOF-Ep3 and TheStormWithinUs. The host engine parses Wartribe with 1062 errors (the style data is not set up), so that result is weaker; the equal result there covers the files that parse.
