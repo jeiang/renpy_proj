@@ -50,7 +50,9 @@ def load_game(files, command="run", env=None):
     os.makedirs(gamedir)
 
     for name, text in files.items():
-        with open(os.path.join(gamedir, name), "w", encoding="utf-8") as f:
+        path = os.path.join(gamedir, name)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
             f.write(text)
 
     renpy.config.basedir = work
@@ -63,7 +65,15 @@ def load_game(files, command="run", env=None):
     renpy.python.file_compiler_flags.clear()
 
     script = hostengine.new_script(command, env)
-    script.load_script()
+
+    # new_script restores the command line command, and script_filter (deferred tl scripts) reads it during load.
+    old_command = renpy.game.args.command
+    renpy.game.args.command = command
+
+    try:
+        script.load_script()
+    finally:
+        renpy.game.args.command = old_command
     return script
 
 
@@ -356,11 +366,15 @@ class NodeName(unittest.TestCase):
         self.assertIsNone(n._name)
 
     def test_unpickled_other_names_are_kept_as_given(self):
-        n = self.node()
-
-        for value in ("label", None, ("b.rpy", 7, 9), ("a.rpy", 7, 9, "x"), ("a.rpy", "7", 9), ("a.rpy", 7, 1.5)):
+        for value in ("label", ("b.rpy", 7, 9), ("a.rpy", 7, 9, "x"), ("a.rpy", "7", 9), ("a.rpy", 7, 1.5)):
+            n = self.node()
             n.__setstate__({"name": value})
             self.assertEqual(n.name, value, value)
+
+    def test_unpickled_none_name_leaves_the_node_unnamed(self):
+        n = self.node()
+        n.__setstate__({"name": None})
+        self.assertIsNone(n.name)
 
 
 if __name__ == "__main__":

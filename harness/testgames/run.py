@@ -35,6 +35,7 @@ GAMES = {
     "SynthMedia": ("media", None, []),
     "SynthText": ("text", None, []),
     "SynthView": ("view", None, []),
+    "SynthTl": ("tl", None, []),
     "SynthObf": ("obf", None, []),
     "SynthUHD": ("uhd", None, []),
     "SynthBig": ("big", None, []),
