@@ -1,10 +1,10 @@
-# Reason: A game that was just added has loose .rpy files with no valid .rpyc. Script.load_file parses them one after the other on one core: 76 percent of a cold load of a large script after lazy compilation. Forked workers now compile the files first (renpy/parallelcompile.py), in waves that end at every file with a python early block or an early config value (renpy/scriptscan.py reads the text for them), and write the same .rpyc files into the cache. Script.load_script then loads every file in the same order as before and finds a valid .rpyc for each, so node order, init priorities, the namemap, the duplicate label check and the early blocks are those of a serial load. At most 4 workers and two cores stay free; they are reaped when the load ends or stops early. Where fork is missing (Windows), with fewer than two workers or for little source the load stays serial. RENPY_PARALLEL_COMPILE=N sets the number of workers (0 turns it off).
+# Reason: A game that was just added has loose .rpy files with no valid .rpyc. Script.load_file parses them one after the other on one core: 76 percent of a cold load of a large script after lazy compilation. Forked workers now compile the files first (renpy/parallelcompile.py), in waves that end at every file with a python early block or an early config value (renpy/scriptscan.py reads the text for them), and write the same .rpyc files into the cache. Script.load_script then loads every file in the same order as before and finds a valid .rpyc for each, so node order, init priorities, the namemap, the duplicate label check and the early blocks are those of a serial load. At most 4 workers and two cores stay free; they are reaped when the load ends or stops early. A launch with nothing to compile only reads and hashes the sources. Where fork is missing (Windows), on macOS, with fewer than two workers or for little source the load stays serial. RENPY_PARALLEL_COMPILE=N sets the number of workers (0 turns it off).
 
 diff --git a/renpy/parallelcompile.py b/renpy/parallelcompile.py
 new file mode 100644
 --- /dev/null
 +++ b/renpy/parallelcompile.py
-@@ -0,0 +1,353 @@
+@@ -0,0 +1,364 @@
 +# Player patch: compile the loose script files of a game in parallel.
 +#
 +# A script file with no valid compiled file (a game that was just added, or an edited .rpy) is parsed, and its
@@ -309,6 +309,11 @@ new file mode 100644
 +        size = 0
 +        start = next_start
 +
++    # First pass: which files need a compile. A launch with nothing to compile (the usual one) stops here, having
++    # read and hashed the sources only.
++    entries = []
++    compile_any = False
++
 +    for index, (_priority, fn, dir) in enumerate(script_files):
 +        if dir == renpy.config.commondir:
 +            continue
@@ -316,19 +321,10 @@ new file mode 100644
 +        if (fn, dir) in script.loaded_scripts or not script.script_filter(fn, dir):
 +            continue
 +
-+        if start is None:
-+            start = index
-+
-+        if dir is None:
-+            # A compiled file in an archive: its early blocks are not known.
-+            close(index + 1)
-+            continue
-+
-+        found = source_of(script, dir, fn, ["_ren.py", ".rpy"])
++        found = source_of(script, dir, fn, ["_ren.py", ".rpy"]) if dir is not None else None
 +
 +        if found is None:
-+            # A compiled file with no source, or a conflict that load_script reports.
-+            close(index + 1)
++            entries.append((index, fn, dir, None, None, False))
 +            continue
 +
 +        source, rpyfn, data = found
@@ -344,6 +340,21 @@ new file mode 100644
 +            (cachedigest is not None and cachedigest == rpydigest)
 +            or (gamedigest is not None and gamedigest in (rpydigest, legacydigest))
 +        )
++
++        compile_any = compile_any or not valid
++        entries.append((index, fn, dir, source, data, valid))
++
++    if not compile_any:
++        return None
++
++    for index, fn, dir, source, data, valid in entries:
++        if start is None:
++            start = index
++
++        if data is None:
++            # A compiled file in an archive or with no source: its early blocks are not known.
++            close(index + 1)
++            continue
 +
 +        if not valid:
 +            items.append((index, fn, dir, source, len(data)))
