@@ -170,6 +170,8 @@ def dump(gamedir, out, workers, ignore_errors=True):
 
     try:
         renpy = hostengine.boot()
+        # The comparison covers every node, so a deferred language set must not hide any of them.
+        renpy.config.defer_tl_scripts = False
 
         if ignore_errors:
             # Without this a parse error stops the load at the next file, and the later files are not compared.

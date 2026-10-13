@@ -155,6 +155,16 @@ plan = "testgames/view/view.plan"
 probe_lines = 8
 save_after = 4
 resume_lines = 3
+[games.SynthTl]
+source = "harness/testgames/build/tl"
+renpy = "8.5.3"
+base = "."
+engine = "sdk-853"
+linux_engine = "sdk-853-linux"
+plan = "testgames/tl/tl.plan"
+probe_lines = 6
+save_after = 2
+resume_lines = 2
 [games.Synth7]
 source = "harness/testgames/build/py7"
 renpy = "7.4.11"

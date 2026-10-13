@@ -1,0 +1,48 @@
+# Reason: A game's tl/ folder holds one copy of every translated script per language, and stock Ren'Py parses all of them before the first screen. Harem Hotel (77 tl/ files, 56% of its nodes) spent 3.3 s loading languages the player never shows. config.defer_tl_scripts already exists upstream (renpy/script.py script_filter, renpy/exports/scriptexports.py load_language): a language's files load when it is first selected, and known_languages() still lists every tl/ folder. The player turns it on by default. A game's own `define config.defer_tl_scripts = False` must win from any file. load_script asks script_filter as it reaches each file, and a define only runs when its file loads, so a define in a file that sorts after tl/ (zz_*.rpy) runs after the earlier tl/ files were already skipped. load_script now re-checks the files it skipped once the loop finishes, so a late opt-out loads every tl/ file at start.
+
+diff --git a/renpy/config.py b/renpy/config.py
+--- a/renpy/config.py
++++ b/renpy/config.py
+@@ -1456,7 +1456,7 @@
+ drag_group_add_top = True
+ 
+ # Should loading of tl scripts be deferred?
+-defer_tl_scripts = False
++defer_tl_scripts = True
+ 
+ # Should transitions take placement from child displayables?
+ transitions_use_child_placement = True
+diff --git a/renpy/script.py b/renpy/script.py
+--- a/renpy/script.py
++++ b/renpy/script.py
+@@ -511,6 +511,7 @@
+ 
+         count = 0
+         skipped = 0
++        skipped_files = []
+ 
+         last_priority = 0
+ 
+@@ -540,6 +541,7 @@
+                 continue
+ 
+             if not self.script_filter(fn, dir):
++                skipped_files.append((fn, dir))
+                 skipped += 1
+                 continue
+ 
+@@ -553,6 +555,14 @@
+         if parallel is not None:
+             parallel.finish()
+ 
++        # A file skipped above while deferral was on still loads if a later file turned deferral off. That is the
++        # opt-out `define config.defer_tl_scripts = False` in a file that sorts after tl/ (for example zz_*.rpy).
++        for fn, dir in skipped_files:
++            if self.script_filter(fn, dir):
++                skipped -= 1
++                self.loaded_scripts.add((fn, dir))
++                self.load_appropriate_file(".rpyc", ["_ren.py", ".rpy"], dir, fn, initcode)
++
+         if skipped:
+             renpy.display.log.write("{} script files skipped.".format(skipped))
+ 
