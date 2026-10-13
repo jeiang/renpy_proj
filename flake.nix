@@ -36,6 +36,9 @@
       };
       # The pure player package is built for the two platforms of the M4 gate.
       playerSystems = [ "aarch64-darwin" "x86_64-linux" ];
+      # The macOS app bundle names. Distinct, so both apps can sit in /Applications/Nix Apps together.
+      urpAppName = "Universal Ren'Py Player";
+      urpNorarAppName = "Universal Ren'Py Player (no RAR)";
       # `urp` carries the UnRAR licence (freeware, not free software), which check-meta rejects in
       # nixpkgs.legacyPackages. The player packages therefore come from a nixpkgs import that admits that one
       # package by name. Same nixpkgs revision, so every dependency is the same derivation as in legacyPackages.
@@ -57,10 +60,15 @@
         in
         rec {
           player-cpython = cpython;
+          # On macOS each one also carries Applications/<name>.app (nix/macos-app.nix). Elsewhere: the plain build.
+          onMac = raw: name: bundleId:
+            if pkgs.stdenv.hostPlatform.isDarwin
+            then import ./nix/macos-app.nix { inherit pkgs raw name bundleId; }
+            else raw;
           # Default cargo features: RAR support (UnRAR, unfree-redistributable).
-          urp = mkUrp true;
+          urp = onMac (mkUrp true) urpAppName "io.github.jeiang.renpy-player";
           # `--no-default-features --features wayland`: no UnRAR, free software only.
-          urp-norar = mkUrp false;
+          urp-norar = onMac (mkUrp false) urpNorarAppName "io.github.jeiang.renpy-player.norar";
           default = urp;
         };
     in
@@ -78,8 +86,8 @@
           packages = playerPackages system;
         in
         {
-          urp-smoke = import ./nix/smoke.nix { inherit pkgs; urp = packages.urp; name = "urp-smoke"; };
-          urp-norar-smoke = import ./nix/smoke.nix { inherit pkgs; urp = packages.urp-norar; name = "urp-norar-smoke"; };
+          urp-smoke = import ./nix/smoke.nix { inherit pkgs; urp = packages.urp; name = "urp-smoke"; appName = urpAppName; };
+          urp-norar-smoke = import ./nix/smoke.nix { inherit pkgs; urp = packages.urp-norar; name = "urp-norar-smoke"; appName = urpNorarAppName; };
         });
 
       devShells = forAllSystems (system:

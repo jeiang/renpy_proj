@@ -2,7 +2,7 @@
 
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
-use pyo3::types::PyTuple;
+use pyo3::types::PyBytes;
 
 /// Builds a `renpy.pygame.error` exception. Falls back to `RuntimeError` when the
 /// package is not importable (for example in a bare embedding).
@@ -33,17 +33,9 @@ pub fn register_hook(m: &Bound<'_, PyModule>, hook: &str, f: &str) -> PyResult<(
     Ok(())
 }
 
-/// Copies a Python `Surface` into RGBA8 bytes through its `get_size` and `get_at` methods.
+/// Copies a Python `Surface` into RGBA8 bytes with one call to its `get_rgba_bytes` method.
 pub fn read_rgba(surface: &Bound<'_, PyAny>) -> PyResult<(u32, u32, Vec<u8>)> {
-    let (w, h): (u32, u32) = surface.call_method0("get_size")?.extract()?;
-    let mut out = Vec::with_capacity(w as usize * h as usize * 4);
-    for y in 0..h {
-        for x in 0..w {
-            let c = surface.call_method1("get_at", (PyTuple::new(surface.py(), [x, y])?,))?;
-            for i in 0..4 {
-                out.push(c.get_item(i)?.extract::<u8>()?);
-            }
-        }
-    }
-    Ok((w, h, out))
+    let (w, h, rgba): (u32, u32, Bound<'_, PyBytes>) =
+        surface.call_method0("get_rgba_bytes")?.extract()?;
+    Ok((w, h, rgba.as_bytes().to_vec()))
 }

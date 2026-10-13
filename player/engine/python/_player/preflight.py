@@ -306,7 +306,7 @@ def _sync_verifying_keys(stock_root, token_dir, extra_keys):
     return len(lines)
 
 
-def _stock_import(settings, savedir, nodes, errors):
+def _stock_import(settings, savedir, names, errors):
     """Copy stock saves on the first open. Returns the import record (also stored beside the report)."""
 
     import renpy
@@ -331,7 +331,7 @@ def _stock_import(settings, savedir, nodes, errors):
     if not sources:
         rec["reason"] = "no stock save folder found"
     else:
-        outcomes = json.loads(_player_saves.import_stock(sources, savedir, nodes, _resolve))
+        outcomes = json.loads(_player_saves.import_stock(sources, savedir, names(), _resolve))
         rec.update(performed=True, outcomes=outcomes, at=datetime.datetime.now().astimezone().isoformat(timespec="seconds"))
 
         root = os.environ.get("RENPY_PATH_TO_SAVES") or os.path.expanduser("~/Library/RenPy")
@@ -535,6 +535,17 @@ def write_report(settings, report):
         os.replace(tmp, os.path.join(d, name))
 
 
+def scan_saves(savedir, names, resolve):
+    """Per-file save reports, as a list. `names` is a callable that returns the label names. An empty
+    folder, or one that does not exist, has nothing to scan, so the names are not read."""
+
+    import _player_saves
+
+    if not os.path.isdir(savedir) or not os.listdir(savedir):
+        return []
+    return json.loads(_player_saves.scan_dir(savedir, names(), resolve))
+
+
 def on_script_loaded(settings, savedir):
     """Import stock saves on the first open, scan the player's saves and write the report.
 
@@ -548,7 +559,6 @@ def on_script_loaded(settings, savedir):
     _done = True
 
     import renpy
-    import _player_saves
 
     settings["reports"] = os.path.join(settings["data"], "reports", settings["key"])
     errors = []
@@ -558,7 +568,13 @@ def on_script_loaded(settings, savedir):
 
     # The namemap uses each node as its own key; a node hashes and compares as its name.
     namemap = renpy.game.script.namemap
-    names = [n.name for n in namemap.values()]
+    names_read = []
+
+    def names():
+        # Each read walks every node, so it happens once, and only when an import or a save scan needs it.
+        if not names_read:
+            names_read.append([n.name for n in namemap.values()])
+        return names_read[0]
 
     try:
         record = _stock_import(settings, savedir, names, errors)
@@ -566,7 +582,7 @@ def on_script_loaded(settings, savedir):
         errors.append("stock save import failed:\n" + traceback.format_exc())
 
     try:
-        files = json.loads(_player_saves.scan_dir(savedir, names, _resolve))
+        files = scan_saves(savedir, names, _resolve)
     except Exception:
         errors.append("save scan failed:\n" + traceback.format_exc())
 
