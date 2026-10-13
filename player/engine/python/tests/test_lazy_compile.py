@@ -347,6 +347,21 @@ class NodeName(unittest.TestCase):
         n.name = ("a.rpy", 8, 10)
         self.assertEqual(n.name, ("a.rpy", 8, 10))
 
+    def test_unpickled_generated_name_goes_to_the_slots(self):
+        n = self.node()
+        n.__setstate__({"name": ("a.rpy", 7, 9)})
+        self.assertEqual(n.name, ("a.rpy", 7, 9))
+        self.assertEqual(n.name_version, 7)
+        self.assertEqual(n.name_serial, 9)
+        self.assertIsNone(n._name)
+
+    def test_unpickled_other_names_are_kept_as_given(self):
+        n = self.node()
+
+        for value in ("label", None, ("b.rpy", 7, 9), ("a.rpy", 7, 9, "x"), ("a.rpy", "7", 9), ("a.rpy", 7, 1.5)):
+            n.__setstate__({"name": value})
+            self.assertEqual(n.name, value, value)
+
 
 if __name__ == "__main__":
     unittest.main()
