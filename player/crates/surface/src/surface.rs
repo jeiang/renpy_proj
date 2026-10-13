@@ -10,7 +10,7 @@ use pyo3::exceptions::{PyBufferError, PyIndexError, PyValueError};
 use pyo3::ffi;
 use pyo3::prelude::*;
 use pyo3::pybacked::PyBackedBytes;
-use pyo3::types::{PyDict, PyTuple};
+use pyo3::types::{PyBytes, PyDict, PyTuple};
 
 use crate::blit::{self, SrcState};
 use crate::buf::{Buf, Img, Shared};
@@ -22,6 +22,23 @@ pub const SRCALPHA: u64 = 0x8000_0000;
 
 /// Bytes held by live surfaces that own their memory (`total_size` in stock).
 static TOTAL_SIZE: AtomicUsize = AtomicUsize::new(0);
+
+/// Row-major RGBA8 bytes for a `w` x `h` image. `px` reads a mapped pixel and `unpack` splits it
+/// into channels, the same pair `get_at` uses.
+pub fn rgba_from_pixels(
+    w: usize,
+    h: usize,
+    px: impl Fn(usize, usize) -> u32,
+    unpack: impl Fn(u32) -> [u8; 4],
+) -> Vec<u8> {
+    let mut out = Vec::with_capacity(w * h * 4);
+    for y in 0..h {
+        for x in 0..w {
+            out.extend_from_slice(&unpack(px(x, y)));
+        }
+    }
+    out
+}
 
 struct BlockBox(Box<SdlBlock>);
 // The block holds raw pointers into itself and into the shared allocation.
@@ -640,6 +657,19 @@ impl Surface {
         make_color(py, self.fmt.unpack(px))
     }
 
+    /// `(width, height, rgba)`: every pixel as RGBA8, rows top to bottom, the values `get_at`
+    /// returns. Icon and cursor readers take the whole surface in one call.
+    fn get_rgba_bytes<'py>(&self, py: Python<'py>) -> (u32, u32, Bound<'py, PyBytes>) {
+        let img = self.img();
+        let rgba = rgba_from_pixels(
+            self.w as usize,
+            self.h as usize,
+            |x, y| img.px(x, y),
+            |px| self.fmt.unpack(px),
+        );
+        (self.w, self.h, PyBytes::new(py, &rgba))
+    }
+
     fn set_at(&self, pos: (i64, i64), color: &Bound<'_, PyAny>) -> PyResult<()> {
         let (x, y) = pos;
         if !(0 <= x && x < self.w as i64) || !(0 <= y && y < self.h as i64) {
@@ -1030,5 +1060,26 @@ pub unsafe extern "C" fn py_surface_as_surface(obj: *mut ffi::PyObject) -> *mut 
             pyo3::exceptions::PyTypeError::new_err("not a Surface").restore(py);
             std::ptr::null_mut()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::rgba_from_pixels;
+
+    #[test]
+    fn rgba_is_row_major_and_matches_per_pixel_unpack() {
+        // Odd width and height, so row and column order can't be confused.
+        let (w, h) = (3, 2);
+        let px = |x: usize, y: usize| (y * w + x) as u32;
+        let unpack = |p: u32| [p as u8, (p >> 8) as u8, 0x10, 0xff - p as u8];
+        let got = rgba_from_pixels(w, h, px, unpack);
+        let mut want = Vec::new();
+        for i in 0..6u32 {
+            want.extend_from_slice(&unpack(i));
+        }
+        assert_eq!(got, want);
+        assert_eq!(got.len(), w * h * 4);
+        assert_eq!(&got[20..24], &[5, 0, 0x10, 0xfa]);
     }
 }
