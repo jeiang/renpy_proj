@@ -2,7 +2,8 @@
 
 Stock `Script.save_bytecode` opens `cache/bytecode-312.rpyb` for writing and writes it in place, so a kill in the
 middle leaves a truncated file. `install()` replaces that method with one that writes a temporary file and renames
-it over the cache, so a reader sees the old file or the new one. The method is otherwise the stock one.
+it over the cache, so a reader sees the old file or the new one. The method is otherwise the engine's own (with the
+lazy compile patch: it carries over the entries of blocks that did not run, and clears the dirty flag).
 
 When the environment variable `URP_WARM_MARKER` names a path, a successful save also creates that file. The
 warm-up worker (`urp warm-game`) stops on it. It is a file that urp writes, so an engine upgrade cannot change it.
@@ -45,9 +46,12 @@ def install():
         ok = True
         if self.bytecode_dirty:
             try:
+                # Engine patch 0012: blocks that did not run keep their entries from the old cache.
+                self.carry_deferred_bytecode()
                 fn = renpy.loader.get_path(script.BYTECODE_FILE)
                 data = (script.BYTECODE_VERSION, self.bytecode_newcache)
                 atomic_write(fn, zlib.compress(script.dumps(data), 3))
+                self.bytecode_dirty = False
             except Exception:
                 ok = False
 

@@ -1,0 +1,43 @@
+# Reason: load_file wrote a compiled .rpyc straight to its final name. A process that was killed in the middle (a warm-up worker, a player that quit during the first launch) left a truncated file there. The write now goes to a temporary name in the same folder, and os.replace gives the file its name when it is complete. A reader sees the old file or the new one, never half of a file.
+
+diff --git a/renpy/script.py b/renpy/script.py
+--- a/renpy/script.py
++++ b/renpy/script.py
+@@ -985,15 +985,30 @@
+                     try:
+                         os.makedirs(os.path.dirname(rpycfn), exist_ok=True)
+ 
+-                        with open(rpycfn, "wb") as f:
+-                            self.write_rpyc_header(f)
+-                            self.write_rpyc_data(f, 1, pickle_data_before_static_transforms)
+-                            self.write_rpyc_data(f, 2, pickle_data_after_static_transforms)
++                        # The file is written under another name and renamed when it is complete, so a
++                        # process that stops in the middle (or a second process that writes the same file) never
++                        # leaves a truncated .rpyc.
++                        temporary = "{}.{}.tmp".format(rpycfn, os.getpid())
+ 
+-                            with renpy.vfs.open(fullfn, "rb") as fullf:
+-                                rpydigest = hashlib.md5(fullf.read() + RPYC_MAGIC).digest()
++                        try:
++                            with open(temporary, "wb") as f:
++                                self.write_rpyc_header(f)
++                                self.write_rpyc_data(f, 1, pickle_data_before_static_transforms)
++                                self.write_rpyc_data(f, 2, pickle_data_after_static_transforms)
+ 
+-                            self.write_rpyc_md5(f, rpydigest)
++                                with renpy.vfs.open(fullfn, "rb") as fullf:
++                                    rpydigest = hashlib.md5(fullf.read() + RPYC_MAGIC).digest()
++
++                                self.write_rpyc_md5(f, rpydigest)
++
++                            os.replace(temporary, rpycfn)
++                        except BaseException:
++                            try:
++                                os.unlink(temporary)
++                            except OSError:
++                                pass
++
++                            raise
+                     except Exception:
+                         import traceback
+ 

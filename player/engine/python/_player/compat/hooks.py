@@ -12,6 +12,7 @@ import importlib.util
 import json
 import os
 import sys
+import threading
 
 import renpy
 
@@ -232,10 +233,71 @@ def install(settings, detection):
             finder.invalidate_caches()
 
 
-def loaded(settings):
-    """Script loaded, init not run: scan the game's Python and report what the rewriter will do."""
+def _write_scan(settings, fp, result):
+    """The scan result files and the `rewrite` events."""
 
+    for fn, counts in sorted(result["by_file"].items()):
+        report.event("rewrite", fn, None, _counts(counts))
+
+    out = os.path.join(report.reports_dir(), "py2compat-scan.json")
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+
+    with open(out, "w", encoding="utf-8") as f:
+        json.dump({"rules_version": compat.RULES_VERSION, "fingerprint": fp, "scan": result, "skipped": stubs_skipped}, f, indent=1)
+
+
+def _scan_and_write(settings, fp, cache, snippets):
     from _player.compat import scan
+
+    result = scan.scan_collected(snippets)
+
+    try:
+        with open(cache, "w", encoding="utf-8") as f:
+            json.dump(result, f)
+    except OSError:
+        pass
+
+    _write_scan(settings, fp, result)
+
+
+def _scan_in_background(settings, fp, cache, snippets):
+    """The scan only feeds the report (rewrite events and py2compat-scan.json), and the engine compiles each block
+    by itself when it first runs. So the scan must not hold up the game: a forked child scans while the game goes on
+    (it shares nothing and the GIL does not slow the game), where fork does not exist a daemon thread does."""
+
+    report.begin()
+
+    # No fork on macOS: a child of a process with Cocoa or Metal threads can crash in the ObjC runtime.
+    if hasattr(os, "fork") and sys.platform != "darwin":
+        try:
+            pid = os.fork()
+        except OSError:
+            pid = -1
+
+        if pid == 0:
+            code = 0
+            report._lock = threading.Lock()  # another thread may have held it when the process forked
+
+            try:
+                _scan_and_write(settings, fp, cache, snippets)
+            except BaseException:
+                code = 1
+            finally:
+                os._exit(code)
+
+        if pid > 0:
+            # Reap the child when it ends (a zombie would stay until the game exits).
+            threading.Thread(target=os.waitpid, args=(pid, 0), daemon=True, name="py2compat-scan-reap").start()
+            return
+
+    threading.Thread(target=_scan_and_write, args=(settings, fp, cache, snippets), daemon=True, name="py2compat-scan").start()
+
+
+def loaded(settings):
+    """Script loaded, init not run: report what the rewriter will do to the game's Python (the `rewrite` events).
+
+    A result that an earlier run saved for this script set is used at once. Otherwise the scan runs in the background
+    (see `_scan_in_background`), so its events come while the game runs, not before init."""
 
     fp = report.fingerprint()
     cache = os.path.join(settings["cachedir"], "compat-scan-v%d-%s.json" % (compat.RULES_VERSION, fp))
@@ -247,22 +309,10 @@ def loaded(settings):
     except (OSError, ValueError):
         pass
 
-    if result is None:
-        result = scan.scan_collected(collected)
-
-        try:
-            with open(cache, "w", encoding="utf-8") as f:
-                json.dump(result, f)
-        except OSError:
-            pass
-
+    snippets = list(collected)
     del collected[:]
 
-    for fn, counts in sorted(result["by_file"].items()):
-        report.event("rewrite", fn, None, _counts(counts))
-
-    out = os.path.join(report.reports_dir(), "py2compat-scan.json")
-    os.makedirs(os.path.dirname(out), exist_ok=True)
-
-    with open(out, "w", encoding="utf-8") as f:
-        json.dump({"rules_version": compat.RULES_VERSION, "fingerprint": fp, "scan": result, "skipped": stubs_skipped}, f, indent=1)
+    if result is None:
+        _scan_in_background(settings, fp, cache, snippets)
+    else:
+        _write_scan(settings, fp, result)
