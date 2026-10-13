@@ -1,10 +1,10 @@
-# Reason: A game that was just added has loose .rpy files with no valid .rpyc. Script.load_file parses them one after the other on one core: 76 percent of a cold load of a large script after lazy compilation. Forked workers now compile the files first (renpy/parallelcompile.py), in waves that end at every file with a python early block or an early config value (renpy/scriptscan.py reads the text for them), and write the same .rpyc files into the cache. Script.load_script then loads every file in the same order as before and finds a valid .rpyc for each, so node order, init priorities, the namemap, the duplicate label check and the early blocks are those of a serial load. At most 4 workers and two cores stay free; they are reaped when the load ends or stops early. A launch with nothing to compile only reads and hashes the sources. Where fork is missing (Windows), on macOS, with fewer than two workers or for little source the load stays serial. RENPY_PARALLEL_COMPILE=N sets the number of workers (0 turns it off).
+# Reason: A game that was just added has loose .rpy files with no valid .rpyc. Script.load_file parses them one after the other on one core: 76 percent of a cold load of a large script after lazy compilation. Forked workers now compile the files first (renpy/parallelcompile.py), in waves that end at every file with a python early block or an early config value (renpy/scriptscan.py reads the text for them), and write the same .rpyc files into the cache. Script.load_script then loads every file in the same order as before and finds a valid .rpyc for each, so node order, init priorities, the namemap, the duplicate label check and the early blocks are those of a serial load. One thing in a compiled file depends on the files before it: translate identifiers are unique across the script (two files that both start with the same license text get different identifiers in a serial load). Each worker reports the identifiers of a file, and a file that has one that an earlier file has loses its compiled file, so the load compiles it again. At most 4 workers and two cores stay free; they are reaped when the load ends or stops early. A launch with nothing to compile only reads and hashes the sources. Where fork is missing (Windows), on macOS, with fewer than two workers or for little source the load stays serial. RENPY_PARALLEL_COMPILE=N sets the number of workers (0 turns it off).
 
 diff --git a/renpy/parallelcompile.py b/renpy/parallelcompile.py
 new file mode 100644
 --- /dev/null
 +++ b/renpy/parallelcompile.py
-@@ -0,0 +1,364 @@
+@@ -0,0 +1,408 @@
 +# Player patch: compile the loose script files of a game in parallel.
 +#
 +# A script file with no valid compiled file (a game that was just added, or an edited .rpy) is parsed, and its
@@ -30,6 +30,7 @@ new file mode 100644
 +import sys
 +
 +import renpy
++import renpy.ast
 +import renpy.script
 +import renpy.scriptscan
 +
@@ -73,8 +74,8 @@ new file mode 100644
 +        self.items = items
 +        self.pending = {i[0] for i in items}
 +        self.pids = {}  # pid -> set of the indexes it still owes
-+        self.fd = None
-+        self.buffer = b""
++        self.channels = {}  # pid -> [read end of its pipe, bytes read and not yet used]
++        self.ids = {}  # index -> the translate identifiers in the compiled file
 +        self.started = False
 +
 +    def workers(self, count):
@@ -99,49 +100,64 @@ new file mode 100644
 +
 +    def start_workers(self, script, count):
 +        self.started = True
-+        read_fd, write_fd = os.pipe()
 +
 +        for items in self.workers(count):
++            read_fd, write_fd = os.pipe()
++
 +            try:
 +                pid = os.fork()
 +            except OSError:
++                os.close(read_fd)
++                os.close(write_fd)
 +                break
 +
 +            if pid == 0:
 +                code = 1
 +
 +                try:
++                    for other in self.channels.values():
++                        os.close(other[0])
++
 +                    os.close(read_fd)
 +                    self.run_worker(script, items, write_fd)
 +                    code = 0
 +                finally:
 +                    os._exit(code)
 +
++            os.close(write_fd)
 +            self.pids[pid] = {i[0] for i in items}
++            self.channels[pid] = [read_fd, b""]
 +
-+        os.close(write_fd)
-+        self.fd = read_fd
-+
-+        if not self.pids:
-+            self.pending.clear()
++        # What no worker owns is compiled by the load.
++        owned = set().union(*self.pids.values()) if self.pids else set()
++        self.pending &= owned
 +
 +    @staticmethod
 +    def run_worker(script, items, write_fd):
 +        """
 +        The worker process: compiles each file as the load would, which writes its .rpyc. Whatever else the
-+        compile does stays in this process.
++        compile does stays in this process. After each file it writes a line to the pipe: the index of the file
++        and the translate identifiers in it.
 +        """
 +
 +        for index, fn, dir, source, _size in items:
 +            script.serial = (index % 1000 + 1) * SERIAL_STRIDE
++            ids = []
 +
 +            try:
-+                script.load_file(dir, fn + source)
++                data, stmts = script.load_file(dir, fn + source)
++
++                for node in renpy.script.collapse_stmts(stmts or []):
++                    if isinstance(node, (renpy.ast.Translate, renpy.ast.TranslateSay)) and node.language is None:
++                        ids.append(node.identifier)
 +            except BaseException:
 +                pass
 +
 +            # The file is done, compiled or not. If it did not compile, the load compiles it and shows the error.
-+            os.write(write_fd, b"%d\n" % index)
++            line = ("%d %s\n" % (index, " ".join(ids))).encode("utf-8")
++
++            while line:
++                line = line[os.write(write_fd, line) :]
 +
 +    def reap(self):
 +        """
@@ -156,6 +172,13 @@ new file mode 100644
 +
 +            if done:
 +                self.pending -= self.pids.pop(pid)
++                self.drop(pid)
++
++    def drop(self, pid):
++        channel = self.channels.pop(pid, None)
++
++        if channel is not None:
++            os.close(channel[0])
 +
 +    def wait(self, index):
 +        """
@@ -163,36 +186,42 @@ new file mode 100644
 +        """
 +
 +        while index in self.pending:
-+            ready, _, _ = select.select([self.fd], [], [], 0.25)
++            fds = {channel[0]: pid for pid, channel in self.channels.items()}
++
++            if not fds:
++                self.pending.clear()
++                break
++
++            ready, _, _ = select.select(list(fds), [], [], 0.25)
 +
 +            if not ready:
 +                self.reap()
 +                continue
 +
-+            data = os.read(self.fd, 65536)
++            for fd in ready:
++                pid = fds[fd]
++                data = os.read(fd, 1 << 20)
 +
-+            if not data:
-+                # Every worker closed the pipe: nothing more comes.
-+                self.reap()
-+                self.pending.clear()
-+                break
-+
-+            self.buffer += data
-+            *lines, self.buffer = self.buffer.split(b"\n")
-+
-+            for line in lines:
-+                if not line:
++                if not data:
++                    # The worker closed its pipe: it is done, or gone.
++                    self.pending -= self.pids.get(pid, set())
++                    self.drop(pid)
 +                    continue
 +
-+                done = int(line)
-+                self.pending.discard(done)
++                channel = self.channels[pid]
++                channel[1] += data
++                *lines, channel[1] = channel[1].split(b"\n")
 +
-+                for owed in self.pids.values():
-+                    owed.discard(done)
++                for line in lines:
++                    number, _, rest = line.decode("utf-8", "replace").partition(" ")
++                    done = int(number)
++                    self.ids[done] = rest.split()
++                    self.pending.discard(done)
++                    self.pids.get(pid, set()).discard(done)
 +
 +    def stop(self):
 +        """
-+        Ends the workers that still run (the load stopped early) and reaps them. Closes the pipe.
++        Ends the workers that still run (the load stopped early) and reaps them. Closes the pipes.
 +        """
 +
 +        for pid in self.pids:
@@ -206,12 +235,11 @@ new file mode 100644
 +            except OSError:
 +                pass
 +
++        for pid in list(self.channels):
++            self.drop(pid)
++
 +        self.pids.clear()
 +        self.pending.clear()
-+
-+        if self.fd is not None:
-+            os.close(self.fd)
-+            self.fd = None
 +
 +
 +class Plan:
@@ -242,12 +270,28 @@ new file mode 100644
 +    def wait(self, index):
 +        """
 +        Called before the load reads the file `index`: waits until its worker is done with it.
++
++        Files were compiled without the files before them. A translate identifier is made unique across the
++        script, so a file that has an identifier that an earlier file already has was compiled with the wrong
++        one. Its compiled file is removed, and the load compiles it again, as it does in a serial load.
 +        """
 +
 +        wave = self.by_file.get(index)
 +
-+        if wave is not None and wave.started:
-+            wave.wait(index)
++        if wave is None or not wave.started:
++            return
++
++        wave.wait(index)
++
++        taken = self.script.translator.default_translates
++
++        if any(i in taken for i in wave.ids.get(index, ())):
++            _index, fn, dir, _source, _size = [i for i in wave.items if i[0] == index][0]
++
++            try:
++                os.unlink(renpy.script.player_rpyc_path(dir, fn + ".rpyc"))
++            except OSError:
++                pass
 +
 +    def finish(self):
 +        for wave in self.waves:

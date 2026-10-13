@@ -214,6 +214,17 @@ class ParallelCompile(unittest.TestCase):
         self.assertEqual(code, 0, output)
         self.assertIn("0 parse errors", output)
 
+    def test_files_with_the_same_text_outside_a_label_get_the_ids_of_a_serial_load(self):
+        # Both start with the same narration (a license text, in real games). Their translate identifiers are
+        # the same when each file is compiled alone: a serial load makes the second one unique.
+        text = '"""\nThe same license text in two files, long enough to be a line of its own.\n"""\n'
+        files = {"%s.rpy" % n: filler(n, 30) for n in "abcdefgh"}
+        files["a.rpy"] = text + files["a.rpy"]
+        files["d.rpy"] = text + files["d.rpy"]
+        code, output = self.run_equiv(files)
+        self.assertEqual(code, 0, output)
+        self.assertIn("0 parse errors", output)
+
 
 if __name__ == "__main__":
     unittest.main()
