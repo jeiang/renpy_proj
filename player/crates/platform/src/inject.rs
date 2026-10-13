@@ -17,20 +17,6 @@ fn run(f: impl FnOnce(Python<'_>) -> PyResult<()>) {
     evloop::wake();
 }
 
-fn modifier_bit(code: KeyCode) -> u16 {
-    match code {
-        KeyCode::ShiftLeft => keys::KMOD_LSHIFT,
-        KeyCode::ShiftRight => keys::KMOD_RSHIFT,
-        KeyCode::ControlLeft => keys::KMOD_LCTRL,
-        KeyCode::ControlRight => keys::KMOD_RCTRL,
-        KeyCode::AltLeft => keys::KMOD_LALT,
-        KeyCode::AltRight => keys::KMOD_RALT,
-        KeyCode::SuperLeft => keys::KMOD_LGUI,
-        KeyCode::SuperRight => keys::KMOD_RGUI,
-        _ => 0,
-    }
-}
-
 /// A key press or release. `dom_code` is `KeyboardEvent.code`, `dom_key` is `KeyboardEvent.key`.
 /// Unknown codes are dropped.
 pub fn key(down: bool, dom_code: &str, dom_key: &str, repeat: bool) {
@@ -39,12 +25,6 @@ pub fn key(down: bool, dom_code: &str, dom_key: &str, repeat: bool) {
     };
     {
         let mut inp = INPUT.lock();
-        let bit = modifier_bit(code);
-        if down {
-            inp.mods |= bit;
-        } else {
-            inp.mods &= !bit;
-        }
         if code == KeyCode::CapsLock && down && !repeat {
             inp.mods ^= keys::KMOD_CAPS;
         }

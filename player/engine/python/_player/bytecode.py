@@ -40,7 +40,7 @@ def install():
     marker = os.environ.get("URP_WARM_MARKER")
 
     def save_bytecode(self):
-        if getattr(renpy, "macapp", False):
+        if getattr(renpy, "macapp", False) and not renpy.config.player_cache_dir:
             return
 
         ok = True
