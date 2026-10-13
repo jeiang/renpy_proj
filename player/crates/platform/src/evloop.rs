@@ -458,6 +458,9 @@ pub(crate) fn key_core(py: Python<'_>, k: &KeyIn) -> PyResult<()> {
         } else {
             inp.pressed.remove(&sc);
         }
+        if let Some(code) = k.physical {
+            inp.mods = keys::mods_after_key(inp.mods, code, pressed);
+        }
         (inp.mods, inp.text_input)
     };
 
