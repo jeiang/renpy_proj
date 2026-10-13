@@ -69,32 +69,8 @@ Categories=Game;
 Terminal=false
 DESKTOP
 
-# A 256x256 icon drawn here: dark rounded square with a light play triangle. Own artwork, no third-party art.
-python3 - "$app/urp.png" <<'PY'
-import struct, sys, zlib
-n = 256
-def inside_round(x, y, r=48):
-    cx = min(max(x, r), n - 1 - r); cy = min(max(y, r), n - 1 - r)
-    return (x - cx) ** 2 + (y - cy) ** 2 <= r * r
-def in_tri(x, y):  # triangle (88,64) (88,192) (200,128)
-    if x < 88 or x > 200: return False
-    half = (200 - x) * 64 / 112
-    return abs(y - 128) <= half
-rows = bytearray()
-for y in range(n):
-    rows.append(0)
-    for x in range(n):
-        if not inside_round(x, y): px = (0, 0, 0, 0)
-        elif in_tri(x, y): px = (245, 245, 250, 255)
-        else: px = (45, 55, 95, 255)
-        rows += bytes(px)
-def chunk(t, d):
-    c = struct.pack(">I", len(d)) + t + d
-    return c + struct.pack(">I", zlib.crc32(t + d) & 0xFFFFFFFF)
-png = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", n, n, 8, 6, 0, 0, 0)) \
-    + chunk(b"IDAT", zlib.compress(bytes(rows), 9)) + chunk(b"IEND", b"")
-open(sys.argv[1], "wb").write(png)
-PY
+# A 256x256 icon: dark rounded square with a light play triangle (shared with the macOS app, see icon/make_icon.py).
+python3 "$here/icon/make_icon.py" png "$app/urp.png" 256
 ln -s urp.png "$app/.DirIcon"
 
 mkdir -p "$(dirname "$out")"

@@ -51,6 +51,12 @@ permissive or LGPL. For a build without it use `cargo build --release -p player 
 `nix build .#urp-norar` (free software only). In Nix the licence of `urp` lists `unrar` (unfree, redistributable): the flake admits it
 for that one package, so `nix build .#urp` needs no `NIXPKGS_ALLOW_UNFREE`. Both packages install the binary as `bin/urp`.
 
+On macOS, `nix build .#urp` also creates `Applications/Universal Ren'Py Player.app` in the output. The app runs the same binary as `bin/urp`. `urp-norar` creates `Applications/Universal Ren'Py Player (no RAR).app`, with its own bundle id, so both can be installed together.
+
+With nix-darwin, add the package to `environment.systemPackages`. The app appears in `/Applications/Nix Apps`. With home-manager, it appears in `~/Applications/Home Manager Apps`.
+
+The Nix app is not signed with a Developer ID. Its bundle is not sealed, so `codesign --verify` reports that its resources are not sealed. The binary keeps the ad hoc signature from the Nix linker.
+
 Packages from a checkout (release builds come from CI):
 
 ```sh

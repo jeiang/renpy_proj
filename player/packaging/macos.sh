@@ -130,36 +130,12 @@ if [ "$probe_only" = 0 ]; then
 
     # --- 2. bundle layout and libraries ------------------------------------------------------------
     rm -rf "$app"
-    mkdir -p "$app/Contents/MacOS" "$fw" "$app/Contents/Resources"
-    cp "$bin" "$exe"
-    chmod u+w "$exe"
+    mkdir -p "$fw"
 
     version="$(sed -n 's/^version *= *"\(.*\)"/\1/p' "$player_dir/Cargo.toml" | head -1)"
     version="${version:-0.1.0}"
-    cat >"$app/Contents/Info.plist" <<PLIST
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>CFBundleDevelopmentRegion</key><string>en</string>
-    <key>CFBundleExecutable</key><string>urp</string>
-    <key>CFBundleIdentifier</key><string>$bundle_id</string>
-    <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
-    <key>CFBundleName</key><string>Universal Ren'Py Player</string>
-    <key>CFBundleDisplayName</key><string>Universal Ren'Py Player</string>
-    <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>$version</string>
-    <key>CFBundleVersion</key><string>$version</string>
-    <key>LSMinimumSystemVersion</key><string>12.0</string>
-    <key>LSApplicationCategoryType</key><string>public.app-category.games</string>
-    <key>NSHighResolutionCapable</key><true/>
-    <key>NSSupportsAutomaticGraphicsSwitching</key><true/>
-</dict>
-</plist>
-PLIST
-
-    # Licence notices: THIRD_PARTY.md, LGPL text for the FFmpeg dylibs, Rust crate licences.
-    "$here/licences/stage.sh" "$app/Contents/Resources/licenses"
+    # Binary, Info.plist, icon and licence notices. The same layout the Nix build produces (macos/make-app.sh).
+    "$here/macos/make-app.sh" "$app" "$bin" "$version" "$bundle_id" "Universal Ren'Py Player"
 
     log "libraries that are not macOS system libraries, before bundling:"
     foreign_deps "$exe" | sed 's/^/    /'
