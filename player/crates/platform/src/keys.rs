@@ -137,3 +137,61 @@ pub fn code_from_dom(code: &str) -> Option<KeyCode> {
     };
     TABLE.iter().map(|r| r.0).find(|k| format!("{k:?}") == name)
 }
+
+/// The `KMOD_*` bit of a modifier key, 0 for any other key.
+fn modifier_bit(code: KeyCode) -> u16 {
+    match code {
+        KeyCode::ShiftLeft => KMOD_LSHIFT,
+        KeyCode::ShiftRight => KMOD_RSHIFT,
+        KeyCode::ControlLeft => KMOD_LCTRL,
+        KeyCode::ControlRight => KMOD_RCTRL,
+        KeyCode::AltLeft => KMOD_LALT,
+        KeyCode::AltRight => KMOD_RALT,
+        KeyCode::SuperLeft => KMOD_LGUI,
+        KeyCode::SuperRight => KMOD_RGUI,
+        _ => 0,
+    }
+}
+
+/// The modifier state an SDL key event of `code` reports: the state after the event, so the key
+/// down of a modifier carries its own bit and the key up does not. winit on macOS queues the
+/// `KeyboardInput` of a modifier key before the `ModifiersChanged` that updates the stored
+/// state, so the stored state alone is one event behind. Ren'Py copies `mod` of every key event
+/// into the `mod` of all later events: a key up of Ctrl that still carried the Ctrl bit made
+/// every click and key read as Ctrl-modified until another key was pressed.
+pub fn mods_after_key(mods: u16, code: KeyCode, down: bool) -> u16 {
+    let bit = modifier_bit(code);
+    if down { mods | bit } else { mods & !bit }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn modifier_key_up_drops_its_own_bit() {
+        let held = KMOD_LCTRL | KMOD_LSHIFT;
+        assert_eq!(mods_after_key(held, KeyCode::ControlLeft, false), KMOD_LSHIFT);
+    }
+
+    #[test]
+    fn modifier_key_down_adds_its_own_bit() {
+        assert_eq!(mods_after_key(0, KeyCode::ControlLeft, true), KMOD_LCTRL);
+        assert_eq!(mods_after_key(KMOD_LCTRL, KeyCode::ControlRight, true), KMOD_LCTRL | KMOD_RCTRL);
+        assert_eq!(mods_after_key(0, KeyCode::SuperRight, true), KMOD_RGUI);
+    }
+
+    #[test]
+    fn ordinary_keys_keep_the_stored_state() {
+        let held = KMOD_LCTRL | KMOD_CAPS;
+        assert_eq!(mods_after_key(held, KeyCode::KeyA, true), held);
+        assert_eq!(mods_after_key(held, KeyCode::Enter, false), held);
+        assert_eq!(mods_after_key(held, KeyCode::CapsLock, false), held);
+    }
+
+    #[test]
+    fn release_of_the_other_side_keeps_the_first() {
+        let held = KMOD_LCTRL | KMOD_RCTRL;
+        assert_eq!(mods_after_key(held, KeyCode::ControlRight, false), KMOD_LCTRL);
+    }
+}

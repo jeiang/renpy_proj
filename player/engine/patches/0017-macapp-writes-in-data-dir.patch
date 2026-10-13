@@ -1,0 +1,57 @@
+# Reason: Ren'Py sets renpy.macapp for a game that starts from <name>.app/Contents/Resources/autorun and then writes nothing: no log.txt, no .rpyc, no analysis, screen or bytecode cache, because stock Ren'Py keeps a signed bundle unchanged. The player writes only to its own data folder, so a game from a .app bundle logged nowhere (--logdir stayed empty) and recompiled all its scripts at every start. The cache and log writes now happen when the player's cache folder is set.
+
+--- a/renpy/log.py
++++ b/renpy/log.py
+@@ -90,7 +90,8 @@
+         if self.file is False:
+             return False
+ 
+-        if renpy.macapp:
++        # Player patch: a game inside a .app bundle logs to the player's log folder like any other game.
++        if renpy.macapp and not renpy.config.player_cache_dir:
+             return False
+ 
+         if self.developer and not renpy.config.developer:
+--- a/renpy/pyanalysis.py
++++ b/renpy/pyanalysis.py
+@@ -959,7 +959,8 @@
+     if not ccache.updated:
+         return
+ 
+-    if renpy.macapp:
++    # Player patch: the cache is in the player's cache folder, not in the (read-only) bundle.
++    if renpy.macapp and not renpy.config.player_cache_dir:
+         return
+ 
+     try:
+--- a/renpy/script.py
++++ b/renpy/script.py
+@@ -995,7 +995,7 @@
+                     bad_reduction_name=f"<{fn} transformed rpyc data>",
+                 )
+ 
+-                if not renpy.macapp and rpycfn is not None:
++                if (not renpy.macapp or renpy.config.player_cache_dir) and rpycfn is not None:
+                     try:
+                         os.makedirs(os.path.dirname(rpycfn), exist_ok=True)
+ 
+@@ -1417,7 +1417,7 @@
+                 new[warnings_key] = old[warnings_key]
+ 
+     def save_bytecode(self):
+-        if renpy.macapp:
++        if renpy.macapp and not renpy.config.player_cache_dir:
+             return
+ 
+         if self.bytecode_dirty:
+--- a/renpy/sl2/slast.py
++++ b/renpy/sl2/slast.py
+@@ -2749,7 +2749,7 @@
+     if not scache.updated:
+         return
+ 
+-    if renpy.macapp:
++    if renpy.macapp and not renpy.config.player_cache_dir:
+         return
+ 
+     try:
