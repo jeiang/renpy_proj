@@ -41,6 +41,10 @@ FILES_DEFAULT = {"script.rpy": GAME.format(defer=""), "tl/fr/script.rpy": TL_FR,
 FILES_EAGER = {"script.rpy": GAME.format(defer="define config.defer_tl_scripts = False"),
                "tl/fr/script.rpy": TL_FR, "tl/de/script.rpy": TL_DE}
 
+# The opt-out sits in a file that sorts after tl/, so the define runs after the tl files were already skipped.
+FILES_LATE_EAGER = {"script.rpy": GAME.format(defer=""), "tl/fr/script.rpy": TL_FR, "tl/de/script.rpy": TL_DE,
+                    "zz_optout.rpy": "define config.defer_tl_scripts = False\n"}
+
 
 def loaded_languages(script):
     """Languages of the translate nodes in the namemap (the namemap keys are the nodes themselves)."""
@@ -80,6 +84,11 @@ class TlDeferral(unittest.TestCase):
     def test_game_can_turn_deferral_off(self):
         script = load_game(FILES_EAGER)
         self.assertEqual(loaded_languages(script), {"fr", "de"})
+
+    def test_late_define_still_turns_deferral_off(self):
+        script = load_game(FILES_LATE_EAGER)
+        self.assertFalse(self.renpy.config.defer_tl_scripts)
+        self.assertEqual(loaded_languages(script), {"fr", "de"}, "every tl file loads at start")
 
 
 if __name__ == "__main__":
