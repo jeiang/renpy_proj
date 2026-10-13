@@ -336,6 +336,28 @@ urp.exe C:\spike\synth\story --data C:\spike\data --harness-script C:\spike\harn
 `lint` is the headless check. With `HARNESS_DIR` set to an empty folder and a `cmd.txt` written by hand (see `harness/README.md`,
 Plans) the injected driver plays the story and writes `progress.txt`. The Windows GPU gate is a recorded gap (M4).
 
+### Windows test kit
+
+`player/packaging/windows-test-kit/build-kit.py` builds a zip for a tester who runs the player on a Windows PC without developer
+tools. It needs the CI `package-windows` zip (`urp-windows-x86_64.zip`) and Python 3.11 or later:
+
+```sh
+python3 player/packaging/windows-test-kit/build-kit.py --package urp-windows-x86_64.zip --out dist/
+```
+
+The kit holds `urp.exe` with its FFmpeg DLLs, the built games listed in `games.json` (SynthUHD is left out unless
+`--include-uhd` is given), the harness script, the plans, and the licences. `run-tests.bat` starts `run-tests.ps1`, which runs
+Windows PowerShell 5.1 on each game: lint, a probe, the compatibility checks, a route plan (shots are best effort and are not
+compared), and a save and resume. The stage counts are the gate's defaults where `corpus.toml` sets no key. Each game's data
+stays under `data\<game>\<stage>` in the kit folder. The tester returns `results-<COMPUTERNAME>-<time>.zip`.
+
+Not reproduced from `run.py`: frame diff, A/V sync, stock baseline digest, full savescan, deep runs, and hygiene checks.
+
+The Windows run is not verified on a real Windows machine. Run the kit on Windows PowerShell 5.1 before relying on it.
+
+The repo has no root `LICENSE` file. The kit ships the licence text for each bundled component under `licenses/`. `synthlib/media.py`
+calls a GPL build of ffmpeg, which needs `SYNTH_ALLOW_GPL=1`. That tool generates the media. Nothing links it into the output.
+
 ## Files
 
 - `build.py` builds the games; `run.py` runs them; `fetch.sh` fetches SDKs and fonts; `synthlib/` holds `gen.py` (PNG canvas,
