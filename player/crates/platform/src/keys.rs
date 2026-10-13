@@ -171,13 +171,19 @@ mod tests {
     #[test]
     fn modifier_key_up_drops_its_own_bit() {
         let held = KMOD_LCTRL | KMOD_LSHIFT;
-        assert_eq!(mods_after_key(held, KeyCode::ControlLeft, false), KMOD_LSHIFT);
+        assert_eq!(
+            mods_after_key(held, KeyCode::ControlLeft, false),
+            KMOD_LSHIFT
+        );
     }
 
     #[test]
     fn modifier_key_down_adds_its_own_bit() {
         assert_eq!(mods_after_key(0, KeyCode::ControlLeft, true), KMOD_LCTRL);
-        assert_eq!(mods_after_key(KMOD_LCTRL, KeyCode::ControlRight, true), KMOD_LCTRL | KMOD_RCTRL);
+        assert_eq!(
+            mods_after_key(KMOD_LCTRL, KeyCode::ControlRight, true),
+            KMOD_LCTRL | KMOD_RCTRL
+        );
         assert_eq!(mods_after_key(0, KeyCode::SuperRight, true), KMOD_RGUI);
     }
 
@@ -192,6 +198,9 @@ mod tests {
     #[test]
     fn release_of_the_other_side_keeps_the_first() {
         let held = KMOD_LCTRL | KMOD_RCTRL;
-        assert_eq!(mods_after_key(held, KeyCode::ControlRight, false), KMOD_LCTRL);
+        assert_eq!(
+            mods_after_key(held, KeyCode::ControlRight, false),
+            KMOD_LCTRL
+        );
     }
 }
