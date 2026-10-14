@@ -358,6 +358,9 @@ function Start-Player([string]$ExePath, [string[]]$ArgList, [string]$WorkDir, $E
         $quoted = @()
         foreach ($a in $ArgList) { $quoted += ('"' + $a + '"') }
         $p = Start-Process -FilePath $ExePath -ArgumentList ($quoted -join ' ') -WorkingDirectory $WorkDir -PassThru -RedirectStandardOutput $OutFile -RedirectStandardError $ErrFile
+        # Windows PowerShell 5.1: ExitCode stays empty after exit unless the handle is opened while the
+        # process runs. Reading Handle once caches it.
+        $null = $p.Handle
     } finally {
         foreach ($k in $EnvVars.Keys) {
             [System.Environment]::SetEnvironmentVariable($k, $saved[$k], 'Process')
