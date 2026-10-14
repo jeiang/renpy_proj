@@ -48,6 +48,7 @@ $script:Rows = New-Object System.Collections.ArrayList
 $script:SeedOk = @{}
 $script:ProbeOk = @{}
 $script:Current = $null
+$script:Adapter = @{ Name = ''; Backend = '' }
 $script:Detail = ''
 $script:Warn = $false
 $script:Notes = $null
@@ -233,23 +234,116 @@ function Wait-Op($ctx, [string]$token) {
     Wait-State $ctx $token $secs $gap
 }
 
-function Save-Shot([string]$Path) {
+# Windows test runs capture the game window and nothing else. The shot is refused, and no file is written, when
+# the game window is missing or when another window covers any part of it. The screen is never captured.
+function Ensure-WinCapture {
+    if ('UrpWinCapture' -as [type]) { return }
+    Add-Type -AssemblyName System.Drawing
+    Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+
+public static class UrpWinCapture {
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
+    [StructLayout(LayoutKind.Sequential)]
+    public struct POINT { public int X; public int Y; }
+    public delegate bool EnumProc(IntPtr hWnd, IntPtr lParam);
+
+    [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr value);
+    [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+    [DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc callback, IntPtr lParam);
+    [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+    [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr hWnd, out RECT rect);
+    [DllImport("user32.dll")] public static extern bool ClientToScreen(IntPtr hWnd, ref POINT point);
+    [DllImport("user32.dll")] public static extern IntPtr WindowFromPoint(POINT point);
+    [DllImport("user32.dll")] public static extern IntPtr GetAncestor(IntPtr hWnd, uint flags);
+
+    // Per-monitor DPI awareness, so client rectangles and CopyFromScreen use the same physical pixels.
+    public static void UseDpiAware() {
+        if (!SetProcessDpiAwarenessContext(new IntPtr(-4))) SetProcessDPIAware();
+    }
+
+    // The largest visible, not minimized top-level window owned by the process, or zero.
+    public static IntPtr FindWindowOfProcess(uint pid) {
+        IntPtr best = IntPtr.Zero;
+        long bestArea = 0;
+        EnumWindows(new EnumProc(delegate (IntPtr h, IntPtr l) {
+            uint owner;
+            GetWindowThreadProcessId(h, out owner);
+            if (owner != pid || !IsWindowVisible(h) || IsIconic(h)) return true;
+            RECT r;
+            if (!GetClientRect(h, out r)) return true;
+            long area = (long)(r.Right - r.Left) * (r.Bottom - r.Top);
+            if (area > bestArea) { bestArea = area; best = h; }
+            return true;
+        }), IntPtr.Zero);
+        return best;
+    }
+
+    // The client area in screen pixels: x, y, width, height. Null when unavailable.
+    public static int[] ClientRectOnScreen(IntPtr hWnd) {
+        RECT r;
+        if (!GetClientRect(hWnd, out r)) return null;
+        POINT p = new POINT();
+        if (!ClientToScreen(hWnd, ref p)) return null;
+        return new int[] { p.X, p.Y, r.Right - r.Left, r.Bottom - r.Top };
+    }
+
+    // True when a grid of points over the rectangle all lie in hWnd or one of its child windows.
+    public static bool IsUncovered(IntPtr hWnd, int x, int y, int width, int height, int steps) {
+        for (int i = 0; i <= steps; i++) {
+            for (int j = 0; j <= steps; j++) {
+                POINT p = new POINT();
+                p.X = x + (int)((long)(width - 1) * i / steps);
+                p.Y = y + (int)((long)(height - 1) * j / steps);
+                IntPtr at = WindowFromPoint(p);
+                if (at == IntPtr.Zero || GetAncestor(at, 2) != hWnd) return false;
+            }
+        }
+        return true;
+    }
+}
+"@
+}
+
+# Wait up to 15 s for the game to show a window. Fails if the game exits first.
+function Find-GameWindow($Proc) {
+    $deadline = (Get-Date).AddSeconds(15)
+    while ($true) {
+        if ($Proc.HasExited) { throw 'the game exited before the shot' }
+        $h = [UrpWinCapture]::FindWindowOfProcess([uint32]$Proc.Id)
+        if ($h -ne [IntPtr]::Zero) { return $h }
+        if ((Get-Date) -gt $deadline) { throw 'no visible game window was found' }
+        Start-Sleep -Milliseconds 250
+    }
+}
+
+function Save-Shot([string]$Path, $Proc) {
     if (-not $OnWindows) {
         # Linux test runs: grim captures the sway output of the slot (WAYLAND_DISPLAY is set by slotrun.py).
         & grim $Path
         if ($LASTEXITCODE -ne 0) { throw 'grim failed' }
         return
     }
-    Add-Type -AssemblyName System.Drawing
-    Add-Type -AssemblyName System.Windows.Forms
-    $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
-    $bmp = New-Object System.Drawing.Bitmap -ArgumentList $b.Width, $b.Height
+    Ensure-WinCapture
+    [UrpWinCapture]::UseDpiAware()
+    $h = Find-GameWindow $Proc
+    $rect = [UrpWinCapture]::ClientRectOnScreen($h)
+    if ($null -eq $rect -or $rect[2] -le 0 -or $rect[3] -le 0) { throw 'the game window has no drawing area' }
+    $x = $rect[0]; $y = $rect[1]; $w = $rect[2]; $ht = $rect[3]
+    if (-not [UrpWinCapture]::IsUncovered($h, $x, $y, $w, $ht, 16)) { throw 'another window covers the game window' }
+    $b = New-Object System.Drawing.Bitmap -ArgumentList $w, $ht
     try {
-        $gr = [System.Drawing.Graphics]::FromImage($bmp)
-        try { $gr.CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size) } finally { $gr.Dispose() }
-        $bmp.Save($Path, [System.Drawing.Imaging.ImageFormat]::Png)
+        $gr = [System.Drawing.Graphics]::FromImage($b)
+        try { $gr.CopyFromScreen($x, $y, 0, 0, (New-Object System.Drawing.Size -ArgumentList $w, $ht)) } finally { $gr.Dispose() }
+        # Check again after the copy. A window that moved over the game meanwhile must not be saved.
+        if (-not [UrpWinCapture]::IsUncovered($h, $x, $y, $w, $ht, 16)) { throw 'another window covered the game window during the shot' }
+        $b.Save($Path, [System.Drawing.Imaging.ImageFormat]::Png)
     } finally {
-        $bmp.Dispose()
+        $b.Dispose()
     }
 }
 
@@ -258,7 +352,7 @@ function Take-Shot($ctx, [string]$arg) {
     $path = PathJoin @($ShotDir, ($ctx.Name + '-' + $name + '.png'))
     try {
         New-Dir $ShotDir
-        Save-Shot $path
+        Save-Shot $path $ctx.Proc
         [void]$ctx.Notes.Add('shot ' + $name + ' saved')
     } catch {
         $ctx.Warn = $true
@@ -422,6 +516,25 @@ function Expect-Clean($ctx) {
     if (Test-Traceback $ctx) { throw 'traceback.txt was written' }
 }
 
+# urp writes the wgpu adapter and backend (wgpudraw.py) as "Renderer: '<name>'" and "Backend: '<name>'" lines.
+# The first pair seen in any stage log is kept for the results.
+function Note-Adapter([string]$LogPath) {
+    if ($script:Adapter.Name -ne '' -and $script:Adapter.Backend -ne '') { return }
+    if (-not [System.IO.File]::Exists($LogPath)) { return }
+    $text = Read-Shared $LogPath
+    $n = [regex]::Match($text, '(?m)^Renderer: (.+?)\s*$')
+    $b = [regex]::Match($text, '(?m)^Backend: (.+?)\s*$')
+    if ($n.Success -and $script:Adapter.Name -eq '') { $script:Adapter.Name = $n.Groups[1].Value.Trim("'") }
+    if ($b.Success -and $script:Adapter.Backend -eq '') { $script:Adapter.Backend = $b.Groups[1].Value.Trim("'") }
+}
+
+function Adapter-Text {
+    if ($script:Adapter.Name -eq '') { return 'not logged (no stage reached the renderer)' }
+    $backend = 'backend not logged'
+    if ($script:Adapter.Backend -ne '') { $backend = 'backend ' + $script:Adapter.Backend }
+    return ($script:Adapter.Name + ', ' + $backend)
+}
+
 function Close-Stage($ctx) {
     if ($null -eq $ctx) { return }
     try {
@@ -429,10 +542,12 @@ function Close-Stage($ctx) {
         Update-Progress $ctx.Progress
         $files = PathJoin @($StageFiles, $ctx.Name)
         New-Dir $files
+        $logDir = PathJoin @($ctx.Data, 'logs')
         foreach ($f in @('log.txt', 'traceback.txt')) {
-            $src = PathJoin @($ctx.Base, $f)
+            $src = PathJoin @($logDir, $f)
             if (Test-Path -LiteralPath $src) { Copy-Item -LiteralPath $src -Destination $files -Force }
         }
+        Note-Adapter (PathJoin @($logDir, 'log.txt'))
         if ([System.IO.File]::Exists($ctx.Progress.File)) {
             Copy-Item -LiteralPath $ctx.Progress.File -Destination $files -Force
         }
@@ -512,13 +627,12 @@ function Invoke-Stage($g, [string]$Stage, [string]$Fn) {
 function Has-Output($ctx) {
     if ((Get-Item -LiteralPath $ctx.Out -ErrorAction SilentlyContinue).Length -gt 0) { return $true }
     if ((Get-Item -LiteralPath $ctx.Err -ErrorAction SilentlyContinue).Length -gt 0) { return $true }
-    if (Test-Path -LiteralPath (PathJoin @($ctx.Base, 'log.txt'))) { return $true }
     $logs = @(Get-ChildItem -LiteralPath $ctx.Data -Recurse -Filter log.txt -ErrorAction SilentlyContinue)
     return ($logs.Count -gt 0)
 }
 
 function Get-LintText($ctx) {
-    return (Read-Shared $ctx.Out) + "`n" + (Read-Shared $ctx.Err) + "`n" + (Read-Shared (PathJoin @($ctx.Base, 'log.txt')))
+    return (Read-Shared $ctx.Out) + "`n" + (Read-Shared $ctx.Err) + "`n" + (Read-Shared (PathJoin @($ctx.Data, 'logs', 'log.txt')))
 }
 
 function Src-Of($g) {
@@ -568,6 +682,8 @@ function Stage-PatchSeed($g) {
     $seedSrc = PathJoin @($Kit, 'seed', 'py7patch-patch.toml')
     $p1 = PathJoin @($Data, $g.id, 'patch-seed')
     New-Dir $p1
+    $p1Logs = PathJoin @($p1, 'logs')
+    New-Dir $p1Logs
     New-Dir $LogsDir
     $base = PathJoin @($Work, $g.id, 'patch-seed')
     Copy-Tree (Src-Of $g) $base
@@ -586,7 +702,7 @@ function Stage-PatchSeed($g) {
     $out2 = PathJoin @($LogsDir, ($g.id + '-patch-seed-2.out.txt'))
     $err2 = PathJoin @($LogsDir, ($g.id + '-patch-seed-2.err.txt'))
     try {
-        $p = Start-Player $Exe @($base, '--data', $p1) $base $envVars $out1 $err1
+        $p = Start-Player $Exe @($base, '--data', $p1, '--logdir', $p1Logs) $base $envVars $out1 $err1
         if (-not $p.WaitForExit(120000)) { Stop-Proc $p; throw 'the apply-test run did not finish in 120 s' }
         $text1 = Read-Shared $out1
         $m = [regex]::Match($text1, '(?m)^fingerprint: (\w+)')
@@ -595,7 +711,7 @@ function Stage-PatchSeed($g) {
         $fpDir = PathJoin @($p1, 'patches', $fp)
         New-Dir $fpDir
         Copy-Item -LiteralPath $seedSrc -Destination (PathJoin @($fpDir, 'patch.toml')) -Force
-        $p2 = Start-Player $Exe @($base, '--data', $p1) $base $envVars $out2 $err2
+        $p2 = Start-Player $Exe @($base, '--data', $p1, '--logdir', $p1Logs) $base $envVars $out2 $err2
         if (-not $p2.WaitForExit(120000)) { Stop-Proc $p2; throw 'the second apply-test run did not finish in 120 s' }
         $text2 = Read-Shared $out2
         $h = [regex]::Match($text2, 'is (sha1:[0-9a-f]{12})')
@@ -818,6 +934,7 @@ function Write-Summary([string]$Stamp, [string]$SysText) {
     $sum = New-Object System.Collections.ArrayList
     [void]$sum.Add('urp Windows test kit: results')
     [void]$sum.Add('run: ' + $Stamp)
+    [void]$sum.Add('wgpu adapter: ' + (Adapter-Text))
     [void]$sum.Add('')
     $pass = @($script:Rows | Where-Object { $_.status -eq 'PASS' }).Count
     $warn = @($script:Rows | Where-Object { $_.status -eq 'WARN' }).Count
@@ -834,7 +951,7 @@ function Write-Summary([string]$Stamp, [string]$SysText) {
     [void]$sum.Add('Not checked by this kit: frame and A/V comparison against stock Ren''Py, the stock baseline,')
     [void]$sum.Add('the full savescan, deep runs, and file hygiene checks. See README-TESTER.txt.')
     [System.IO.File]::WriteAllText([System.IO.Path]::Combine($Results, 'summary.txt'), (($sum -join "`r`n") + "`r`n"), $Utf8)
-    [System.IO.File]::WriteAllText([System.IO.Path]::Combine($Results, 'system.txt'), $SysText, $Utf8)
+    [System.IO.File]::WriteAllText([System.IO.Path]::Combine($Results, 'system.txt'), ($SysText + 'wgpu adapter: ' + (Adapter-Text) + "`r`n"), $Utf8)
     $json = @{
         run = $Stamp
         computer = [System.Environment]::MachineName

@@ -15,6 +15,9 @@ What you need
   into the kit folder.
 - Do not use the mouse or keyboard while the test runs. Game windows
   open and close by themselves.
+- Keep other windows off the game window. Screenshots capture only the
+  game window. If another window covers it, that screenshot is skipped,
+  and the step shows WARN.
 
 
 Steps
@@ -57,10 +60,15 @@ What you will get back
 
 - summary.txt: one line per step, with PASS, FAIL, WARN, SKIP, XFAIL, or XPASS.
 - results.json: the same data in machine-readable form.
-- system.txt: the Windows version and the urp.exe checksum.
+- system.txt: the Windows version, the GPU names, and the urp.exe checksum.
+- The line "wgpu adapter:" in summary.txt and system.txt names the GPU and
+  the graphics backend that urp used. It says "not logged" when no step
+  reached the renderer.
 - run.log: the full run log.
 - logs\: the log files from urp for each game.
-- shots\: screenshots, when they could be taken.
+- shots\: screenshots of the game window only. The rest of the desktop is
+  never captured. A screenshot is skipped when another window covers the
+  game window.
 - stagefiles\: each step's log.txt and traceback.txt, when urp wrote them.
 
 The results zip contains only the files above. It does not contain your
