@@ -5,7 +5,7 @@
 //! the same cache at once:
 //! - a warm-up takes it exclusively and writes its pid into the file;
 //! - a play or a serve takes it shared. When a warm-up holds it, the play sends SIGTERM to the pid
-//!   in the file and waits. A stopped warm-up leaves a cache the next run can use: unusable entries
+//!   in the file and waits, at most [`PlayGuard::acquire`]'s deadline. A stopped warm-up leaves a cache the next run can use: unusable entries
 //!   are recompiled, as on any run.
 //!
 //! Warm-up needs Unix. On other platforms [`SUPPORTED`] is false, nothing starts a warm-up, and a
@@ -80,11 +80,17 @@ mod lock {
     use std::io::Write;
     use std::os::unix::io::AsRawFd;
     use std::path::Path;
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
 
-    use anyhow::{Context, Result};
+    use anyhow::{Context, Result, bail};
 
     use super::lock_path;
+
+    /// How long a play waits for the lock. A warm-up exits within a second of SIGTERM, and a compile
+    /// worker it forked (engine patch 0016) that outlives it keeps the lock only until it has
+    /// finished its file, normally a few seconds. A holder that keeps the lock longer is stuck or is
+    /// not a warm-up, and the play fails with a message instead of waiting without end.
+    const PLAY_LOCK_DEADLINE: Duration = Duration::from_secs(30);
 
     /// A warm-up's exclusive hold on one game's lock. Dropping it releases the lock.
     #[derive(Debug)]
@@ -155,16 +161,43 @@ mod lock {
 
     impl PlayGuard {
         /// Takes the game's lock shared, for a play or a serve. A warm-up that holds it is stopped
-        /// first: SIGTERM goes to the pid it recorded, and the call waits until the lock is free.
+        /// first: SIGTERM goes to the pid it recorded, and the call waits until the lock is free, for
+        /// at most 30 s.
         pub fn acquire(data: &Path, key: &str) -> Result<PlayGuard> {
+            Self::acquire_with_deadline(data, key, PLAY_LOCK_DEADLINE)
+        }
+
+        /// [`PlayGuard::acquire`] with a given wait. The recorded pid gets SIGTERM only while it is
+        /// alive. A pid found dead is not signalled again, so that a new process that gets the
+        /// same pid is never signalled. The wait continues after the pid is dead, because a worker
+        /// that the warm-up forked can still hold the lock. Fails when the lock is still held at the
+        /// deadline.
+        pub fn acquire_with_deadline(
+            data: &Path,
+            key: &str,
+            deadline: Duration,
+        ) -> Result<PlayGuard> {
             let path = lock_path(data, key);
             let file = open(data, key)?;
+            let give_up = Instant::now() + deadline;
+            let mut dead = None;
             while !try_lock(&file, libc::LOCK_SH)? {
-                if let Some(pid) = holder_pid(&path) {
-                    // SAFETY: a plain signal to the warm-up that recorded this pid. holder_pid
-                    // rejects pid 0 and negative values, which would address process groups.
-                    unsafe {
-                        libc::kill(pid, libc::SIGTERM);
+                if Instant::now() >= give_up {
+                    bail!(
+                        "another process holds {}; stop the warm-up or remove the lock",
+                        path.display()
+                    );
+                }
+                if let Some(pid) = holder_pid(&path).filter(|&pid| Some(pid) != dead) {
+                    // SAFETY: signal 0 only probes the pid. holder_pid rejects pid 0 and negative
+                    // values, which would address process groups.
+                    if unsafe { libc::kill(pid, 0) } == 0 {
+                        // SAFETY: a plain signal to the live warm-up that recorded this pid.
+                        unsafe {
+                            libc::kill(pid, libc::SIGTERM);
+                        }
+                    } else if std::io::Error::last_os_error().raw_os_error() == Some(libc::ESRCH) {
+                        dead = Some(pid);
                     }
                 }
                 std::thread::sleep(Duration::from_millis(50));
@@ -329,26 +362,6 @@ mod tests {
             );
             assert!(started.elapsed() >= Duration::from_secs(2), "gave up early");
             drop(holder);
-        }
-
-        /// The same scenario against the unfixed `acquire`, which loops forever. Run with
-        /// `timeout 20 cargo test -p library warm:: -- --ignored`: it fails with "acquire did not
-        /// return". It stays ignored because it cannot pass after the fix either: `acquire` then
-        /// gives up after 30 s, later than the 10 s window here.
-        #[test]
-        #[ignore = "demonstrates the hang of the unfixed acquire"]
-        fn play_guard_acquire_hangs_on_an_orphaned_holder() {
-            let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
-            let d = tempfile::tempdir().unwrap();
-            let holder = orphaned_holder(d.path(), "k");
-            let data = d.path().to_path_buf();
-            let res = within(Duration::from_secs(10), move || {
-                PlayGuard::acquire(&data, "k")
-            });
-            if res.is_none() {
-                drop(holder); // Lets the stuck thread finish.
-                panic!("acquire did not return");
-            }
         }
 
         #[test]
