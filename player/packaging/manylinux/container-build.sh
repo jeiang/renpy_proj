@@ -178,6 +178,9 @@ if [ "${PLAYER_CHECKS:-0}" = 1 ]; then
   log "cargo clippy, cargo test"
   rustup component add clippy >/dev/null
   (cd "$PLAYER" && cargo clippy --workspace --all-targets --release -- -D warnings && cargo test --release --workspace)
+  log "engine tests"
+  URP_TESTS_REQUIRE_TREE=1 URP_HOST_TREE=$PLAYER/build-out/engine/common-rpyc/host \
+    python3.12 -m unittest discover -s "$PLAYER/engine/python/tests" -v
 fi
 
 # ---- package: the steps of packaging/linux.sh, with the same host-provided set ----------------------------------------

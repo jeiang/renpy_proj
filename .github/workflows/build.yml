@@ -99,7 +99,10 @@ jobs:
           nix develop .#player -c bash -ec '
             cd player
             cargo clippy --workspace --all-targets --release -- -D warnings
-            cargo test --release --workspace'
+            cargo test --release --workspace
+            cd ..
+            URP_TESTS_REQUIRE_TREE=1 URP_HOST_TREE=player/build-out/engine/common-rpyc/host \
+              python3.12 -m unittest discover -s player/engine/python/tests -v'
       - name: Zip the app
         run: |
           ditto -c -k --keepParent "player/build-out/macos/Universal Ren'Py Player.app" urp-macos-arm64.zip

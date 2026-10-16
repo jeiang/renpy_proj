@@ -2,9 +2,14 @@
 
 The tests need the patched Ren'Py tree with its Cython modules built as shared libraries: the `host` folder that
 player/engine/build.py writes to player/build-out/engine/common-rpyc/host (run it in `nix develop .#player`). Set
-URP_HOST_TREE to another folder with a `renpy/` package to test that one. Without a tree the tests are skipped.
+URP_HOST_TREE to another folder with a `renpy/` package to test that one. Without a tree the tests are skipped, or
+fail to import with URP_TESTS_REQUIRE_TREE=1 (CI sets it so that a missing tree cannot pass as a run of no tests).
 
     URP_HOST_TREE=... python3.12 -m unittest discover -s player/engine/python/tests
+
+CI (the Linux and macOS checks, after `cargo build --release -p player` wrote the tree):
+
+    URP_TESTS_REQUIRE_TREE=1 URP_HOST_TREE=player/build-out/engine/common-rpyc/host python3.12 -m unittest discover -s player/engine/python/tests -v
 
 `boot()` sets up one engine per process (the same stand-ins and start-up steps as packaging/compile_common.py, which
 compiles renpy/common at build time) and `new_script()` gives a fresh `renpy.script.Script`.
@@ -22,18 +27,23 @@ _state = {}
 
 
 def host_tree():
-    tree = pathlib.Path(os.environ.get("URP_HOST_TREE") or DEFAULT_TREE)
+    # Absolute: boot() symlinks renpy/common from beside the tree into a temporary folder.
+    tree = pathlib.Path(os.environ.get("URP_HOST_TREE") or DEFAULT_TREE).resolve()
     return tree if (tree / "renpy" / "__init__.py").is_file() else None
 
 
 def skip_reason():
+    reason = None
+
     if sys.version_info[:2] != (3, 12):
-        return "needs Python 3.12 (the engine tree is built for it)"
+        reason = "needs Python 3.12 (the engine tree is built for it)"
+    elif host_tree() is None:
+        reason = "no host engine tree (set URP_HOST_TREE, or build player/engine/build.py)"
 
-    if host_tree() is None:
-        return "no host engine tree (set URP_HOST_TREE, or build player/engine/build.py)"
+    if reason and os.environ.get("URP_TESTS_REQUIRE_TREE") == "1":
+        raise RuntimeError(reason)
 
-    return None
+    return reason
 
 
 def boot():
