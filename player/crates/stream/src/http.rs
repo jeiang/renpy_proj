@@ -100,7 +100,7 @@ async fn page(AxState(st): AxState<State>) -> Response {
 }
 
 async fn stats(AxState(st): AxState<State>) -> Response {
-    let mut s: Stats = st.shared.stats.lock().unwrap().clone();
+    let mut s: Stats = crate::lock_or_recover(&st.shared.stats).clone();
     s.connected = st
         .shared
         .connected

@@ -13,7 +13,7 @@ mod tests;
 
 use std::net::{IpAddr, SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, mpsc};
+use std::sync::{Arc, Mutex, MutexGuard, mpsc};
 use std::thread::JoinHandle;
 use std::time::Instant;
 
@@ -124,6 +124,12 @@ pub struct Server {
     readers: Vec<JoinHandle<()>>,
     http: Option<JoinHandle<()>>,
     shutdown: Option<tokio::sync::oneshot::Sender<()>>,
+}
+
+/// Locks `m` even when a panic on another thread poisoned it. The guarded values are counters and
+/// buffers that stay usable, and one panic must not make every later call panic too.
+pub(crate) fn lock_or_recover<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(|e| e.into_inner())
 }
 
 /// Monotonic milliseconds since the first call in this process.
@@ -238,14 +244,9 @@ impl Server {
         if self.shared.overlay {
             f.capture_ms = clock_ms() as u32;
         }
-        let old = self
-            .shared
-            .frame
-            .lock()
-            .unwrap()
-            .replace((f, Instant::now()));
+        let old = lock_or_recover(&self.shared.frame).replace((f, Instant::now()));
         {
-            let mut s = self.shared.stats.lock().unwrap();
+            let mut s = lock_or_recover(&self.shared.stats);
             s.frames_in += 1;
             if old.is_some() {
                 s.frames_replaced += 1;
@@ -265,16 +266,12 @@ impl Server {
         {
             return;
         }
-        self.shared
-            .audio
-            .lock()
-            .unwrap()
-            .extend_from_slice(stereo_f32_48k);
+        lock_or_recover(&self.shared.audio).extend_from_slice(stereo_f32_48k);
         self.shared.wake();
     }
 
     pub fn stats(&self) -> Stats {
-        let mut s = self.shared.stats.lock().unwrap().clone();
+        let mut s = lock_or_recover(&self.shared.stats).clone();
         s.connected = self.shared.connected.load(Ordering::Acquire);
         s
     }
