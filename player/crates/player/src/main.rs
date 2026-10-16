@@ -102,6 +102,9 @@ fn build_launch(args: Vec<String>) -> Result<Launch> {
     boot.push("--game".into());
     let game_ref = lib.game_ref(&game)?;
     boot.push(py_path(&game_ref.path));
+    // The key is computed once, here: the boot uses it as given and does not hash its own path text.
+    boot.push("--key".into());
+    boot.push(game_ref.key.clone());
     boot.extend(rest);
     Ok(Launch {
         argv: boot,

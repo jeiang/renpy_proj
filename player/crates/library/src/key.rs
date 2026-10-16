@@ -1,6 +1,7 @@
-//! Game path resolution and the game key. Both must match `player/engine/python/_player/boot.py`
-//! (`resolve_game`, `game_key`) and `crates/player/src/main.rs`, because the key names the per-game
-//! folders under `<data>`.
+//! Game path resolution and the game key. The key names the per-game folders under `<data>`. Rust is the
+//! producer; boot receives the key (`crates/player/src/main.rs` passes it as `--key`). The boot's own
+//! `resolve_game` and `game_key` in `player/engine/python/_player/boot.py` are only a fallback for a boot
+//! started without `--key`, and must still match.
 
 use std::path::{Path, PathBuf};
 
@@ -93,9 +94,10 @@ mod tests {
             .to_string()
     }
 
-    /// The Rust key and the boot's key must name the same folders. Covers the game-key split: two producers
-    /// that can disagree (on Windows `canonicalize` gives `\\?\C:\...` and `py_path` strips the prefix before
-    /// Python hashes the text). The prefix cannot occur here, so this checks the rest of the algorithm.
+    /// The Rust key and the boot's fallback key must name the same folders. Covers the game-key split: the
+    /// launcher passes `--key`, so the boot's own derivation runs only for a boot started without it (on
+    /// Windows that derivation hashes other text: `canonicalize` gives `\\?\C:\...` and `py_path` strips the
+    /// prefix). The prefix cannot occur here, so this guards the rest of the fallback algorithm.
     #[cfg(unix)]
     #[test]
     fn rust_and_boot_keys_agree() {
