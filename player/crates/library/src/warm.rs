@@ -5,7 +5,7 @@
 //! the same cache at once:
 //! - a warm-up takes it exclusively and writes its pid into the file;
 //! - a play or a serve takes it shared. When a warm-up holds it, the play sends SIGTERM to the pid
-//!   in the file and waits. A stopped warm-up leaves a cache the next run can use: unusable entries
+//!   in the file and waits, at most [`PlayGuard::acquire`]'s deadline. A stopped warm-up leaves a cache the next run can use: unusable entries
 //!   are recompiled, as on any run.
 //!
 //! Warm-up needs Unix. On other platforms [`SUPPORTED`] is false, nothing starts a warm-up, and a
@@ -80,11 +80,17 @@ mod lock {
     use std::io::Write;
     use std::os::unix::io::AsRawFd;
     use std::path::Path;
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
 
-    use anyhow::{Context, Result};
+    use anyhow::{Context, Result, bail};
 
     use super::lock_path;
+
+    /// How long a play waits for the lock. A warm-up exits within a second of SIGTERM, and a compile
+    /// worker it forked (engine patch 0016) that outlives it keeps the lock only until it has
+    /// finished its file, normally a few seconds. A holder that keeps the lock longer is stuck or is
+    /// not a warm-up, and the play fails with a message instead of waiting without end.
+    const PLAY_LOCK_DEADLINE: Duration = Duration::from_secs(30);
 
     /// A warm-up's exclusive hold on one game's lock. Dropping it releases the lock.
     #[derive(Debug)]
@@ -155,16 +161,43 @@ mod lock {
 
     impl PlayGuard {
         /// Takes the game's lock shared, for a play or a serve. A warm-up that holds it is stopped
-        /// first: SIGTERM goes to the pid it recorded, and the call waits until the lock is free.
+        /// first: SIGTERM goes to the pid it recorded, and the call waits until the lock is free, for
+        /// at most 30 s.
         pub fn acquire(data: &Path, key: &str) -> Result<PlayGuard> {
+            Self::acquire_with_deadline(data, key, PLAY_LOCK_DEADLINE)
+        }
+
+        /// [`PlayGuard::acquire`] with a given wait. The recorded pid gets SIGTERM only while it is
+        /// alive. A pid found dead is not signalled again, so that a new process that gets the
+        /// same pid is never signalled. The wait continues after the pid is dead, because a worker
+        /// that the warm-up forked can still hold the lock. Fails when the lock is still held at the
+        /// deadline.
+        pub fn acquire_with_deadline(
+            data: &Path,
+            key: &str,
+            deadline: Duration,
+        ) -> Result<PlayGuard> {
             let path = lock_path(data, key);
             let file = open(data, key)?;
+            let give_up = Instant::now() + deadline;
+            let mut dead = None;
             while !try_lock(&file, libc::LOCK_SH)? {
-                if let Some(pid) = holder_pid(&path) {
-                    // SAFETY: a plain signal to the warm-up that recorded this pid. holder_pid
-                    // rejects pid 0 and negative values, which would address process groups.
-                    unsafe {
-                        libc::kill(pid, libc::SIGTERM);
+                if Instant::now() >= give_up {
+                    bail!(
+                        "another process holds {}; stop the warm-up or remove the lock",
+                        path.display()
+                    );
+                }
+                if let Some(pid) = holder_pid(&path).filter(|&pid| Some(pid) != dead) {
+                    // SAFETY: signal 0 only probes the pid. holder_pid rejects pid 0 and negative
+                    // values, which would address process groups.
+                    if unsafe { libc::kill(pid, 0) } == 0 {
+                        // SAFETY: a plain signal to the live warm-up that recorded this pid.
+                        unsafe {
+                            libc::kill(pid, libc::SIGTERM);
+                        }
+                    } else if std::io::Error::last_os_error().raw_os_error() == Some(libc::ESRCH) {
+                        dead = Some(pid);
                     }
                 }
                 std::thread::sleep(Duration::from_millis(50));
@@ -234,12 +267,137 @@ mod tests {
 
     #[cfg(unix)]
     mod unix {
+        use std::fs::File;
+        use std::io::{BufRead, BufReader};
+        use std::os::unix::io::AsRawFd;
         use std::os::unix::process::ExitStatusExt;
-        use std::process::Command;
-        use std::time::Duration;
+        use std::process::{Child, Command, Stdio};
+        use std::sync::mpsc;
+        use std::time::{Duration, Instant};
 
         use super::super::*;
         static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+        /// Kills and reaps a spawned stand-in holder, so a failing test leaves no process behind.
+        struct Reaper(Child);
+
+        impl Drop for Reaper {
+            fn drop(&mut self) {
+                let _ = self.0.kill();
+                let _ = self.0.wait();
+            }
+        }
+
+        /// Opens the game's lock file and takes it exclusively, as a warm-up does. The returned
+        /// file is the holder: the lock lasts as long as the file (or a copy of it in a child) is open.
+        fn lock_exclusive(data: &Path, key: &str) -> File {
+            let path = lock_path(data, key);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            let file = File::options()
+                .read(true)
+                .write(true)
+                .create(true)
+                .truncate(false)
+                .open(path)
+                .unwrap();
+            // SAFETY: flock reads only the descriptor, which `file` keeps open.
+            assert_eq!(
+                unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) },
+                0
+            );
+            file
+        }
+
+        /// The pid of a process that has exited and been reaped.
+        fn dead_pid() -> u32 {
+            let mut child = Command::new("true").spawn().unwrap();
+            child.wait().unwrap();
+            child.id()
+        }
+
+        /// Runs `f` on a thread. `None` when it has not returned after `limit`, so that a hang fails
+        /// the test instead of hanging it.
+        fn within<T: Send + 'static>(
+            limit: Duration,
+            f: impl FnOnce() -> T + Send + 'static,
+        ) -> Option<T> {
+            let (tx, rx) = mpsc::channel();
+            std::thread::spawn(move || {
+                let _ = tx.send(f());
+            });
+            rx.recv_timeout(limit).ok()
+        }
+
+        /// A lock held by a live process whose pid is not in the lock file, and a file that names a
+        /// dead process: no SIGTERM can free the lock. This is a warm-up worker (engine patch 0016)
+        /// that outlived its parent, after the parent was reaped.
+        fn orphaned_holder(data: &Path, key: &str) -> File {
+            let holder = lock_exclusive(data, key);
+            std::fs::write(lock_path(data, key), dead_pid().to_string()).unwrap();
+            holder
+        }
+
+        #[test]
+        fn play_guard_gives_up_at_the_deadline() {
+            let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+            let d = tempfile::tempdir().unwrap();
+            let holder = orphaned_holder(d.path(), "k");
+            let data = d.path().to_path_buf();
+            let started = Instant::now();
+            let res = within(Duration::from_secs(10), move || {
+                PlayGuard::acquire_with_deadline(&data, "k", Duration::from_secs(2))
+            });
+            let Some(res) = res else {
+                drop(holder); // Lets the stuck thread finish.
+                panic!("acquire did not return");
+            };
+            let err = res
+                .expect_err("the lock is held, so acquire must fail")
+                .to_string();
+            let path = lock_path(d.path(), "k");
+            assert!(
+                err.contains(&path.display().to_string()),
+                "error should name the lock file {}: {err}",
+                path.display()
+            );
+            assert!(started.elapsed() >= Duration::from_secs(2), "gave up early");
+            drop(holder);
+        }
+
+        #[test]
+        fn play_guard_waits_for_a_warm_up_that_exits_on_sigterm() {
+            let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+            let d = tempfile::tempdir().unwrap();
+            let key = "k";
+            let path = lock_path(d.path(), key);
+            // The child gets the locked file as stdin: it shares the open file description, so the
+            // lock stays with the child once the test drops its own copy. `exec` keeps the pid that
+            // the shell recorded, as a warm-up records its own.
+            let holder = lock_exclusive(d.path(), key);
+            let mut child = Command::new("sh")
+                .arg("-c")
+                .arg(r#"echo $$ > "$0"; echo held; exec sleep 60"#)
+                .arg(&path)
+                .stdin(Stdio::from(holder))
+                .stdout(Stdio::piped())
+                .spawn()
+                .unwrap();
+            let mut line = String::new();
+            BufReader::new(child.stdout.take().unwrap())
+                .read_line(&mut line)
+                .unwrap();
+            let _reaper = Reaper(child);
+            assert_eq!(line.trim(), "held");
+
+            let data = d.path().to_path_buf();
+            let started = Instant::now();
+            let res = within(Duration::from_secs(10), move || {
+                PlayGuard::acquire_with_deadline(&data, key, Duration::from_secs(10))
+            });
+            let guard = res.expect("acquire did not return");
+            assert!(guard.is_ok(), "{:?}", guard.err());
+            assert!(started.elapsed() < Duration::from_secs(5));
+        }
 
         #[test]
         fn two_warm_ups_exclude_each_other() {
