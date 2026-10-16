@@ -110,6 +110,22 @@ impl Library {
         Ok(())
     }
 
+    /// Makes sure `folder` is in the library, then rescans. An import calls this with its destination,
+    /// which is normally a library folder already; `add_folders` would then un-hide every game the
+    /// user removed below it. So a known folder is only rescanned, and a new one is added as by
+    /// `add_folders`.
+    pub fn include_folder(&mut self, folder: &Path) -> Result<()> {
+        let f = folder
+            .canonicalize()
+            .with_context(|| format!("folder not found: {}", folder.display()))?;
+        if self.folders.contains(&f) {
+            self.rescan();
+            Ok(())
+        } else {
+            self.add_folders(&[f])
+        }
+    }
+
     pub fn rescan(&mut self) {
         self.folders.retain(|f| {
             let ok = f.is_dir();
@@ -277,10 +293,11 @@ mod tests {
     }
 
     /// Covers the finding "import into an existing folder un-hides removed games". `cmd_import` and the
-    /// window's `Msg::Imported` call `add_folders` with the destination, which is normally already a
-    /// library folder. This documents the mechanism and may be deleted once they use `include_folder`.
+    /// window's `Msg::Imported` used to call `add_folders` with the destination, which is normally
+    /// already a library folder. `add_folders` still un-hides (for `urp scan` and Add folder), which is
+    /// why imports use `include_folder`.
     #[test]
-    fn add_folders_on_an_existing_folder_unhides_removed_games_current_behaviour() {
+    fn add_folders_on_an_existing_folder_unhides_removed_games() {
         let d = tempfile::tempdir().unwrap();
         let (mut lib, root, _) = library_with_alpha_removed(d.path());
         game(&root, "Gamma");
@@ -311,7 +328,7 @@ mod tests {
         let mut lib = Library::default();
         lib.include_folder(&root).unwrap();
         assert_eq!(names(&lib), ["Alpha", "Beta"]);
-        assert_eq!(lib.folders, [root.clone()]);
+        assert_eq!(lib.folders, std::slice::from_ref(&root));
         lib.include_folder(&root).unwrap();
         assert_eq!(lib.folders, [root]);
         assert_eq!(lib.games.len(), 2);
