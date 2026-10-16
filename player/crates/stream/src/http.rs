@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 use axum::Router;
 use axum::extract::State as AxState;
-use axum::http::{HeaderValue, StatusCode, header};
+use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use str0m::change::SdpOffer;
@@ -26,6 +26,8 @@ pub(crate) struct State {
     pub title: String,
     pub size: (u32, u32),
     pub fps: u32,
+    /// Per-launch secret: the page embeds it and sends it back as `x-stream-token` on `/offer`.
+    pub token: String,
 }
 
 pub(crate) fn run(
@@ -79,6 +81,7 @@ fn render_page(st: &State) -> String {
         "width": st.size.0,
         "height": st.size.1,
         "fps": st.fps,
+        "token": st.token,
     });
     PAGE.replace("__TITLE__", &html_escape(&st.title))
         // `</` cannot occur in this JSON, so inline embedding is safe.
@@ -106,7 +109,11 @@ async fn stats(AxState(st): AxState<State>) -> Response {
     ([(header::CONTENT_TYPE, "application/json")], body).into_response()
 }
 
-async fn offer(AxState(st): AxState<State>, body: String) -> Response {
+async fn offer(AxState(st): AxState<State>, headers: HeaderMap, body: String) -> Response {
+    if let Err(why) = check_offer_headers(&st, &headers) {
+        log::warn!("stream: offer refused: {why}");
+        return (StatusCode::FORBIDDEN, why).into_response();
+    }
     match answer_offer(&st, &body) {
         Ok(sdp) => ([(header::CONTENT_TYPE, "application/sdp")], sdp).into_response(),
         Err(e) => {
@@ -114,6 +121,27 @@ async fn offer(AxState(st): AxState<State>, body: String) -> Response {
             (StatusCode::BAD_REQUEST, format!("{e:#}")).into_response()
         }
     }
+}
+
+/// Only a page served by this server may replace the session. The token stops blind posts from the
+/// LAN; the Origin check stops a page from another site posting cross-origin (a text/plain POST
+/// needs no CORS preflight). Anyone who can GET `/` can still read the token.
+fn check_offer_headers(st: &State, headers: &HeaderMap) -> Result<(), &'static str> {
+    let token = headers.get("x-stream-token").and_then(|v| v.to_str().ok());
+    if token != Some(st.token.as_str()) {
+        return Err("missing or wrong x-stream-token");
+    }
+    if let Some(origin) = headers.get(header::ORIGIN) {
+        let origin = origin.to_str().unwrap_or_default();
+        let origin_host = origin
+            .strip_prefix("http://")
+            .or_else(|| origin.strip_prefix("https://"));
+        let host = headers.get(header::HOST).and_then(|v| v.to_str().ok());
+        if origin_host.is_none() || origin_host != host {
+            return Err("Origin does not match Host");
+        }
+    }
+    Ok(())
 }
 
 /// Builds the session: H.264 42e01f / mode 1 and Opus only, host candidates, answer.
@@ -207,6 +235,7 @@ mod tests {
             title: "t".into(),
             size: (1280, 720),
             fps: 60,
+            token: "t".into(),
         };
         let offer = include_str!("../tests/chrome_offer.sdp");
         let ans = answer_offer(&st, offer).unwrap();

@@ -168,6 +168,35 @@ fn offer_with_page_token_is_answered() {
     );
 }
 
+/// Finding 1: a cross-site page cannot post an offer even with the token.
+#[test]
+fn offer_from_foreign_origin_is_forbidden() {
+    let (_srv, addr) = start();
+    let token = page_token(addr);
+    let h = [
+        ("content-type", "application/sdp"),
+        ("x-stream-token", token.as_str()),
+        ("origin", "http://evil.example"),
+    ];
+    let (status, body) = http(addr, "POST", "/offer", &h, OFFER);
+    assert_eq!(status, 403, "{body}");
+}
+
+/// Finding 1: browsers send `Origin` on same-origin POSTs too; a matching one is accepted.
+#[test]
+fn offer_from_own_origin_is_answered() {
+    let (_srv, addr) = start();
+    let token = page_token(addr);
+    let origin = format!("http://{addr}");
+    let h = [
+        ("content-type", "application/sdp"),
+        ("x-stream-token", token.as_str()),
+        ("origin", origin.as_str()),
+    ];
+    let (status, body) = http(addr, "POST", "/offer", &h, OFFER);
+    assert_eq!(status, 200, "{body}");
+}
+
 /// Poisons `m`: a thread takes the guard and panics.
 fn poison<T: Send>(m: &Mutex<T>) {
     std::thread::scope(|s| {

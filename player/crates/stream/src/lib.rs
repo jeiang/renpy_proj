@@ -213,6 +213,7 @@ impl Server {
                 title: cfg.title,
                 size: cfg.size,
                 fps: cfg.fps,
+                token: new_token(),
             };
             std::thread::Builder::new()
                 .name(format!("stream-http-{id}"))
@@ -305,6 +306,15 @@ impl Drop for Server {
     fn drop(&mut self) {
         self.shutdown_inner();
     }
+}
+
+/// 128 bits for the page token. `RandomState` keys come from the OS random source once per process
+/// (then a per-instance counter), and SipHash keyed with them is unpredictable without the key.
+/// This avoids a new dependency; it is not a general-purpose CSPRNG.
+fn new_token() -> String {
+    use std::hash::BuildHasher;
+    let s = std::collections::hash_map::RandomState::new();
+    format!("{:016x}{:016x}", s.hash_one(0u8), s.hash_one(1u8))
 }
 
 /// Binds the HTTP listener and UDP sockets on the same port number. A wildcard bind gets one UDP
