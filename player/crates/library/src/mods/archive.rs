@@ -294,7 +294,12 @@ fn walk_7z(src: &Path, list_only: bool, budget: &mut u64, cb: &mut Visit) -> Res
 
 #[cfg(feature = "rar")]
 fn walk_rar(src: &Path, list_only: bool, budget: &mut u64, cb: &mut Visit) -> Result<()> {
+    use std::ffi::c_int;
+    use std::io::Write;
+    use std::ptr;
+    use unrar::error::{Code, UnrarError, When};
     use unrar::{Archive, FileHeader};
+    use unrar_sys as native;
     fn entry_of(h: &FileHeader) -> Result<Entry> {
         if h.is_encrypted() {
             bail!("the RAR archive is encrypted");
@@ -325,31 +330,173 @@ fn walk_rar(src: &Path, list_only: bool, budget: &mut u64, cb: &mut Visit) -> Re
         }
         return Ok(());
     }
-    let mut open = archive.open_for_processing().map_err(err)?;
-    while let Some(h) = open.read_header().map_err(err)? {
-        let want = cb(&entry_of(h.entry())?)?;
-        open = match want {
-            Want::Skip => h.skip().map_err(err)?,
-            Want::Write(dest) => {
-                let next = h.extract_to(&dest).map_err(err)?;
-                let meta = std::fs::symlink_metadata(&dest)
-                    .with_context(|| format!("RAR entry was not extracted: {}", dest.display()))?;
-                if !meta.is_file() {
-                    let _ = std::fs::remove_file(&dest);
-                    bail!("RAR entry is not a regular file");
-                }
-                if meta.len() > *budget {
-                    bail!("the archive unpacks to more than the size limit");
-                }
-                *budget -= meta.len();
-                next
-            }
-        };
+    // The `unrar` crate can only extract a whole entry to a file or to memory, so the data is taken
+    // through UnRAR's own callback instead: the entry is tested (decompressed and checked, nothing
+    // written by UnRAR) and the callback writes the chunks itself, stopping at `budget + 1` bytes as
+    // `copy_limited` does.
+    struct Sink {
+        file: File,
+        /// Bytes that may still be written; 0 means the entry is over the budget.
+        left: u64,
+        err: Option<io::Error>,
     }
-    Ok(())
+    extern "C" fn on_data(
+        msg: native::UINT,
+        sink: native::LPARAM,
+        data: native::LPARAM,
+        len: native::LPARAM,
+    ) -> c_int {
+        if msg != native::UCM_PROCESSDATA {
+            // A password or a next volume: neither is supported, so stop.
+            return -1;
+        }
+        // SAFETY: `sink` is the `Sink` set with this callback below and outlives the call to
+        // `RARProcessFile`; UnRAR gives `len` valid bytes at `data`.
+        let sink = unsafe { &mut *(sink as *mut Sink) };
+        let data = unsafe { std::slice::from_raw_parts(data as *const u8, len as usize) };
+        let take = &data[..data
+            .len()
+            .min(usize::try_from(sink.left).unwrap_or(usize::MAX))];
+        if let Err(e) = sink.file.write_all(take) {
+            sink.err = Some(e);
+            return -1;
+        }
+        sink.left -= take.len() as u64;
+        if sink.left == 0 { -1 } else { 0 }
+    }
+    struct Handle(*const native::Handle);
+    impl Drop for Handle {
+        fn drop(&mut self) {
+            // SAFETY: the handle came from `RAROpenArchiveEx` and is closed once.
+            unsafe { native::RARCloseArchive(self.0) };
+        }
+    }
+    let code_err = |code: c_int, when: When| {
+        err(UnrarError::from(
+            Code::from(code).unwrap_or(Code::Unknown),
+            when,
+        ))
+    };
+
+    // The archive name as the `unrar` crate passes it.
+    #[cfg(any(target_os = "linux", target_os = "netbsd"))]
+    let name = std::ffi::CString::new(src.as_os_str().as_encoded_bytes())?;
+    #[cfg(not(any(target_os = "linux", target_os = "netbsd")))]
+    let name = widestring::WideCString::from_os_str(src)?;
+    let mut data = native::OpenArchiveDataEx::new(name.as_ptr().cast(), native::RAR_OM_EXTRACT);
+    // UnRAR writes its results through these pointers although the bindings declare them `*const`,
+    // so they are made from mutable places.
+    // SAFETY: `data` and `name` live across the call.
+    let h = unsafe { native::RAROpenArchiveEx((&raw mut data).cast_const()) };
+    let _close = (!h.is_null()).then(|| Handle(h));
+    if h.is_null() || data.open_result != 0 {
+        return Err(code_err(data.open_result as c_int, When::Open));
+    }
+    loop {
+        let mut header = native::HeaderDataEx::default();
+        // SAFETY: `h` is open and `header` lives across the call.
+        match unsafe { native::RARReadHeaderEx(h, (&raw mut header).cast_const()) } {
+            native::ERAR_SUCCESS => {}
+            native::ERAR_END_ARCHIVE => return Ok(()),
+            code => return Err(code_err(code, When::Read)),
+        }
+        let dest = match cb(&entry_of(&FileHeader::from(header))?)? {
+            Want::Skip => {
+                // SAFETY: `h` is open and no callback is set.
+                let code = unsafe {
+                    native::RARProcessFile(h, native::RAR_SKIP, ptr::null(), ptr::null())
+                };
+                if code != native::ERAR_SUCCESS {
+                    return Err(code_err(code, When::Process));
+                }
+                continue;
+            }
+            Want::Write(dest) => dest,
+        };
+        let file =
+            File::create(&dest).with_context(|| format!("cannot create {}", dest.display()))?;
+        let limit = budget.saturating_add(1);
+        let mut sink = Sink {
+            file,
+            left: limit,
+            err: None,
+        };
+        // SAFETY: `sink` outlives the processing call, and the callback is cleared before `sink`
+        // goes out of scope.
+        let code = unsafe {
+            native::RARSetCallback(h, Some(on_data), &mut sink as *mut Sink as native::LPARAM);
+            let code = native::RARProcessFile(h, native::RAR_TEST, ptr::null(), ptr::null());
+            native::RARSetCallback(h, None, 0);
+            code
+        };
+        if let Some(e) = sink.err {
+            return Err(e).with_context(|| format!("cannot extract {}", dest.display()));
+        }
+        if sink.left == 0 {
+            bail!("the archive unpacks to more than the size limit");
+        }
+        if code != native::ERAR_SUCCESS {
+            return Err(code_err(code, When::Process));
+        }
+        *budget -= limit - sink.left;
+    }
 }
 
 #[cfg(not(feature = "rar"))]
 fn walk_rar(_: &Path, _: bool, _: &mut u64, _: &mut Visit) -> Result<()> {
     bail!("this build of urp has no RAR support (it was built without the `rar` feature)")
+}
+
+#[cfg(all(test, feature = "rar"))]
+mod tests {
+    use super::*;
+
+    /// `testdata/rar_bomb.rar` holds one entry, `bomb.bin`, of `BOMB_SIZE` zero bytes in about 200 bytes
+    /// (made by `testdata/make_rar_bomb.py`, because the RAR creator is proprietary).
+    const BOMB: &str = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/src/mods/testdata/rar_bomb.rar"
+    );
+    const BOMB_SIZE: u64 = 1 + 2050 * 1024;
+
+    /// Walks the fixture, writing its one file to `dest` in a temp folder, and returns the walk result
+    /// with the size of the file that reached the disk.
+    fn walk_bomb(mut budget: u64) -> (Result<()>, Option<u64>) {
+        let dir = tempfile::tempdir().unwrap();
+        let dest = dir.path().join("bomb.bin");
+        let res = walk(Path::new(BOMB), Format::Rar, false, &mut budget, &mut |e| {
+            Ok(if e.kind == Kind::File {
+                Want::Write(dest.clone())
+            } else {
+                Want::Skip
+            })
+        });
+        (res, std::fs::metadata(&dest).ok().map(|m| m.len()))
+    }
+
+    #[test]
+    fn rar_fixture_unpacks_in_full_within_budget() {
+        let (res, written) = walk_bomb(BOMB_SIZE);
+        res.unwrap();
+        assert_eq!(written, Some(BOMB_SIZE));
+    }
+
+    /// Covers the finding "walk_rar extracts a whole entry before checking the unpack budget": a RAR
+    /// that inflates far past the budget must stop at `budget + 1` bytes on disk, as `copy_limited` does
+    /// for the other formats.
+    #[test]
+    fn rar_entry_over_budget_is_not_written_in_full() {
+        let budget = 4096;
+        let (res, written) = walk_bomb(budget);
+        let err = res.expect_err("an entry over the budget must be refused");
+        assert!(
+            err.to_string().contains("size limit"),
+            "unexpected error: {err:#}"
+        );
+        let written = written.unwrap_or(0);
+        assert!(
+            written <= budget + 1,
+            "{written} bytes reached the disk for a budget of {budget}"
+        );
+    }
 }
