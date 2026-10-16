@@ -14,6 +14,11 @@ first line of its code) and whose source hash starts with `original_hash`. The n
 compiled as plain Python 3 and replaces `code.source` and `code.bytecode`. The node, its name, the
 `.rpyc` files and saves are not touched.
 
+The tl/ files of a language are loaded when the language is first selected (engine patch 0018). A patch for a node
+of such a file is listed in `unmatched` until then, with a reason that says so. `renpy.exports.load_language` calls
+`on_language_loaded` (`config.player_language_loaded_callbacks`) after it loads the files and before their init code
+runs; the patches for that language are then matched again, and the ones that apply move to `applied`.
+
 Environment: `PLAYER_PATCHES_APPLY_TEST=1` (set by `urp patches <game> apply-test`) prints a
 summary, writes nothing else and exits after the patches are applied, before init and before any
 window. The exit code is 0 when every patch matched, 1 otherwise. `PLAYER_PATCHES_APPLY_TEST=json` prints the
@@ -28,6 +33,11 @@ import textwrap
 
 # Filled by on_script_loaded; read by _player.preflight.
 results = {"fingerprint": None, "dirs": [], "files": [], "inactive": [], "applied": [], "unmatched": [], "errors": []}
+
+# The settings of on_script_loaded, and (patch, its `unmatched` entry) for each patch with no Python code node at its
+# place: it can be in a tl/ file of a language that is not loaded yet.
+_settings = None
+_waiting = []
 
 
 def source_hash(src):
@@ -80,11 +90,72 @@ def _compile(code, new):
         )
 
 
+def _deferred_language(file):
+    """The language of `file` if it is in a tl/<language> folder that is deferred and not loaded, else None."""
+    import renpy
+
+    parts = file.split("/")
+
+    if "tl" not in parts[:-2] or not renpy.config.defer_tl_scripts:
+        return None
+
+    lang = parts[parts.index("tl") + 1]
+    return None if lang == "None" or lang in renpy.game.script.load_languages else lang
+
+
+def _apply_one(settings, p, idx):
+    label = "%s #%d" % (os.path.basename(p["origin"]), p["index"])
+    want = p["original_hash"]
+    here = idx.get((p["file"], p["line"]), [])
+    hits = [(n, c) for n, c in here if source_hash(c.source).startswith(want)]
+
+    if not hits:
+        have = sorted({source_hash(c.source)[:12] for n, c in here})
+
+        if have:
+            why = "source hash at %s:%d is %s, the patch expects sha1:%s; the game build changed?" % (p["file"], p["line"], ", ".join("sha1:" + h for h in have), want)
+        else:
+            lines = sorted({ln for (fn, ln) in idx if fn == p["file"]})
+            why = "no Python code node at %s:%d" % (p["file"], p["line"])
+            lang = _deferred_language(p["file"])
+
+            if lang is not None:
+                why += "; the tl/%s files are not loaded yet, the patch applies when the game loads that language" % lang
+            else:
+                why += "; nodes in that file start at lines %s" % (", ".join(map(str, lines[:12])) + (" ..." if len(lines) > 12 else "") if lines else "(none: no such script file or it has no Python code)")
+
+        entry = {"patch": label, "file": p["file"], "line": p["line"], "reason": why}
+        results["unmatched"].append(entry)
+        _event(settings, p["file"], p["line"], "not applied (%s): %s" % (label, why))
+
+        if not here:
+            _waiting.append((p, entry))
+
+        return
+
+    new = textwrap.dedent(p["source"]).strip("\n") + "\n"
+
+    try:
+        for node, code in hits:
+            old = source_hash(code.source)
+            bytecode = _compile(code, new)
+            code.source = new
+            code.py = 3
+            code.bytecode = bytecode
+            results["applied"].append({"patch": label, "file": p["file"], "line": p["line"], "node": str(node.name), "original_hash": "sha1:" + old[:12]})
+            _event(settings, p["file"], p["line"], "applied (%s) to node %s" % (label, node.name))
+    except Exception as e:
+        why = "new source does not compile: %s: %s" % (type(e).__name__, e)
+        results["unmatched"].append({"patch": label, "file": p["file"], "line": p["line"], "reason": why})
+        _event(settings, p["file"], p["line"], "not applied (%s): %s" % (label, why))
+
+
 def apply(settings, dirs):
     """Load, match and apply. Returns `results`."""
     import _player_patches
 
     results.update(dirs=dirs, files=[], inactive=[], applied=[], unmatched=[], errors=[])
+    del _waiting[:]
     proposed = bool(os.environ.get("PLAYER_PATCHES_PROPOSED"))  # verification of an AI patch: also load proposed ones
     files, patches, errors, inactive = _player_patches.load_dirs(dirs, proposed)
     results["files"] = files
@@ -100,40 +171,7 @@ def apply(settings, dirs):
     idx = _node_index()
 
     for p in patches:
-        label = "%s #%d" % (os.path.basename(p["origin"]), p["index"])
-        want = p["original_hash"]
-        here = idx.get((p["file"], p["line"]), [])
-        hits = [(n, c) for n, c in here if source_hash(c.source).startswith(want)]
-
-        if not hits:
-            have = sorted({source_hash(c.source)[:12] for n, c in here})
-
-            if have:
-                why = "source hash at %s:%d is %s, the patch expects sha1:%s; the game build changed?" % (p["file"], p["line"], ", ".join("sha1:" + h for h in have), want)
-            else:
-                lines = sorted({ln for (fn, ln) in idx if fn == p["file"]})
-                why = "no Python code node at %s:%d" % (p["file"], p["line"])
-                why += "; nodes in that file start at lines %s" % (", ".join(map(str, lines[:12])) + (" ..." if len(lines) > 12 else "") if lines else "(none: no such script file or it has no Python code)")
-
-            results["unmatched"].append({"patch": label, "file": p["file"], "line": p["line"], "reason": why})
-            _event(settings, p["file"], p["line"], "not applied (%s): %s" % (label, why))
-            continue
-
-        new = textwrap.dedent(p["source"]).strip("\n") + "\n"
-
-        try:
-            for node, code in hits:
-                old = source_hash(code.source)
-                bytecode = _compile(code, new)
-                code.source = new
-                code.py = 3
-                code.bytecode = bytecode
-                results["applied"].append({"patch": label, "file": p["file"], "line": p["line"], "node": str(node.name), "original_hash": "sha1:" + old[:12]})
-                _event(settings, p["file"], p["line"], "applied (%s) to node %s" % (label, node.name))
-        except Exception as e:
-            why = "new source does not compile: %s: %s" % (type(e).__name__, e)
-            results["unmatched"].append({"patch": label, "file": p["file"], "line": p["line"], "reason": why})
-            _event(settings, p["file"], p["line"], "not applied (%s): %s" % (label, why))
+        _apply_one(settings, p, idx)
 
     return results
 
@@ -146,10 +184,46 @@ def _write_state(settings):
         json.dump(results, f, indent=1)
 
 
-def on_script_loaded(settings):
-    apply_test = bool(os.environ.get("PLAYER_PATCHES_APPLY_TEST"))
+def on_language_loaded(language):
+    """`config.player_language_loaded_callbacks`: the tl/<language> files are loaded and their init code has not run.
+    Matches the waiting patches for those files again."""
+    if _settings is None:
+        return
 
     try:
+        mine = [w for w in _waiting if "/tl/%s/" % language in "/" + w[0]["file"]]
+
+        if not mine:
+            return
+
+        _waiting[:] = [w for w in _waiting if not any(w is m for m in mine)]
+        results["unmatched"] = [u for u in results["unmatched"] if not any(u is e for _p, e in mine)]
+        idx = _node_index()
+
+        for p, _entry in mine:
+            _apply_one(_settings, p, idx)
+
+        if not os.environ.get("PLAYER_PATCHES_APPLY_TEST"):
+            _write_state(_settings)
+    except Exception:
+        import traceback
+
+        results["errors"].append("patch library failed for language %s: %s" % (language, traceback.format_exc()))
+        sys.stderr.write("urp patches: patch library failed for language %s:\n%s\n" % (language, traceback.format_exc()))
+
+
+def on_script_loaded(settings):
+    global _settings
+
+    apply_test = bool(os.environ.get("PLAYER_PATCHES_APPLY_TEST"))
+    _settings = settings
+
+    try:
+        import renpy
+
+        if on_language_loaded not in renpy.config.player_language_loaded_callbacks:
+            renpy.config.player_language_loaded_callbacks.append(on_language_loaded)
+
         fp = fingerprint(settings)
         results["fingerprint"] = fp
         pdir = os.path.join(settings["data"], "patches")
