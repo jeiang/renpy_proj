@@ -4,6 +4,7 @@
 
 import os
 import pathlib
+import signal
 import subprocess
 import sys
 import tempfile
@@ -12,6 +13,10 @@ import unittest
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 import hostengine  # noqa: E402
+import script_equiv  # noqa: E402
+
+# The in-process load of the hung-worker test needs no renpy/common, and without this the engine prints an error for it.
+os.environ.setdefault("URP_TEST_NO_COMMON", "1")
 
 SKIP = hostengine.skip_reason()
 HERE = pathlib.Path(__file__).resolve().parent
@@ -224,6 +229,83 @@ class ParallelCompile(unittest.TestCase):
         code, output = self.run_equiv(files)
         self.assertEqual(code, 0, output)
         self.assertIn("0 parse errors", output)
+
+    def test_a_hung_worker_does_not_hang_the_load(self):
+        """Finding: Wave.wait has no deadline. A worker forked from a multithreaded process can deadlock on a lock
+        that a thread of the parent held at the fork. It never writes and never exits, and the load waits for it
+        forever. With WAVE_TIMEOUT the wave is stopped, and the load compiles the files itself.
+        """
+
+        files = {"%s.rpy" % n: filler(n, 30) for n in "abcdefgh"}
+        gamedir = self.game(files)
+        serial_dump = os.path.join(self.tmp.name, "serial.json")
+        hung_dump = os.path.join(self.tmp.name, "hung.json")
+        script_equiv.dump(gamedir, serial_dump, 0)
+
+        pids = []
+        real_fork = os.fork
+        real_run_worker = self.pc.Wave.__dict__["run_worker"]
+        missing = object()
+        old_timeout = getattr(self.pc, "WAVE_TIMEOUT", missing)
+        old_workers = os.environ.get("RENPY_PARALLEL_COMPILE")
+
+        def fork():
+            pid = real_fork()
+
+            if pid:
+                pids.append(pid)
+
+            return pid
+
+        def hang(script, items, write_fd):
+            while True:
+                signal.pause()
+
+        def too_slow(_signum, _frame):
+            raise AssertionError("load_script did not return: a hung worker blocks Wave.wait")
+
+        old_handler = signal.signal(signal.SIGALRM, too_slow)
+        os.fork = fork
+        self.pc.Wave.run_worker = staticmethod(hang)
+        self.pc.WAVE_TIMEOUT = 2.0
+
+        try:
+            signal.alarm(60)
+
+            try:
+                script_equiv.dump(gamedir, hung_dump, 4)
+            finally:
+                signal.alarm(0)
+        finally:
+            os.fork = real_fork
+            self.pc.Wave.run_worker = real_run_worker
+            signal.signal(signal.SIGALRM, old_handler)
+
+            if old_timeout is missing:
+                del self.pc.WAVE_TIMEOUT
+            else:
+                self.pc.WAVE_TIMEOUT = old_timeout
+
+            if old_workers is None:
+                os.environ.pop("RENPY_PARALLEL_COMPILE", None)
+            else:
+                os.environ["RENPY_PARALLEL_COMPILE"] = old_workers
+
+            # A failed test must not leave the hung workers behind.
+            alive = []
+
+            for pid in pids:
+                try:
+                    os.kill(pid, 0)
+                    alive.append(pid)
+                    os.kill(pid, signal.SIGKILL)
+                    os.waitpid(pid, 0)
+                except (ProcessLookupError, ChildProcessError):
+                    pass
+
+        self.assertTrue(pids, "no worker was forked, so the test did not exercise a wave")
+        self.assertEqual(alive, [], "workers still exist after the load")
+        self.assertEqual(script_equiv.compare(serial_dump, hung_dump), [])
 
 
 if __name__ == "__main__":
