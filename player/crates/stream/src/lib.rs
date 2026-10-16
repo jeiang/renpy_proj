@@ -8,6 +8,8 @@ mod http;
 mod input;
 mod media;
 mod net;
+#[cfg(test)]
+mod tests;
 
 use std::net::{IpAddr, SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
