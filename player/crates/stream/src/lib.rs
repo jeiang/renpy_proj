@@ -8,10 +8,12 @@ mod http;
 mod input;
 mod media;
 mod net;
+#[cfg(test)]
+mod tests;
 
 use std::net::{IpAddr, SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, mpsc};
+use std::sync::{Arc, Mutex, MutexGuard, mpsc};
 use std::thread::JoinHandle;
 use std::time::Instant;
 
@@ -84,6 +86,8 @@ pub(crate) struct Shared {
     pub fps: u32,
     pub kbps: u32,
     pub overlay: bool,
+    /// `STREAM_NO_AUDIO` as read once by `Server::start`; `push_audio` runs on the PCM hot path.
+    pub no_audio: bool,
     pub encoder: Option<String>,
     pub frame: Mutex<Option<(RawFrame, Instant)>>,
     pub audio: Mutex<Vec<f32>>,
@@ -124,6 +128,12 @@ pub struct Server {
     shutdown: Option<tokio::sync::oneshot::Sender<()>>,
 }
 
+/// Locks `m` even when a panic on another thread poisoned it. The guarded values are counters and
+/// buffers that stay usable, and one panic must not make every later call panic too.
+pub(crate) fn lock_or_recover<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 /// Monotonic milliseconds since the first call in this process.
 pub(crate) fn clock_ms() -> u64 {
     static T0: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
@@ -149,6 +159,7 @@ impl Server {
             fps: cfg.fps.max(1),
             kbps: cfg.kbps,
             overlay: cfg.latency_overlay,
+            no_audio: std::env::var_os("STREAM_NO_AUDIO").is_some(),
             encoder: cfg.encoder,
             frame: Mutex::new(None),
             audio: Mutex::new(Vec::new()),
@@ -211,6 +222,7 @@ impl Server {
                 title: cfg.title,
                 size: cfg.size,
                 fps: cfg.fps,
+                token: new_token(),
             };
             std::thread::Builder::new()
                 .name(format!("stream-http-{id}"))
@@ -235,14 +247,9 @@ impl Server {
         if self.shared.overlay {
             f.capture_ms = clock_ms() as u32;
         }
-        let old = self
-            .shared
-            .frame
-            .lock()
-            .unwrap()
-            .replace((f, Instant::now()));
+        let old = lock_or_recover(&self.shared.frame).replace((f, Instant::now()));
         {
-            let mut s = self.shared.stats.lock().unwrap();
+            let mut s = lock_or_recover(&self.shared.stats);
             s.frames_in += 1;
             if old.is_some() {
                 s.frames_replaced += 1;
@@ -257,21 +264,15 @@ impl Server {
 
     /// Interleaved stereo f32 at 48 kHz. Dropped while nobody is connected.
     pub fn push_audio(&self, stereo_f32_48k: &[f32]) {
-        if !self.shared.connected.load(Ordering::Acquire)
-            || std::env::var_os("STREAM_NO_AUDIO").is_some()
-        {
+        if self.shared.no_audio || !self.shared.connected.load(Ordering::Acquire) {
             return;
         }
-        self.shared
-            .audio
-            .lock()
-            .unwrap()
-            .extend_from_slice(stereo_f32_48k);
+        lock_or_recover(&self.shared.audio).extend_from_slice(stereo_f32_48k);
         self.shared.wake();
     }
 
     pub fn stats(&self) -> Stats {
-        let mut s = self.shared.stats.lock().unwrap().clone();
+        let mut s = lock_or_recover(&self.shared.stats).clone();
         s.connected = self.shared.connected.load(Ordering::Acquire);
         s
     }
@@ -303,6 +304,15 @@ impl Drop for Server {
     fn drop(&mut self) {
         self.shutdown_inner();
     }
+}
+
+/// 128 bits for the page token. `RandomState` keys come from the OS random source once per process
+/// (then a per-instance counter), and SipHash keyed with them is unpredictable without the key.
+/// This avoids a new dependency; it is not a general-purpose CSPRNG.
+fn new_token() -> String {
+    use std::hash::BuildHasher;
+    let s = std::collections::hash_map::RandomState::new();
+    format!("{:016x}{:016x}", s.hash_one(0u8), s.hash_one(1u8))
 }
 
 /// Binds the HTTP listener and UDP sockets on the same port number. A wildcard bind gets one UDP
@@ -341,6 +351,7 @@ pub(crate) fn test_shared() -> Arc<Shared> {
         fps: 60,
         kbps: 4000,
         overlay: false,
+        no_audio: false,
         encoder: None,
         frame: Mutex::new(None),
         audio: Mutex::new(Vec::new()),

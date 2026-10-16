@@ -16,7 +16,7 @@ use str0m::net::{Protocol, Receive};
 use str0m::{Event, IceConnectionState, Input, Output, Rtc};
 
 use crate::input::{self, Message};
-use crate::{Msg, Shared, clock_ms};
+use crate::{Msg, Shared, clock_ms, lock_or_recover};
 
 /// Longest gap between two video frames while the picture is static (`STREAM_KEEPALIVE_MS` overrides, default 100).
 fn keepalive() -> Duration {
@@ -155,7 +155,7 @@ impl Media {
         }
         self.sh.connected.store(false, Ordering::Release);
         self.audio_pending.clear();
-        self.sh.audio.lock().unwrap().clear();
+        lock_or_recover(&self.sh.audio).clear();
         self.sess = Some(Session::new(rtc));
     }
 
@@ -241,9 +241,9 @@ impl Media {
                 s.audio_base = None;
                 s.audio_samples = 0;
                 self.sh.connected.store(true, Ordering::Release);
-                self.sh.audio.lock().unwrap().clear();
+                lock_or_recover(&self.sh.audio).clear();
                 self.audio_pending.clear();
-                self.sh.stats.lock().unwrap().sessions += 1;
+                lock_or_recover(&self.sh.stats).sessions += 1;
                 log::info!("stream: connected");
             }
             Event::IceConnectionStateChange(IceConnectionState::Disconnected) => {
@@ -298,7 +298,7 @@ impl Media {
                 }
             }
             Event::PeerStats(p) => {
-                self.sh.stats.lock().unwrap().rtt_ms = p.rtt.map(|d| d.as_secs_f64() * 1000.0);
+                lock_or_recover(&self.sh.stats).rtt_ms = p.rtt.map(|d| d.as_secs_f64() * 1000.0);
             }
             _ => {}
         }
@@ -306,14 +306,14 @@ impl Media {
 
     /// Takes new frames and audio, encodes and writes them. Call `drive` afterwards.
     fn pump(&mut self, now: Instant) {
-        let newest = self.sh.frame.lock().unwrap().take();
+        let newest = lock_or_recover(&self.sh.frame).take();
         if let Some(f) = newest {
             self.last_frame = Some(f);
             self.on_new_frame(now);
         }
         let connected = self.sess.as_ref().is_some_and(|s| s.connected);
         if !connected {
-            self.sh.audio.lock().unwrap().clear();
+            lock_or_recover(&self.sh.audio).clear();
             return;
         }
         // PLI/FIR and first connect: IDR from the last picture, gate ignored.
@@ -345,7 +345,7 @@ impl Media {
         let t = Instant::now();
         let changed = self.gate.changed(f);
         {
-            let mut st = self.sh.stats.lock().unwrap();
+            let mut st = lock_or_recover(&self.sh.stats);
             st.gate_ms += (t.elapsed().as_secs_f64() * 1000.0 - st.gate_ms) * 0.05;
             if !changed {
                 st.frames_gated += 1;
@@ -378,7 +378,7 @@ impl Media {
         ) {
             Ok(e) => {
                 log::info!("stream: encoder {} {}x{}", e.name(), size.0, size.1);
-                self.sh.stats.lock().unwrap().encoder = e.name().to_string();
+                lock_or_recover(&self.sh.stats).encoder = e.name().to_string();
                 self.enc = Some(e);
                 self.enc_size = size;
                 self.enc_failed = None;
@@ -435,7 +435,7 @@ impl Media {
         self.flush_at = (!keepalive || restamp)
             .then(|| now + Duration::from_millis(2000 / u64::from(self.sh.fps)));
         {
-            let mut st = self.sh.stats.lock().unwrap();
+            let mut st = lock_or_recover(&self.sh.stats);
             st.encode_ms += (t.elapsed().as_secs_f64() * 1000.0 - st.encode_ms) * 0.05;
         }
         let Some(s) = self.sess.as_mut() else { return };
@@ -473,7 +473,7 @@ impl Media {
                 log::warn!("stream: video write: {e:?}");
             }
         }
-        let mut st = self.sh.stats.lock().unwrap();
+        let mut st = lock_or_recover(&self.sh.stats);
         st.frames_encoded += 1;
         st.video_bytes += bytes;
         st.keyframes += keys;
@@ -488,7 +488,7 @@ impl Media {
     /// for audio (with the timeline taken from the sample count alone, a mixer that ran slightly slow made the
     /// browser delay the video by up to a second).
     fn pump_audio(&mut self, now: Instant) {
-        let incoming = std::mem::take(&mut *self.sh.audio.lock().unwrap());
+        let incoming = std::mem::take(&mut *lock_or_recover(&self.sh.audio));
         self.audio_pending.extend_from_slice(&incoming);
         if self.opus.is_none() && !self.opus_failed {
             match OpusEncoder::new(96) {
@@ -550,7 +550,7 @@ impl Media {
             if let Some(w) = s.rtc.writer(mid)
                 && w.write(pt, wall, rtp, data).is_ok()
             {
-                self.sh.stats.lock().unwrap().audio_packets += 1;
+                lock_or_recover(&self.sh.stats).audio_packets += 1;
             }
         }
         self.audio_pending.drain(..used);
