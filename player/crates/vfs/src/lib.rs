@@ -873,46 +873,6 @@ pub fn write_order(mods_root: &Path, names: &[String]) -> io::Result<()> {
     std::fs::write(mods_root.join(ORDER_FILE), text)
 }
 
-// ---- game key ----------------------------------------------------------------------------
-
-/// `(base folder, game folder)` of a user path, as `_player.boot.resolve_game` does. `path` must be
-/// absolute and canonical (the player canonicalizes it, and resolves a `.app` bundle first).
-pub fn resolve_game(path: &Path) -> (PathBuf, PathBuf) {
-    if path.file_name().is_some_and(|n| n != "game") && path.join("game").is_dir() {
-        return (path.to_path_buf(), path.join("game"));
-    }
-    (
-        path.parent().unwrap_or(path).to_path_buf(),
-        path.to_path_buf(),
-    )
-}
-
-/// The per-game key of `_player.boot.game_key`: sanitized base folder name plus the first eight
-/// hex digits of the SHA-1 of the game folder path.
-pub fn game_key(basedir: &Path, gamedir: &Path) -> String {
-    use sha1::{Digest, Sha1};
-    let name = basedir
-        .file_name()
-        .map_or_else(|| "game".to_string(), |n| n.to_string_lossy().into_owned());
-    let mut clean = String::new();
-    let mut in_run = false;
-    for c in name.chars() {
-        if c.is_ascii_alphanumeric() || c == '.' || c == '_' || c == '-' {
-            clean.push(c);
-            in_run = false;
-        } else if !in_run {
-            clean.push('_');
-            in_run = true;
-        }
-    }
-    if clean.is_empty() {
-        clean.push_str("game");
-    }
-    let digest = Sha1::digest(gamedir.to_string_lossy().as_bytes());
-    let hex: String = digest.iter().take(4).map(|b| format!("{b:02x}")).collect();
-    format!("{clean}-{hex}")
-}
-
 // ---- global instance -----------------------------------------------------------------------
 
 static INSTALLED: AtomicPtr<Vfs> = AtomicPtr::new(std::ptr::null_mut());

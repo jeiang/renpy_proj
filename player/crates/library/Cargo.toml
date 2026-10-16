@@ -38,8 +38,6 @@ unrar = { version = "0.5", optional = true }
 libc = "0.2"
 
 [dev-dependencies]
-# Only for the comparison with the duplicate `vfs::game_key` in key.rs tests; goes with that function.
-vfs = { path = "../vfs" }
 tempfile = "3"
 sevenz-rust2 = { version = "0.24", default-features = false, features = ["deflate", "compress", "util"] }
 egui_kittest = { version = "0.36.2", default-features = false }

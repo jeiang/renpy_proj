@@ -142,15 +142,4 @@ mod tests {
         std::fs::create_dir_all(&game).unwrap();
         assert_eq!(game_key(&game), game_key(game.parent().unwrap()));
     }
-
-    /// `vfs::game_key` is a second copy of the algorithm with no callers. It hashes `to_string_lossy()`, so it
-    /// splits from this key on a non-UTF-8 path. Delete this test together with that function.
-    #[test]
-    fn duplicate_vfs_key_agrees_for_an_ascii_path() {
-        let d = tempfile::tempdir().unwrap();
-        std::fs::create_dir_all(d.path().join("My Demo/game")).unwrap();
-        let project = d.path().join("My Demo").canonicalize().unwrap();
-        let (base, game) = vfs::resolve_game(&project);
-        assert_eq!(vfs::game_key(&base, &game), game_key(&project));
-    }
 }
