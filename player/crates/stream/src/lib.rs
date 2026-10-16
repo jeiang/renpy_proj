@@ -86,6 +86,8 @@ pub(crate) struct Shared {
     pub fps: u32,
     pub kbps: u32,
     pub overlay: bool,
+    /// `STREAM_NO_AUDIO` as read once by `Server::start`; `push_audio` runs on the PCM hot path.
+    pub no_audio: bool,
     pub encoder: Option<String>,
     pub frame: Mutex<Option<(RawFrame, Instant)>>,
     pub audio: Mutex<Vec<f32>>,
@@ -157,6 +159,7 @@ impl Server {
             fps: cfg.fps.max(1),
             kbps: cfg.kbps,
             overlay: cfg.latency_overlay,
+            no_audio: std::env::var_os("STREAM_NO_AUDIO").is_some(),
             encoder: cfg.encoder,
             frame: Mutex::new(None),
             audio: Mutex::new(Vec::new()),
@@ -261,9 +264,7 @@ impl Server {
 
     /// Interleaved stereo f32 at 48 kHz. Dropped while nobody is connected.
     pub fn push_audio(&self, stereo_f32_48k: &[f32]) {
-        if !self.shared.connected.load(Ordering::Acquire)
-            || std::env::var_os("STREAM_NO_AUDIO").is_some()
-        {
+        if self.shared.no_audio || !self.shared.connected.load(Ordering::Acquire) {
             return;
         }
         lock_or_recover(&self.shared.audio).extend_from_slice(stereo_f32_48k);
@@ -350,6 +351,7 @@ pub(crate) fn test_shared() -> Arc<Shared> {
         fps: 60,
         kbps: 4000,
         overlay: false,
+        no_audio: false,
         encoder: None,
         frame: Mutex::new(None),
         audio: Mutex::new(Vec::new()),
