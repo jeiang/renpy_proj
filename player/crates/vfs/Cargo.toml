@@ -10,4 +10,3 @@ license.workspace = true
 pyo3 = { workspace = true }
 pyo3-ffi = { workspace = true }
 libc = "0.2"
-sha1 = "0.10"
