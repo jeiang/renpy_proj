@@ -10,6 +10,7 @@ loads a game twice, in two processes (the engine keeps global state), and compar
 """
 
 import argparse
+import contextlib
 import hashlib
 import json
 import os
@@ -18,6 +19,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from unittest import mock
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
@@ -165,9 +167,14 @@ def compare_rpyc(a, b):
 
 
 def dump(gamedir, out, workers, ignore_errors=True, min_wave_bytes=None):
-    """Loads the game and writes its canonical form, and the number of workers that the load forked, to `out`."""
+    """Loads the game and writes its canonical form, and the number of workers that the load forked, to `out`.
 
-    os.environ["RENPY_PARALLEL_COMPILE"] = str(workers)
+    What it changes in the engine and the environment is put back, so a test can call it in its own process.
+    """
+
+    renpy = hostengine.boot()
+    import renpy.parallelcompile
+
     cache = tempfile.mkdtemp(prefix="urp-equiv-cache-")
     real_fork = os.fork
     forks = []
@@ -180,37 +187,29 @@ def dump(gamedir, out, workers, ignore_errors=True, min_wave_bytes=None):
 
         return pid
 
-    try:
-        renpy = hostengine.boot()
+    with contextlib.ExitStack() as stack:
+        stack.callback(shutil.rmtree, cache, ignore_errors=True)
+        stack.enter_context(mock.patch.dict(os.environ, RENPY_PARALLEL_COMPILE=str(workers)))
+        stack.enter_context(mock.patch.object(os, "fork", fork))
 
         if min_wave_bytes is not None:
             # A test game is small: without this no wave is worth a fork, and the parallel load is a serial one.
-            import renpy.parallelcompile
-
-            renpy.parallelcompile.MIN_WAVE_BYTES = min_wave_bytes
+            stack.enter_context(mock.patch.object(renpy.parallelcompile, "MIN_WAVE_BYTES", min_wave_bytes))
 
         # The comparison covers every node, so a deferred language set must not hide any of them.
-        renpy.config.defer_tl_scripts = False
+        stack.enter_context(mock.patch.object(renpy.config, "defer_tl_scripts", False))
 
         if ignore_errors:
             # Without this a parse error stops the load at the next file, and the later files are not compared.
-            renpy.parser.has_parse_errors = lambda: False
+            stack.enter_context(mock.patch.object(renpy.parser, "has_parse_errors", lambda: False))
 
-        os.fork = fork
-
-        try:
-            script = hostengine.load_script_of(gamedir, cache)
-        finally:
-            os.fork = real_fork
-
+        script = hostengine.load_script_of(gamedir, cache)
         rows, tail = Canon(renpy, script).script_form()
         compiled = sorted(str(p.relative_to(cache)) for p in pathlib.Path(cache).rglob("*.rpyc"))
         digest = hashlib.sha256("\n".join(rows).encode()).hexdigest()
 
         with open(out, "w", encoding="utf-8") as f:
             json.dump({"rows": rows, "tail": tail, "compiled": compiled, "digest": digest, "forks": len(forks)}, f)
-    finally:
-        shutil.rmtree(cache, ignore_errors=True)
 
 
 def compare(a, b):
