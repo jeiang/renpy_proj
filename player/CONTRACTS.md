@@ -153,7 +153,7 @@ Pure-Rust text replaces the stock Cython FreeType/HarfBuzz modules and the LTR-o
 ### Library (`library::Library`, `library.toml`)
 
 - `Library { folders, games, hidden: Vec<PathBuf> }` (`hidden` is omitted from the file when empty). `rescan()` drops games whose path is in `hidden`.
-- `remove_game(path_or_key_or_name: &str) -> Result<Game>`: drops the entry and adds its path to `hidden`, so rescans skip it. The name only works when one game has it. `remove_folder(&Path) -> Result<Vec<Game>>`: drops a scanned folder and rescans; the returned games were reachable only through it. `add_folders` (`urp scan <folder>`) removes every `hidden` path below a folder it adds, so re-adding a folder brings its games back. Neither call touches any game or folder on disk.
+- `remove_game(path_or_key_or_name: &str) -> Result<Game>`: drops the entry and adds its path to `hidden`, so rescans skip it. The name only works when one game has it. `remove_folder(&Path) -> Result<Vec<Game>>`: drops a scanned folder and rescans; the returned games were reachable only through it. `add_folders` (`urp scan <folder>`) removes every `hidden` path below a folder it adds, so re-adding a folder brings its games back. `include_folder` (import) rescans a folder that is already in the library and adds a new one as `add_folders` does, so an import does not un-hide removed games. None of these calls touches any game or folder on disk.
 - CLI: `urp library folders` (one absolute path per line), `urp library remove <game|folder>` (a stored folder path wins over a game of that name), `urp list`, `urp scan`.
 
 ### Settings (`library::Settings`, `<data>/settings.toml`)
