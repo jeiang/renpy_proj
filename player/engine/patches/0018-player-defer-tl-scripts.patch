@@ -1,9 +1,9 @@
-# Reason: A game's tl/ folder holds one copy of every translated script per language, and stock Ren'Py parses all of them before the first screen. Harem Hotel (77 tl/ files, 56% of its nodes) spent 3.3 s loading languages the player never shows. config.defer_tl_scripts already exists upstream (renpy/script.py script_filter, renpy/exports/scriptexports.py load_language): a language's files load when it is first selected, and known_languages() still lists every tl/ folder. The player turns it on by default. A game's own `define config.defer_tl_scripts = False` must win from any file. load_script asks script_filter as it reaches each file, and a define only runs when its file loads, so a define in a file that sorts after tl/ (zz_*.rpy) runs after the earlier tl/ files were already skipped. load_script now re-checks the files it skipped once the loop finishes, so a late opt-out loads every tl/ file at start.
+# Reason: A game's tl/ folder holds one copy of every translated script per language, and stock Ren'Py parses all of them before the first screen. Harem Hotel (77 tl/ files, 56% of its nodes) spent 3.3 s loading languages the player never shows. config.defer_tl_scripts already exists upstream (renpy/script.py script_filter, renpy/exports/scriptexports.py load_language): a language's files load when it is first selected, and known_languages() still lists every tl/ folder. The player turns it on by default. A game's own `define config.defer_tl_scripts = False` must win from any file and give the load of stock Ren'Py. load_script asks script_filter as it reaches each file, and the define (an early config value) only runs when its file loads, so a define in a file that sorts after tl/ (zz_*.rpy) would run after the tl/ files were skipped. load_script now searches the text of the files it will read for `config.defer_tl_scripts = False` before the loop (only when a file would be skipped) and turns deferral off first, so the tl/ files are in the parallel compile plan (0016) and in the parse error check between script priorities, as with an opt-out in the first file. An opt-out in a compiled file with no source is not seen by the search; for it, load_script still loads the skipped files after the loop, since load_language does nothing once deferral is off.
 
 diff --git a/renpy/config.py b/renpy/config.py
 --- a/renpy/config.py
 +++ b/renpy/config.py
-@@ -1456,7 +1456,7 @@
+@@ -1460,7 +1460,7 @@
  drag_group_add_top = True
  
  # Should loading of tl scripts be deferred?
@@ -15,7 +15,25 @@ diff --git a/renpy/config.py b/renpy/config.py
 diff --git a/renpy/script.py b/renpy/script.py
 --- a/renpy/script.py
 +++ b/renpy/script.py
-@@ -511,6 +511,7 @@
+@@ -32,6 +32,7 @@
+ import time
+ import struct
+ import zlib
++import re
+ import sys
+ import shutil
+ 
+@@ -40,6 +41,9 @@
+ 
+ from renpy.compat.pickle import loads, dumps
+ 
++# Player patch: a game that turns off the deferral of tl/ files (see Script.load_script).
++DEFER_OPT_OUT_RE = re.compile(rb"\bconfig\.defer_tl_scripts[ \t]*=[ \t]*False\b")
++
+ 
+ # The version of the dumped script.
+ script_version = renpy.script_version
+@@ -511,12 +515,32 @@
  
          count = 0
          skipped = 0
@@ -23,7 +41,32 @@ diff --git a/renpy/script.py b/renpy/script.py
  
          last_priority = 0
  
-@@ -540,6 +541,7 @@
+         # Player patch: workers compile the files that need it, in waves, while this loop loads the files in order.
+         import renpy.parallelcompile
+ 
++        # Player patch: the player defers tl/ files (config.defer_tl_scripts), and a game turns that off with
++        # `define config.defer_tl_scripts = False`, an early config value that is set when its file loads. A define in
++        # a file that sorts after tl/ (zz_*.rpy) would run after the tl/ files were skipped, so the text of the files
++        # this load reads is searched for it first. The load is then that of an opt-out in the first file: the tl/
++        # files are in the parallel compile plan and in the parse error check between script priorities.
++        if renpy.config.defer_tl_scripts:
++            todo = [(fn, dir) for _priority, fn, dir in script_files if (fn, dir) not in self.loaded_scripts]
++
++            if not all(self.script_filter(fn, dir) for fn, dir in todo):
++                for fn, dir in todo:
++                    if dir is None or dir == renpy.config.commondir or not self.script_filter(fn, dir):
++                        continue
++
++                    found = renpy.parallelcompile.source_of(self, dir, fn, ["_ren.py", ".rpy"])
++
++                    if found is not None and DEFER_OPT_OUT_RE.search(found[2]):
++                        renpy.config.defer_tl_scripts = False
++                        break
++
+         parallel = renpy.parallelcompile.plan(self, script_files)
+ 
+         for index, (priority, fn, dir) in enumerate(script_files):
+@@ -540,6 +564,7 @@
                  continue
  
              if not self.script_filter(fn, dir):
@@ -31,12 +74,13 @@ diff --git a/renpy/script.py b/renpy/script.py
                  skipped += 1
                  continue
  
-@@ -553,6 +555,14 @@
+@@ -553,6 +578,15 @@
          if parallel is not None:
              parallel.finish()
  
-+        # A file skipped above while deferral was on still loads if a later file turned deferral off. That is the
-+        # opt-out `define config.defer_tl_scripts = False` in a file that sorts after tl/ (for example zz_*.rpy).
++        # A file skipped above still loads if a later file turned deferral off and the search above did not see it:
++        # the opt-out is in a compiled file with no source (an archive). Else a language would never load, since
++        # load_language does nothing when deferral is off.
 +        for fn, dir in skipped_files:
 +            if self.script_filter(fn, dir):
 +                skipped -= 1
