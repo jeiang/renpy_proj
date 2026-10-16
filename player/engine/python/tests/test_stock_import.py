@@ -113,6 +113,18 @@ class StockImportTest(unittest.TestCase):
         with open(self.tokens) as f:
             self.assertEqual([_decode_line(l)[1] for l in f], [self.key])
 
+    def test_no_stock_root_skips_the_key_sync_with_a_reason(self):
+        sys.modules["_player_saves"].root = None
+        errors = []
+        settings = {"gamedir": "game", "reports": self.reports}
+        rec = preflight._stock_import(settings, self.savedir, lambda: [], errors)
+
+        self.assertEqual(errors, [])
+        self.assertTrue(rec["performed"])
+        self.assertEqual(rec["verifying_keys_copied"], 0)
+        self.assertTrue(rec["verifying_keys_reason"])
+        self.assertFalse(os.path.exists(self.tokens))
+
 
 if __name__ == "__main__":
     unittest.main()

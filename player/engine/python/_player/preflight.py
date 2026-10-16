@@ -334,11 +334,15 @@ def _stock_import(settings, savedir, names, errors):
         outcomes = json.loads(_player_saves.import_stock(sources, savedir, names(), _resolve))
         rec.update(performed=True, outcomes=outcomes, at=datetime.datetime.now().astimezone().isoformat(timespec="seconds"))
 
-        root = os.environ.get("RENPY_PATH_TO_SAVES") or os.path.expanduser("~/Library/RenPy")
-        try:
-            rec["verifying_keys_copied"] = _sync_verifying_keys(root, os.path.join(os.path.dirname(savedir), "tokens"), _signature_keys(savedir, outcomes))
-        except Exception:
-            errors.append("verifying-key sync failed:\n" + traceback.format_exc())
+        root = _player_saves.default_save_root()
+        if root is None:
+            rec["verifying_keys_copied"] = 0
+            rec["verifying_keys_reason"] = "no stock save root (RENPY_PATH_TO_SAVES and the platform home variable are unset)"
+        else:
+            try:
+                rec["verifying_keys_copied"] = _sync_verifying_keys(root, os.path.join(os.path.dirname(savedir), "tokens"), _signature_keys(savedir, outcomes))
+            except Exception:
+                errors.append("verifying-key sync failed:\n" + traceback.format_exc())
 
     # Written even when no stock folder exists: the first open happens once.
     os.makedirs(settings["reports"], exist_ok=True)
