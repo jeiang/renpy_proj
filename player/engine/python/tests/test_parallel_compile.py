@@ -182,12 +182,19 @@ class ParallelCompile(unittest.TestCase):
     def run_equiv(self, files, workers=4):
         gamedir = self.game(files)
         result = subprocess.run(
-            [sys.executable, str(HERE / "script_equiv.py"), "--game", gamedir, "--workers", str(workers)],
+            [sys.executable, str(HERE / "script_equiv.py"), "--game", gamedir, "--workers", str(workers),
+             "--min-wave-bytes", str(self.pc.MIN_WAVE_BYTES)],
             capture_output=True,
             text=True,
             env=dict(os.environ, URP_TEST_NO_COMMON="1"),
         )
-        return result.returncode, result.stdout + result.stderr
+        output = result.stdout + result.stderr
+
+        if result.returncode == 0:
+            # Without a worker the parallel load is a second serial load, and the compare proves nothing.
+            self.assertRegex(output, r"\([1-9]\d* worker forks\)", output)
+
+        return result.returncode, output
 
     def test_serial_and_parallel_loads_are_equal(self):
         files = {"%s.rpy" % n: filler(n, 30) for n in "abcdefgh"}
@@ -199,7 +206,10 @@ class ParallelCompile(unittest.TestCase):
     def test_serial_and_parallel_loads_are_equal_with_early_blocks_and_errors(self):
         files = {"%s.rpy" % n: filler(n, 30) for n in "abcdefgh"}
         files["c.rpy"] = "init -5 python early:\n    early_value = 1\n" + filler("c", 30)
-        files["f.rpy"] = filler("f", 10) + "label broken:\n    $ x = = 1\n    this is not a statement\n"
+        # The broken file is the last one. After a parse error a serial load parses no other file (parser.parse
+        # returns None while parse_errors is not empty), but the workers forked before it compile the later files,
+        # and the load then reads them. A real load ends with the same parse errors either way.
+        files["h.rpy"] = filler("h", 10) + "label broken:\n    $ x = = 1\n    this is not a statement\n"
         code, output = self.run_equiv(files)
         self.assertEqual(code, 0, output)
 
