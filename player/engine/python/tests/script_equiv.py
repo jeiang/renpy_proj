@@ -10,6 +10,7 @@ loads a game twice, in two processes (the engine keeps global state), and compar
 """
 
 import argparse
+import contextlib
 import hashlib
 import json
 import os
@@ -18,6 +19,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from unittest import mock
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
@@ -164,18 +166,42 @@ def compare_rpyc(a, b):
     return problems, sum(len(v) for v in left.values()), len(left)
 
 
-def dump(gamedir, out, workers, ignore_errors=True):
-    os.environ["RENPY_PARALLEL_COMPILE"] = str(workers)
-    cache = tempfile.mkdtemp(prefix="urp-equiv-cache-")
+def dump(gamedir, out, workers, ignore_errors=True, min_wave_bytes=None):
+    """Loads the game and writes its canonical form, and the number of workers that the load forked, to `out`.
 
-    try:
-        renpy = hostengine.boot()
+    What it changes in the engine and the environment is put back, so a test can call it in its own process.
+    """
+
+    renpy = hostengine.boot()
+    import renpy.parallelcompile
+
+    cache = tempfile.mkdtemp(prefix="urp-equiv-cache-")
+    real_fork = os.fork
+    forks = []
+
+    def fork():
+        pid = real_fork()
+
+        if pid:
+            forks.append(pid)
+
+        return pid
+
+    with contextlib.ExitStack() as stack:
+        stack.callback(shutil.rmtree, cache, ignore_errors=True)
+        stack.enter_context(mock.patch.dict(os.environ, RENPY_PARALLEL_COMPILE=str(workers)))
+        stack.enter_context(mock.patch.object(os, "fork", fork))
+
+        if min_wave_bytes is not None:
+            # A test game is small: without this no wave is worth a fork, and the parallel load is a serial one.
+            stack.enter_context(mock.patch.object(renpy.parallelcompile, "MIN_WAVE_BYTES", min_wave_bytes))
+
         # The comparison covers every node, so a deferred language set must not hide any of them.
-        renpy.config.defer_tl_scripts = False
+        stack.enter_context(mock.patch.object(renpy.config, "defer_tl_scripts", False))
 
         if ignore_errors:
             # Without this a parse error stops the load at the next file, and the later files are not compared.
-            renpy.parser.has_parse_errors = lambda: False
+            stack.enter_context(mock.patch.object(renpy.parser, "has_parse_errors", lambda: False))
 
         script = hostengine.load_script_of(gamedir, cache)
         rows, tail = Canon(renpy, script).script_form()
@@ -183,9 +209,7 @@ def dump(gamedir, out, workers, ignore_errors=True):
         digest = hashlib.sha256("\n".join(rows).encode()).hexdigest()
 
         with open(out, "w", encoding="utf-8") as f:
-            json.dump({"rows": rows, "tail": tail, "compiled": compiled, "digest": digest}, f)
-    finally:
-        shutil.rmtree(cache, ignore_errors=True)
+            json.dump({"rows": rows, "tail": tail, "compiled": compiled, "digest": digest, "forks": len(forks)}, f)
 
 
 def compare(a, b):
@@ -228,6 +252,7 @@ def main():
     ap.add_argument("--dump", help="internal: load the game and write the canonical form here")
     ap.add_argument("--serial-workers", type=int, default=0)
     ap.add_argument("--keep", action="store_true")
+    ap.add_argument("--min-wave-bytes", type=int, help="the smallest wave (bytes of source) that workers compile")
     ap.add_argument("--rpyc", nargs=2, metavar=("A", "B"), help="compare the .rpyc files of two player caches (the rpyc folders)")
     a = ap.parse_args()
 
@@ -239,7 +264,7 @@ def main():
         return 1 if problems else 0
 
     if a.dump:
-        dump(a.game, a.dump, a.workers)
+        dump(a.game, a.dump, a.workers, min_wave_bytes=a.min_wave_bytes)
         return 0
 
     tmp = tempfile.mkdtemp(prefix="urp-equiv-")
@@ -251,7 +276,12 @@ def main():
     try:
         for workers in (a.serial_workers, a.workers):
             out = os.path.join(tmp, "workers%d.json" % workers)
-            subprocess.run([sys.executable, __file__, "--game", a.game, "--workers", str(workers), "--dump", out], check=True)
+            command = [sys.executable, __file__, "--game", a.game, "--workers", str(workers), "--dump", out]
+
+            if a.min_wave_bytes is not None:
+                command += ["--min-wave-bytes", str(a.min_wave_bytes)]
+
+            subprocess.run(command, check=True)
             outs.append(out)
 
         problems = compare(*outs)
@@ -268,7 +298,10 @@ def main():
             print("DIFFERENT:\n" + "\n".join(problems))
             return 1
 
-        print("serial and %d workers: equal" % a.workers)
+        with open(outs[1], encoding="utf-8") as f:
+            forks = json.load(f)["forks"]
+
+        print("serial and %d workers (%d worker forks): equal" % (a.workers, forks))
         return 0
     finally:
         if not a.keep:
