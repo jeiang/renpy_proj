@@ -27,7 +27,8 @@ _state = {}
 
 
 def host_tree():
-    tree = pathlib.Path(os.environ.get("URP_HOST_TREE") or DEFAULT_TREE)
+    # Absolute: boot() symlinks renpy/common from beside the tree into a temporary folder.
+    tree = pathlib.Path(os.environ.get("URP_HOST_TREE") or DEFAULT_TREE).resolve()
     return tree if (tree / "renpy" / "__init__.py").is_file() else None
 
 
