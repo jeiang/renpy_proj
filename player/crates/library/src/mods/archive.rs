@@ -353,3 +353,57 @@ fn walk_rar(src: &Path, list_only: bool, budget: &mut u64, cb: &mut Visit) -> Re
 fn walk_rar(_: &Path, _: bool, _: &mut u64, _: &mut Visit) -> Result<()> {
     bail!("this build of urp has no RAR support (it was built without the `rar` feature)")
 }
+
+#[cfg(all(test, feature = "rar"))]
+mod tests {
+    use super::*;
+
+    /// `testdata/rar_bomb.rar` holds one entry, `bomb.bin`, of `BOMB_SIZE` zero bytes in about 200 bytes
+    /// (made by `testdata/make_rar_bomb.py`, because the RAR creator is proprietary).
+    const BOMB: &str = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/src/mods/testdata/rar_bomb.rar"
+    );
+    const BOMB_SIZE: u64 = 1 + 2050 * 1024;
+
+    /// Walks the fixture, writing its one file to `dest` in a temp folder, and returns the walk result
+    /// with the size of the file that reached the disk.
+    fn walk_bomb(mut budget: u64) -> (Result<()>, Option<u64>) {
+        let dir = tempfile::tempdir().unwrap();
+        let dest = dir.path().join("bomb.bin");
+        let res = walk(Path::new(BOMB), Format::Rar, false, &mut budget, &mut |e| {
+            Ok(if e.kind == Kind::File {
+                Want::Write(dest.clone())
+            } else {
+                Want::Skip
+            })
+        });
+        (res, std::fs::metadata(&dest).ok().map(|m| m.len()))
+    }
+
+    #[test]
+    fn rar_fixture_unpacks_in_full_within_budget() {
+        let (res, written) = walk_bomb(BOMB_SIZE);
+        res.unwrap();
+        assert_eq!(written, Some(BOMB_SIZE));
+    }
+
+    /// Covers the finding "walk_rar extracts a whole entry before checking the unpack budget": a RAR
+    /// that inflates far past the budget must stop at `budget + 1` bytes on disk, as `copy_limited` does
+    /// for the other formats.
+    #[test]
+    fn rar_entry_over_budget_is_not_written_in_full() {
+        let budget = 4096;
+        let (res, written) = walk_bomb(budget);
+        let err = res.expect_err("an entry over the budget must be refused");
+        assert!(
+            err.to_string().contains("size limit"),
+            "unexpected error: {err:#}"
+        );
+        let written = written.unwrap_or(0);
+        assert!(
+            written <= budget + 1,
+            "{written} bytes reached the disk for a budget of {budget}"
+        );
+    }
+}
