@@ -1,10 +1,10 @@
-# Reason: A game that was just added has loose .rpy files with no valid .rpyc. Script.load_file parses them one after the other on one core: 76 percent of a cold load of a large script after lazy compilation. Forked workers now compile the files first (renpy/parallelcompile.py), in waves that end at every file with a python early block or an early config value (renpy/scriptscan.py reads the text for them), and write the same .rpyc files into the cache. Script.load_script then loads every file in the same order as before and finds a valid .rpyc for each, so node order, init priorities, the namemap, the duplicate label check and the early blocks are those of a serial load. One thing in a compiled file depends on the files before it: translate identifiers are unique across the script (two files that both start with the same license text get different identifiers in a serial load). Each worker reports the identifiers of a file, and a file that has one that an earlier file has loses its compiled file, so the load compiles it again. At most 4 workers and two cores stay free; they are reaped when the load ends or stops early. A launch with nothing to compile only reads and hashes the sources. Where fork is missing (Windows), on macOS, with fewer than two workers or for little source the load stays serial. RENPY_PARALLEL_COMPILE=N sets the number of workers (0 turns it off).
+# Reason: A game that was just added has loose .rpy files with no valid .rpyc. Script.load_file parses them one after the other on one core: 76 percent of a cold load of a large script after lazy compilation. Forked workers now compile the files first (renpy/parallelcompile.py), in waves that end at every file with a python early block or an early config value (renpy/scriptscan.py reads the text for them), and write the same .rpyc files into the cache. Script.load_script then loads every file in the same order as before and finds a valid .rpyc for each, so node order, init priorities, the namemap, the duplicate label check and the early blocks are those of a serial load. One thing in a compiled file depends on the files before it: translate identifiers are unique across the script (two files that both start with the same license text get different identifiers in a serial load). Each worker reports the identifiers of a file, and a file that has one that an earlier file has loses its compiled file, so the load compiles it again. At most 4 workers and two cores stay free; they are reaped when the load ends or stops early. A wave in which no worker reports a file for WAVE_TIMEOUT seconds (60; the time starts again at each report) is stopped with SIGKILL and the load compiles its files, so a worker that deadlocks after the fork (the parent has threads) cannot hang the load. A launch with nothing to compile only reads and hashes the sources. Where fork is missing (Windows), on macOS, with fewer than two workers or for little source the load stays serial. RENPY_PARALLEL_COMPILE=N sets the number of workers (0 turns it off).
 
 diff --git a/renpy/parallelcompile.py b/renpy/parallelcompile.py
 new file mode 100644
 --- /dev/null
 +++ b/renpy/parallelcompile.py
-@@ -0,0 +1,408 @@
+@@ -0,0 +1,430 @@
 +# Player patch: compile the loose script files of a game in parallel.
 +#
 +# A script file with no valid compiled file (a game that was just added, or an edited .rpy) is parsed, and its
@@ -28,6 +28,7 @@ new file mode 100644
 +import select
 +import signal
 +import sys
++import time
 +
 +import renpy
 +import renpy.ast
@@ -43,6 +44,11 @@ new file mode 100644
 +# Names that a worker makes for the nodes of file number `index` start at (index % 1000 + 1) * SERIAL_STRIDE. So they
 +# are unique in a script, and the same for every run.
 +SERIAL_STRIDE = 4000000
++
++# Seconds that a wave can go with no report from a worker before it is stopped and the load compiles the rest. A
++# worker reports a file in well under a second, a few seconds for a very large one, so a wave that is quiet this long
++# is hung (a worker forked from a process with threads can deadlock on a lock that one of them held at the fork).
++WAVE_TIMEOUT = 60.0
 +
 +
 +def worker_count():
@@ -183,9 +189,21 @@ new file mode 100644
 +    def wait(self, index):
 +        """
 +        Returns when the file `index` is compiled, or when it will not be.
++
++        If no worker reports a file for WAVE_TIMEOUT seconds, the wave is stopped and the load compiles its
++        files. The time starts again at each report, so a large wave that makes progress is not stopped.
 +        """
 +
++        deadline = time.monotonic() + WAVE_TIMEOUT
++
 +        while index in self.pending:
++            if time.monotonic() > deadline:
++                renpy.display.log.write(
++                    "Parallel compile: no worker reported for %s seconds, the load compiles the rest." % WAVE_TIMEOUT
++                )
++                self.stop()
++                break
++
 +            fds = {channel[0]: pid for pid, channel in self.channels.items()}
 +
 +            if not fds:
@@ -197,6 +215,8 @@ new file mode 100644
 +            if not ready:
 +                self.reap()
 +                continue
++
++            deadline = time.monotonic() + WAVE_TIMEOUT
 +
 +            for fd in ready:
 +                pid = fds[fd]
@@ -221,12 +241,14 @@ new file mode 100644
 +
 +    def stop(self):
 +        """
-+        Ends the workers that still run (the load stopped early) and reaps them. Closes the pipes.
++        Ends the workers that still run (the load stopped early, or a worker hung) and reaps them. Closes the pipes.
++        SIGKILL, because a worker has the signal handlers of the parent: SDL's SIGTERM handler only queues a quit
++        event, and a hung worker would then never end and the waitpid below would block.
 +        """
 +
 +        for pid in self.pids:
 +            try:
-+                os.kill(pid, signal.SIGTERM)
++                os.kill(pid, signal.SIGKILL)
 +            except OSError:
 +                pass
 +
