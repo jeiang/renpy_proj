@@ -642,4 +642,81 @@ mod tests {
         let z = put(d.path(), "empty.zip", &zip_bytes(&[]));
         assert!(plan_install(&data, "g-1", &z).is_err());
     }
+
+    /// Plans a zip holding `names` (each with a one-byte body) and returns the error text, if any.
+    fn plan_zip_err(names: &[&str]) -> Option<String> {
+        let (d, data) = setup();
+        let entries: Vec<(&str, &[u8])> = names.iter().map(|n| (*n, &b"x"[..])).collect();
+        let zip = put(d.path(), "z.zip", &zip_bytes(&entries));
+        plan_install(&data, "g-1", &zip)
+            .err()
+            .map(|e| e.to_string())
+    }
+
+    /// Finding: entries that collide after case folding. On a case-insensitive file system (macOS, Windows)
+    /// one file would silently overwrite the other and the post-extract count check would still pass.
+    #[test]
+    fn entries_that_collide_after_case_folding_are_rejected() {
+        let e = plan_zip_err(&["game/Images/bg.png", "game/images/bg.png"])
+            .expect("a case-only file collision must be rejected");
+        assert!(e.to_lowercase().contains("images/bg.png"), "{e}");
+        // Folders that differ only by case are the same folder on those file systems, so the layout the author
+        // packed is not what lands on disk. That is a collision too, even for different file names.
+        let e = plan_zip_err(&["game/Images/bg.png", "game/images/fg.png"])
+            .expect("a case-only folder collision must be rejected");
+        assert!(e.to_lowercase().contains("images"), "{e}");
+    }
+
+    /// Finding: Windows creates `script.rpy.` and `script.rpy ` as `script.rpy`.
+    #[test]
+    fn components_ending_in_dot_or_space_are_rejected() {
+        for bad in [
+            "game/script.rpy.",
+            "game/script.rpy ",
+            "game/dir./a.rpy",
+            "game/dir /a.rpy",
+        ] {
+            let e = plan_zip_err(&["game/ok.rpy", bad])
+                .unwrap_or_else(|| panic!("{bad:?} must be rejected"));
+            assert!(e.contains(bad), "{bad:?}: {e}");
+        }
+    }
+
+    /// Finding: Windows opens the device for these names, with or without an extension.
+    #[test]
+    fn reserved_windows_device_names_are_rejected() {
+        for bad in [
+            "game/NUL.rpy",
+            "game/aux.txt",
+            "game/COM1",
+            "game/Prn.tar.gz",
+            "game/LPT9.rpy",
+            "game/con/a.rpy",
+        ] {
+            let e = plan_zip_err(&["game/ok.rpy", bad])
+                .unwrap_or_else(|| panic!("{bad} must be rejected"));
+            assert!(
+                e.contains(bad.rsplit('/').find(|c| !c.is_empty()).unwrap()),
+                "{bad}: {e}"
+            );
+        }
+    }
+
+    /// Control for the three tests above: portable names that look similar are accepted.
+    #[test]
+    fn portable_names_are_accepted() {
+        let (d, data) = setup();
+        let zip = put(
+            d.path(),
+            "z.zip",
+            &zip_bytes(&[
+                ("game/images/bg.png", b"x"),
+                ("game/images/fg.png", b"x"),
+                ("game/console.rpy", b"x"),
+                ("game/com10.rpy", b"x"),
+                ("game/.hidden", b"x"),
+            ]),
+        );
+        assert!(plan_install(&data, "g-1", &zip).is_ok());
+    }
 }
