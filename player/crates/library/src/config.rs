@@ -257,6 +257,66 @@ mod tests {
         assert!(lib.hidden.is_empty());
     }
 
+    /// A library with `Alpha` removed and `Beta` kept, under a fresh `games` folder.
+    fn library_with_alpha_removed(d: &Path) -> (Library, PathBuf, PathBuf) {
+        let root = d.join("games");
+        std::fs::create_dir_all(&root).unwrap();
+        let root = root.canonicalize().unwrap();
+        let a = game(&root, "Alpha");
+        game(&root, "Beta");
+        let mut lib = Library::default();
+        lib.add_folders(std::slice::from_ref(&root)).unwrap();
+        lib.remove_game("Alpha").unwrap();
+        (lib, root, a)
+    }
+
+    fn names(lib: &Library) -> Vec<&str> {
+        let mut n: Vec<&str> = lib.games.iter().map(|g| g.name.as_str()).collect();
+        n.sort_unstable();
+        n
+    }
+
+    /// Covers the finding "import into an existing folder un-hides removed games". `cmd_import` and the
+    /// window's `Msg::Imported` call `add_folders` with the destination, which is normally already a
+    /// library folder. This documents the mechanism and may be deleted once they use `include_folder`.
+    #[test]
+    fn add_folders_on_an_existing_folder_unhides_removed_games_current_behaviour() {
+        let d = tempfile::tempdir().unwrap();
+        let (mut lib, root, _) = library_with_alpha_removed(d.path());
+        game(&root, "Gamma");
+        lib.add_folders(std::slice::from_ref(&root)).unwrap();
+        assert_eq!(names(&lib), ["Alpha", "Beta", "Gamma"]);
+        assert!(lib.hidden.is_empty());
+    }
+
+    /// Covers the same finding: an import into a folder the library already has must not bring back
+    /// games the user removed.
+    #[test]
+    fn import_into_an_existing_folder_keeps_removed_games_hidden() {
+        let d = tempfile::tempdir().unwrap();
+        let (mut lib, root, a) = library_with_alpha_removed(d.path());
+        // The import writes the new game into the folder.
+        game(&root, "Gamma");
+        lib.include_folder(&root).unwrap();
+        assert_eq!(names(&lib), ["Beta", "Gamma"]);
+        assert_eq!(lib.hidden, [a]);
+    }
+
+    #[test]
+    fn include_folder_adds_a_new_folder_and_scans_it() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path().canonicalize().unwrap();
+        game(&root, "Alpha");
+        game(&root, "Beta");
+        let mut lib = Library::default();
+        lib.include_folder(&root).unwrap();
+        assert_eq!(names(&lib), ["Alpha", "Beta"]);
+        assert_eq!(lib.folders, [root.clone()]);
+        lib.include_folder(&root).unwrap();
+        assert_eq!(lib.folders, [root]);
+        assert_eq!(lib.games.len(), 2);
+    }
+
     #[test]
     fn games_are_removed_by_key_or_path() {
         let d = tempfile::tempdir().unwrap();
