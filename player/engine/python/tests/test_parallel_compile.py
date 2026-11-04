@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import unittest.mock
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
@@ -121,7 +122,9 @@ class ParallelCompile(unittest.TestCase):
             renpy.loader.index_files()
             script = hostengine.new_script("run")
             script_files = [i for i in script.sort_script_files() if i[2] == gamedir]
-            return script, script_files, self.pc.plan(script, script_files)
+            # plan() is off on macOS (no fork there); these tests check the planning, so they run it anyway.
+            with unittest.mock.patch.object(sys, "platform", "linux"):
+                return script, script_files, self.pc.plan(script, script_files)
         finally:
             del os.environ["RENPY_PARALLEL_COMPILE"]
 

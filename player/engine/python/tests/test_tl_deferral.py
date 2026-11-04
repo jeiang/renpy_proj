@@ -145,7 +145,9 @@ class LateOptOutBase(unittest.TestCase):
         real_plan = self.pc.plan
 
         def spy(script, script_files):
-            plan = real_plan(script, script_files)
+            # plan() is off on macOS (no fork there); these tests check the planning, so they run it anyway.
+            with mock.patch.object(sys, "platform", "linux"):
+                plan = real_plan(script, script_files)
             planned.append(None if plan is None else sorted(i[1] for w in plan.waves for i in w.items))
             return plan
 
