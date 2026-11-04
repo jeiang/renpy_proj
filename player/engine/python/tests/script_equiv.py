@@ -178,6 +178,13 @@ def dump(gamedir, out, workers, ignore_errors=True, min_wave_bytes=None):
     cache = tempfile.mkdtemp(prefix="urp-equiv-cache-")
     real_fork = os.fork
     forks = []
+    real_plan = renpy.parallelcompile.plan
+
+    def plan(*args, **kwargs):
+        # plan() is off on macOS (no fork there). The test process has no GUI frameworks, so a fork is safe here,
+        # and these loads must run the parallel path. Only plan() sees the other platform, not the rest of the load.
+        with mock.patch.object(sys, "platform", "linux"):
+            return real_plan(*args, **kwargs)
 
     def fork():
         pid = real_fork()
@@ -191,6 +198,7 @@ def dump(gamedir, out, workers, ignore_errors=True, min_wave_bytes=None):
         stack.callback(shutil.rmtree, cache, ignore_errors=True)
         stack.enter_context(mock.patch.dict(os.environ, RENPY_PARALLEL_COMPILE=str(workers)))
         stack.enter_context(mock.patch.object(os, "fork", fork))
+        stack.enter_context(mock.patch.object(renpy.parallelcompile, "plan", plan))
 
         if min_wave_bytes is not None:
             # A test game is small: without this no wave is worth a fork, and the parallel load is a serial one.
