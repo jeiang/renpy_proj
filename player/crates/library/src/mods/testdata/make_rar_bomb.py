@@ -2,7 +2,9 @@
 """Writes rar_bomb.rar: a valid RAR5 archive whose one entry, `bomb.bin`, is ~2 MiB of zero bytes
 stored in about 300 bytes. The RAR creator is proprietary, so this emits the format by hand: one
 literal, one distance-1 match of 2050 bytes, then 1023 "repeat last match" symbols. Run
-`python3 make_rar_bomb.py rar_bomb.rar`; `unrar t` accepts the result."""
+`python3 make_rar_bomb.py rar_bomb.rar`; `unrar t` accepts the result. With `--link` it writes rar_link.rar
+instead: one empty entry `link.bin` that is a RAR5 hard link to `target.bin` (a redirect record in the
+extra area), which a test-mode extraction reports as success without sending any data."""
 
 import struct
 import sys
@@ -113,4 +115,24 @@ def main(out):
         f.write(header(vint(5) + vint(0) + vint(0)))  # end of archive
 
 
-main(sys.argv[1])
+def link(out):
+    name, target = b"link.bin", b"target.bin"
+    record = vint(5) + vint(4) + vint(0) + vint(len(target)) + target  # redirect, hard link
+    extra = vint(len(record)) + record
+    # type, flags (extra area present), extra size, file flags, size 0, attributes, method 0 (store),
+    # host OS Unix, name, then the extra area.
+    file_hdr = header(
+        vint(2) + vint(0x01) + vint(len(extra)) + vint(0) + vint(0) + vint(0x20)
+        + vint(0) + vint(1) + vint(len(name)) + name + extra
+    )
+    with open(out, "wb") as f:
+        f.write(b"Rar!\x1a\x07\x01\x00")
+        f.write(header(vint(1) + vint(0) + vint(0)))
+        f.write(file_hdr)
+        f.write(header(vint(5) + vint(0) + vint(0)))
+
+
+if sys.argv[1] == "--link":
+    link(sys.argv[2])
+else:
+    main(sys.argv[1])

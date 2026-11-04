@@ -294,13 +294,13 @@ fn walk_7z(src: &Path, list_only: bool, budget: &mut u64, cb: &mut Visit) -> Res
 
 #[cfg(feature = "rar")]
 fn walk_rar(src: &Path, list_only: bool, budget: &mut u64, cb: &mut Visit) -> Result<()> {
-    use std::ffi::c_int;
+    use std::ffi::{c_int, c_uint};
     use std::io::Write;
     use std::ptr;
+    use unrar::FileHeader;
     use unrar::error::{Code, UnrarError, When};
-    use unrar::{Archive, FileHeader};
     use unrar_sys as native;
-    fn entry_of(h: &FileHeader) -> Result<Entry> {
+    fn entry_of(h: &FileHeader, redir_type: c_uint) -> Result<Entry> {
         if h.is_encrypted() {
             bail!("the RAR archive is encrypted");
         }
@@ -308,7 +308,10 @@ fn walk_rar(src: &Path, list_only: bool, budget: &mut u64, cb: &mut Visit) -> Re
             bail!("multi-volume RAR archives are not supported");
         }
         // The attribute is a unix mode for archives made on unix; a symlink is S_IFLNK.
-        let symlink = h.file_attr & 0o170000 == 0o120000;
+        // A redirect (unix or Windows symlink, junction, hard link, file copy) is a link too. The
+        // header is the only place that says so: a hard link or file copy has a plain file mode, and
+        // UnRAR's test mode reports every redirect as extracted without sending any data.
+        let symlink = redir_type != 0 || h.file_attr & 0o170000 == 0o120000;
         Ok(Entry {
             path: h.filename.to_string_lossy().into_owned(),
             size: h.unpacked_size,
@@ -321,15 +324,25 @@ fn walk_rar(src: &Path, list_only: bool, budget: &mut u64, cb: &mut Visit) -> Re
             },
         })
     }
+    /// `RedirType` of the header. `unrar_sys` declares `HeaderDataEx` without the `pack(1)` that UnRAR's
+    /// `dll.hpp` has, so its `redir_type` field is 4 bytes off; the real one is `file_attr` + 64 bytes in.
+    ///
+    /// # Safety
+    /// `header` must have been filled by `RARReadHeaderEx`.
+    unsafe fn redir_type(header: &native::HeaderDataEx) -> c_uint {
+        let at = std::mem::offset_of!(native::HeaderDataEx, file_attr) + 64;
+        // SAFETY: `at + 4` is within the struct; the read can be unaligned.
+        unsafe {
+            ptr::read_unaligned(
+                (header as *const native::HeaderDataEx)
+                    .cast::<u8>()
+                    .add(at)
+                    .cast(),
+            )
+        }
+    }
     let err =
         |e: unrar::error::UnrarError| anyhow!("cannot read RAR archive {}: {e}", src.display());
-    let archive = Archive::new(src);
-    if list_only {
-        for h in archive.open_for_listing().map_err(err)? {
-            cb(&entry_of(&h.map_err(err)?)?)?;
-        }
-        return Ok(());
-    }
     // The `unrar` crate can only extract a whole entry to a file or to memory, so the data is taken
     // through UnRAR's own callback instead: the entry is tested (decompressed and checked, nothing
     // written by UnRAR) and the callback writes the chunks itself, stopping at `budget + 1` bytes as
@@ -383,7 +396,14 @@ fn walk_rar(src: &Path, list_only: bool, budget: &mut u64, cb: &mut Visit) -> Re
     let name = std::ffi::CString::new(src.as_os_str().as_encoded_bytes())?;
     #[cfg(not(any(target_os = "linux", target_os = "netbsd")))]
     let name = widestring::WideCString::from_os_str(src)?;
-    let mut data = native::OpenArchiveDataEx::new(name.as_ptr().cast(), native::RAR_OM_EXTRACT);
+    let mut data = native::OpenArchiveDataEx::new(
+        name.as_ptr().cast(),
+        if list_only {
+            native::RAR_OM_LIST
+        } else {
+            native::RAR_OM_EXTRACT
+        },
+    );
     // UnRAR writes its results through these pointers although the bindings declare them `*const`,
     // so they are made from mutable places.
     // SAFETY: `data` and `name` live across the call.
@@ -400,7 +420,11 @@ fn walk_rar(src: &Path, list_only: bool, budget: &mut u64, cb: &mut Visit) -> Re
             native::ERAR_END_ARCHIVE => return Ok(()),
             code => return Err(code_err(code, When::Read)),
         }
-        let dest = match cb(&entry_of(&FileHeader::from(header))?)? {
+        // SAFETY: `header` was just filled by `RARReadHeaderEx`.
+        let redir_type = unsafe { redir_type(&header) };
+        let want = cb(&entry_of(&FileHeader::from(header), redir_type)?)?;
+        // With `list_only` every `Want` is ignored.
+        let dest = match if list_only { Want::Skip } else { want } {
             Want::Skip => {
                 // SAFETY: `h` is open and no callback is set.
                 let code = unsafe {
@@ -498,5 +522,32 @@ mod tests {
             written <= budget + 1,
             "{written} bytes reached the disk for a budget of {budget}"
         );
+    }
+
+    /// A RAR5 hard link (also a file reference or a Windows link) carries no data and UnRAR's test mode
+    /// reports it as extracted, so it must be refused as a link, not installed as an empty file.
+    #[test]
+    fn rar_link_entry_is_a_link() {
+        let link = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/src/mods/testdata/rar_link.rar"
+        );
+        for list_only in [true, false] {
+            let dir = tempfile::tempdir().unwrap();
+            let dest = dir.path().join("link.bin");
+            let mut kinds = vec![];
+            walk(
+                Path::new(link),
+                Format::Rar,
+                list_only,
+                &mut 1024,
+                &mut |e| {
+                    kinds.push(e.kind);
+                    Ok(Want::Write(dest.clone()))
+                },
+            )
+            .unwrap();
+            assert_eq!(kinds, [Kind::Symlink], "list_only={list_only}");
+        }
     }
 }
