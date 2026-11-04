@@ -102,6 +102,9 @@ fn build_launch(args: Vec<String>) -> Result<Launch> {
     boot.push("--game".into());
     let game_ref = lib.game_ref(&game)?;
     boot.push(py_path(&game_ref.path));
+    // The key is computed once, here: the boot uses it as given and does not hash its own path text.
+    boot.push("--key".into());
+    boot.push(game_ref.key.clone());
     boot.extend(rest);
     Ok(Launch {
         argv: boot,
@@ -334,7 +337,7 @@ fn cmd_import(args: Vec<String>) -> Result<i32> {
     let plan = library::import::plan_import(&folder, &archive)?;
     let dest = library::import::import(&plan)?;
     // The new game's folder is in the library from now on, so `urp list` shows the game.
-    lib.add_folders(std::slice::from_ref(&folder.canonicalize()?))?;
+    lib.include_folder(&folder, &dest)?;
     lib.save(&data)?;
     warm_new_games(&lib, &before, &data);
     if json {
@@ -554,6 +557,32 @@ mod tests {
         assert_eq!(
             renderer(&argv(&data, &game, &["--renderer", "software"])),
             ["software"]
+        );
+    }
+
+    /// Covers the game-key split: the key the launcher locks on and names folders with must reach the boot
+    /// as `--key`, so Python does not recompute it from different path text.
+    #[test]
+    fn the_boot_argv_carries_the_launchers_key() {
+        let d = tempfile::tempdir().unwrap();
+        let game = d.path().join("Game");
+        std::fs::create_dir_all(game.join("game")).unwrap();
+        let data = d.path().join("data");
+        let args = vec![
+            game.to_string_lossy().into_owned(),
+            "--data".into(),
+            data.to_string_lossy().into_owned(),
+        ];
+        let launch = build_launch(args).unwrap();
+        assert_eq!(launch.key, library::game_key(&game));
+        assert!(
+            launch
+                .argv
+                .windows(2)
+                .any(|w| w[0] == "--key" && w[1] == launch.key),
+            "no --key {} in {:?}",
+            launch.key,
+            launch.argv
         );
     }
 }

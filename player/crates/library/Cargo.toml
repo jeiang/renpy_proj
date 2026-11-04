@@ -8,7 +8,7 @@ license.workspace = true
 
 [features]
 # RAR extraction (UnRAR by Alexander Roshal: freeware licence, extraction only; see THIRD_PARTY.md).
-rar = ["dep:unrar"]
+rar = ["dep:unrar", "dep:unrar_sys", "dep:widestring"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -33,6 +33,9 @@ zstd = { version = "0.13", default-features = false }
 bzip2 = "0.6"
 sevenz-rust2 = { version = "0.24", default-features = false, features = ["deflate", "bzip2"] }
 unrar = { version = "0.5", optional = true }
+# Used directly to stream RAR entries under the unpack budget (`mods/archive.rs`).
+unrar_sys = { version = "0.5", optional = true }
+widestring = { version = "1", optional = true }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

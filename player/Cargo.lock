@@ -2002,7 +2002,9 @@ dependencies = [
  "tempfile",
  "toml",
  "unrar",
+ "unrar_sys",
  "wgpu",
+ "widestring",
  "winit",
  "xz2",
  "zip",
@@ -4408,7 +4410,6 @@ dependencies = [
  "libc",
  "pyo3",
  "pyo3-ffi",
- "sha1",
 ]
 
 [[package]]

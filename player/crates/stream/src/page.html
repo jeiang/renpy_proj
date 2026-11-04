@@ -185,7 +185,7 @@ async function connect() {
     p.onicegatheringstatechange = () => { if (p.iceGatheringState === "complete") { clearTimeout(t); res(); } };
   });
   sdp.offer = p.localDescription.sdp;
-  const r = await fetch("offer", { method: "POST", headers: { "content-type": "application/sdp" }, body: p.localDescription.sdp });
+  const r = await fetch("offer", { method: "POST", headers: { "content-type": "application/sdp", "x-stream-token": CFG.token }, body: p.localDescription.sdp });
   if (!r.ok) { setState("offer rejected: " + await r.text()); btn.classList.remove("hide"); return; }
   sdp.answer = await r.text();
   await p.setRemoteDescription({ type: "answer", sdp: sdp.answer });

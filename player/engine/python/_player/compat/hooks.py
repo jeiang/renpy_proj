@@ -11,8 +11,10 @@ import ast
 import importlib.util
 import json
 import os
+import signal
 import sys
 import threading
+import time
 
 import renpy
 
@@ -30,6 +32,11 @@ collected = []  # (kind, filename, lineno, source, mode) of every PyCode / PyExp
 stubs_skipped = []
 
 STUB_NAMES = ("un.rpyc", "unrpyc.rpyc", "unren.rpyc")
+
+# Seconds a forked scan child may run before it is killed. A real scan of a large game takes well under a minute;
+# the bound is generous so a slow disk or a loaded machine does not kill a healthy scan, and only a child that
+# deadlocked after fork (a lock held by another thread of the game when it forked) reaches it.
+SCAN_TIMEOUT = 300.0
 
 
 def is_game_file(fn):
@@ -260,6 +267,33 @@ def _scan_and_write(settings, fp, cache, snippets):
     _write_scan(settings, fp, result)
 
 
+def _reap_scan(pid):
+    """Reap the forked scan child, and kill it if it runs longer than SCAN_TIMEOUT (a zombie or a hung copy of the
+    game would stay until the game exits). It never raises: it runs in a daemon thread of the game."""
+
+    try:
+        deadline = time.monotonic() + SCAN_TIMEOUT
+
+        while os.waitpid(pid, os.WNOHANG) == (0, 0):
+            if time.monotonic() >= deadline:
+                os.kill(pid, signal.SIGKILL)
+                os.waitpid(pid, 0)
+
+                try:
+                    report.event("skip", "py2compat-scan.json", None, "scan killed after %gs" % (SCAN_TIMEOUT,))
+                except Exception:
+                    pass
+
+                return
+
+            time.sleep(0.5)
+    except Exception as e:
+        try:
+            sys.stderr.write("player compat: cannot reap the scan child: %r\n" % (e,))
+        except Exception:
+            pass
+
+
 def _scan_in_background(settings, fp, cache, snippets):
     """The scan only feeds the report (rewrite events and py2compat-scan.json), and the engine compiles each block
     by itself when it first runs. So the scan must not hold up the game: a forked child scans while the game goes on
@@ -286,8 +320,7 @@ def _scan_in_background(settings, fp, cache, snippets):
                 os._exit(code)
 
         if pid > 0:
-            # Reap the child when it ends (a zombie would stay until the game exits).
-            threading.Thread(target=os.waitpid, args=(pid, 0), daemon=True, name="py2compat-scan-reap").start()
+            threading.Thread(target=_reap_scan, args=(pid,), daemon=True, name="py2compat-scan-reap").start()
             return
 
     threading.Thread(target=_scan_and_write, args=(settings, fp, cache, snippets), daemon=True, name="py2compat-scan").start()

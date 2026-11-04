@@ -7,6 +7,7 @@ Reads its settings from sys.argv:
     --renderer <name>  draw backend name (sets RENPY_RENDERER)
     --logdir <dir>     where log.txt and traceback.txt go (default: <data>/logs/<game key>)
     --harness-script <file>  an .rpy or .rpym file served to the script loader as an extra game script
+    --key <key>        the game key, as the launcher computed it (default: `game_key` of the game paths)
 
 Every other argument goes to Ren'Py (for example `lint` or `compile`).
 
@@ -27,12 +28,12 @@ settings = {}
 
 
 def parse_args(argv):
-    game = data = renderer = logdir = harness = None
+    game = data = renderer = logdir = harness = key = None
     rest = []
     it = iter(argv)
 
     for a in it:
-        if a in ("--game", "--data", "--renderer", "--logdir", "--harness-script"):
+        if a in ("--game", "--data", "--renderer", "--logdir", "--harness-script", "--key"):
             try:
                 v = next(it)
             except StopIteration:
@@ -46,15 +47,17 @@ def parse_args(argv):
                 renderer = v
             elif a == "--harness-script":
                 harness = v
+            elif a == "--key":
+                key = v
             else:
                 logdir = v
         else:
             rest.append(a)
 
     if not game:
-        raise SystemExit("usage: --game <dir> [--data <dir>] [--renderer <name>] [--logdir <dir>] [--harness-script <file>] [renpy args]")
+        raise SystemExit("usage: --game <dir> [--data <dir>] [--renderer <name>] [--logdir <dir>] [--harness-script <file>] [--key <key>] [renpy args]")
 
-    return game, data, renderer, logdir, harness, rest
+    return game, data, renderer, logdir, harness, key, rest
 
 
 def default_data_dir():
@@ -302,7 +305,7 @@ def predefined_searchpath(commondir):
 def main():
     import _player.build as build
 
-    game, data, renderer, logdir, harness, rest = parse_args(sys.argv[1:])
+    game, data, renderer, logdir, harness, key, rest = parse_args(sys.argv[1:])
 
     basedir, gamedir = resolve_game(game)
 
@@ -310,7 +313,8 @@ def main():
         raise SystemExit("game directory not found: %s" % gamedir)
 
     data = os.path.abspath(data or default_data_dir())
-    key = game_key(basedir, gamedir)
+    # The launcher passes its key. Recomputing it is only a fallback: on Windows the launcher hashes other path text.
+    key = key or game_key(basedir, gamedir)
     renpy_base = os.path.join(data, "renpy_base")
 
     settings.update(
