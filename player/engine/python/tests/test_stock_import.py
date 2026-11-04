@@ -12,6 +12,7 @@ import pathlib
 import sys
 import tempfile
 import types
+import zipfile
 import unittest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
@@ -42,11 +43,18 @@ class _FakeSaves(types.ModuleType):
         super().__init__("_player_saves")
         self.source = source
         self.root = root
+        self.signed_key = None
 
     def stock_dirs(self, gamedir, save_directory):
         return [self.source]
 
     def import_stock(self, sources, savedir, names, resolve):
+        if self.signed_key is not None:
+            with zipfile.ZipFile(os.path.join(savedir, "1-1-LT1.save"), "w") as z:
+                z.writestr("signatures", _encode_line("signature", self.signed_key, b"sig"))
+
+            return '[{"action": "copied", "name": "1-1-LT1.save"}]'
+
         return '[{"action": "skipped", "name": "1-1-LT1.save"}]'
 
     def default_save_root(self):
@@ -124,6 +132,20 @@ class StockImportTest(unittest.TestCase):
         self.assertEqual(rec["verifying_keys_copied"], 0)
         self.assertTrue(rec["verifying_keys_reason"])
         self.assertFalse(os.path.exists(self.tokens))
+
+    def test_no_stock_root_still_trusts_the_keys_of_copied_saves(self):
+        fake = sys.modules["_player_saves"]
+        fake.root = None
+        fake.signed_key = b"save-signing-key-der"
+        errors = []
+        settings = {"gamedir": "game", "reports": self.reports}
+        rec = preflight._stock_import(settings, self.savedir, lambda: [], errors)
+
+        self.assertEqual(errors, [])
+        self.assertEqual(rec["verifying_keys_copied"], 1)
+
+        with open(self.tokens) as f:
+            self.assertEqual([_decode_line(l)[1] for l in f], [b"save-signing-key-der"])
 
 
 if __name__ == "__main__":

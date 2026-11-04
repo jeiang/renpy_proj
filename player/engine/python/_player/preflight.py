@@ -265,7 +265,7 @@ def _sync_verifying_keys(stock_root, token_dir, extra_keys):
     without the "unknown token" prompt: the public halves of the stock save token (read from the stock
     folder, never written) and the keys that the imported files are signed with."""
 
-    src = os.path.join(stock_root, "tokens", "security_keys.txt")
+    src = None if stock_root is None else os.path.join(stock_root, "tokens", "security_keys.txt")
 
     import renpy.savetoken as st
 
@@ -282,7 +282,7 @@ def _sync_verifying_keys(stock_root, token_dir, extra_keys):
 
     candidates = list(extra_keys)
 
-    if os.path.isfile(src):
+    if src and os.path.isfile(src):
         with open(src, "r") as f:
             for l in f:
                 kind, a, b = st.decode_line(l)
@@ -336,13 +336,13 @@ def _stock_import(settings, savedir, names, errors):
 
         root = _player_saves.default_save_root()
         if root is None:
-            rec["verifying_keys_copied"] = 0
-            rec["verifying_keys_reason"] = "no stock save root (RENPY_PATH_TO_SAVES and the platform home variable are unset)"
-        else:
-            try:
-                rec["verifying_keys_copied"] = _sync_verifying_keys(root, os.path.join(os.path.dirname(savedir), "tokens"), _signature_keys(savedir, outcomes))
-            except Exception:
-                errors.append("verifying-key sync failed:\n" + traceback.format_exc())
+            rec["verifying_keys_reason"] = "no stock save root (RENPY_PATH_TO_SAVES and the platform home variable are unset): stock token file not read"
+
+        # Without a root only the stock token file is skipped; the keys of the copied saves are still trusted.
+        try:
+            rec["verifying_keys_copied"] = _sync_verifying_keys(root, os.path.join(os.path.dirname(savedir), "tokens"), _signature_keys(savedir, outcomes))
+        except Exception:
+            errors.append("verifying-key sync failed:\n" + traceback.format_exc())
 
     # Written even when no stock folder exists: the first open happens once.
     os.makedirs(settings["reports"], exist_ok=True)
