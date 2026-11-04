@@ -105,6 +105,12 @@ mod saves_py {
             .collect()
     }
 
+    /// `default_save_root()`: the stock save root (`$RENPY_PATH_TO_SAVES` or the platform default), or `None`.
+    #[pyfunction]
+    fn default_save_root() -> Option<String> {
+        import::default_save_root().map(|p| p.to_string_lossy().into_owned())
+    }
+
     /// `import_stock(sources, dest, namemap, resolver)` -> JSON list of per-file outcomes.
     #[pyfunction]
     fn import_stock(
