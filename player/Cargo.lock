@@ -4408,7 +4408,6 @@ dependencies = [
  "libc",
  "pyo3",
  "pyo3-ffi",
- "sha1",
 ]
 
 [[package]]
