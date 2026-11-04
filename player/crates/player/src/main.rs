@@ -334,7 +334,7 @@ fn cmd_import(args: Vec<String>) -> Result<i32> {
     let plan = library::import::plan_import(&folder, &archive)?;
     let dest = library::import::import(&plan)?;
     // The new game's folder is in the library from now on, so `urp list` shows the game.
-    lib.include_folder(&folder)?;
+    lib.include_folder(&folder, &dest)?;
     lib.save(&data)?;
     warm_new_games(&lib, &before, &data);
     if json {

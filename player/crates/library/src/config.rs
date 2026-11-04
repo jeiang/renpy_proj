@@ -110,14 +110,19 @@ impl Library {
         Ok(())
     }
 
-    /// Makes sure `folder` is in the library, then rescans. An import calls this with its destination,
-    /// which is normally a library folder already; `add_folders` would then un-hide every game the
-    /// user removed below it. So a known folder is only rescanned, and a new one is added as by
-    /// `add_folders`.
-    pub fn include_folder(&mut self, folder: &Path) -> Result<()> {
+    /// Makes sure `folder` is in the library, then rescans. An import calls this with its destination
+    /// folder, which is normally a library folder already; `add_folders` would then un-hide every game
+    /// the user removed below it. So a known folder is only rescanned, and a new one is added as by
+    /// `add_folders`. `imported` is the game folder the import just wrote: it did not exist before, so
+    /// a `hidden` path at or below it is from an earlier removal and the user now asked for the game.
+    pub fn include_folder(&mut self, folder: &Path, imported: &Path) -> Result<()> {
         let f = folder
             .canonicalize()
             .with_context(|| format!("folder not found: {}", folder.display()))?;
+        let imported = imported
+            .canonicalize()
+            .with_context(|| format!("folder not found: {}", imported.display()))?;
+        self.hidden.retain(|h| !h.starts_with(&imported));
         if self.folders.contains(&f) {
             self.rescan();
             Ok(())
@@ -314,9 +319,25 @@ mod tests {
         let (mut lib, root, a) = library_with_alpha_removed(d.path());
         // The import writes the new game into the folder.
         game(&root, "Gamma");
-        lib.include_folder(&root).unwrap();
+        lib.include_folder(&root, &root.join("Gamma")).unwrap();
         assert_eq!(names(&lib), ["Beta", "Gamma"]);
         assert_eq!(lib.hidden, [a]);
+    }
+
+    /// An import of a game the user removed, after deleting its folder, is an explicit request for that
+    /// game. Other removed games in the folder stay hidden.
+    #[test]
+    fn importing_a_removed_game_again_shows_it_and_keeps_others_hidden() {
+        let d = tempfile::tempdir().unwrap();
+        let (mut lib, root, a) = library_with_alpha_removed(d.path());
+        let b = root.join("Beta");
+        lib.remove_game("Beta").unwrap();
+        // The user deleted Alpha from disk; the import extracts it to the same place.
+        std::fs::remove_dir_all(&a).unwrap();
+        game(&root, "Alpha");
+        lib.include_folder(&root, &root.join("Alpha")).unwrap();
+        assert_eq!(names(&lib), ["Alpha"]);
+        assert_eq!(lib.hidden, [b]);
     }
 
     #[test]
@@ -326,10 +347,10 @@ mod tests {
         game(&root, "Alpha");
         game(&root, "Beta");
         let mut lib = Library::default();
-        lib.include_folder(&root).unwrap();
+        lib.include_folder(&root, &root.join("Alpha")).unwrap();
         assert_eq!(names(&lib), ["Alpha", "Beta"]);
         assert_eq!(lib.folders, std::slice::from_ref(&root));
-        lib.include_folder(&root).unwrap();
+        lib.include_folder(&root, &root.join("Alpha")).unwrap();
         assert_eq!(lib.folders, [root]);
         assert_eq!(lib.games.len(), 2);
     }

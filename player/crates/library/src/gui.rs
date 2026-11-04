@@ -392,7 +392,7 @@ impl App {
                     self.message = match result {
                         Ok((name, folder)) => match self
                             .library
-                            .include_folder(&folder)
+                            .include_folder(&folder, &folder.join(&name))
                             .and_then(|()| self.library.save(&self.data))
                         {
                             Ok(()) => format!(
