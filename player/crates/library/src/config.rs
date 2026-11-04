@@ -110,6 +110,27 @@ impl Library {
         Ok(())
     }
 
+    /// Makes sure `folder` is in the library, then rescans. An import calls this with its destination
+    /// folder, which is normally a library folder already; `add_folders` would then un-hide every game
+    /// the user removed below it. So a known folder is only rescanned, and a new one is added as by
+    /// `add_folders`. `imported` is the game folder the import just wrote: it did not exist before, so
+    /// a `hidden` path at or below it is from an earlier removal and the user now asked for the game.
+    pub fn include_folder(&mut self, folder: &Path, imported: &Path) -> Result<()> {
+        let f = folder
+            .canonicalize()
+            .with_context(|| format!("folder not found: {}", folder.display()))?;
+        let imported = imported
+            .canonicalize()
+            .with_context(|| format!("folder not found: {}", imported.display()))?;
+        self.hidden.retain(|h| !h.starts_with(&imported));
+        if self.folders.contains(&f) {
+            self.rescan();
+            Ok(())
+        } else {
+            self.add_folders(&[f])
+        }
+    }
+
     pub fn rescan(&mut self) {
         self.folders.retain(|f| {
             let ok = f.is_dir();
@@ -255,6 +276,83 @@ mod tests {
         lib.add_folders(std::slice::from_ref(&root)).unwrap();
         assert_eq!(lib.games.len(), 2);
         assert!(lib.hidden.is_empty());
+    }
+
+    /// A library with `Alpha` removed and `Beta` kept, under a fresh `games` folder.
+    fn library_with_alpha_removed(d: &Path) -> (Library, PathBuf, PathBuf) {
+        let root = d.join("games");
+        std::fs::create_dir_all(&root).unwrap();
+        let root = root.canonicalize().unwrap();
+        let a = game(&root, "Alpha");
+        game(&root, "Beta");
+        let mut lib = Library::default();
+        lib.add_folders(std::slice::from_ref(&root)).unwrap();
+        lib.remove_game("Alpha").unwrap();
+        (lib, root, a)
+    }
+
+    fn names(lib: &Library) -> Vec<&str> {
+        let mut n: Vec<&str> = lib.games.iter().map(|g| g.name.as_str()).collect();
+        n.sort_unstable();
+        n
+    }
+
+    /// Covers the finding "import into an existing folder un-hides removed games". `cmd_import` and the
+    /// window's `Msg::Imported` used to call `add_folders` with the destination, which is normally
+    /// already a library folder. `add_folders` still un-hides (for `urp scan` and Add folder), which is
+    /// why imports use `include_folder`.
+    #[test]
+    fn add_folders_on_an_existing_folder_unhides_removed_games() {
+        let d = tempfile::tempdir().unwrap();
+        let (mut lib, root, _) = library_with_alpha_removed(d.path());
+        game(&root, "Gamma");
+        lib.add_folders(std::slice::from_ref(&root)).unwrap();
+        assert_eq!(names(&lib), ["Alpha", "Beta", "Gamma"]);
+        assert!(lib.hidden.is_empty());
+    }
+
+    /// Covers the same finding: an import into a folder the library already has must not bring back
+    /// games the user removed.
+    #[test]
+    fn import_into_an_existing_folder_keeps_removed_games_hidden() {
+        let d = tempfile::tempdir().unwrap();
+        let (mut lib, root, a) = library_with_alpha_removed(d.path());
+        // The import writes the new game into the folder.
+        game(&root, "Gamma");
+        lib.include_folder(&root, &root.join("Gamma")).unwrap();
+        assert_eq!(names(&lib), ["Beta", "Gamma"]);
+        assert_eq!(lib.hidden, [a]);
+    }
+
+    /// An import of a game the user removed, after deleting its folder, is an explicit request for that
+    /// game. Other removed games in the folder stay hidden.
+    #[test]
+    fn importing_a_removed_game_again_shows_it_and_keeps_others_hidden() {
+        let d = tempfile::tempdir().unwrap();
+        let (mut lib, root, a) = library_with_alpha_removed(d.path());
+        let b = root.join("Beta");
+        lib.remove_game("Beta").unwrap();
+        // The user deleted Alpha from disk; the import extracts it to the same place.
+        std::fs::remove_dir_all(&a).unwrap();
+        game(&root, "Alpha");
+        lib.include_folder(&root, &root.join("Alpha")).unwrap();
+        assert_eq!(names(&lib), ["Alpha"]);
+        assert_eq!(lib.hidden, [b]);
+    }
+
+    #[test]
+    fn include_folder_adds_a_new_folder_and_scans_it() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path().canonicalize().unwrap();
+        game(&root, "Alpha");
+        game(&root, "Beta");
+        let mut lib = Library::default();
+        lib.include_folder(&root, &root.join("Alpha")).unwrap();
+        assert_eq!(names(&lib), ["Alpha", "Beta"]);
+        assert_eq!(lib.folders, std::slice::from_ref(&root));
+        lib.include_folder(&root, &root.join("Alpha")).unwrap();
+        assert_eq!(lib.folders, [root]);
+        assert_eq!(lib.games.len(), 2);
     }
 
     #[test]
