@@ -125,10 +125,11 @@ def capture_game(repo, binary, game, out, scratch, probes=False):
             frames.append({'game': game, 'checkpoint': 'screen-loop', 'path': str(p.relative_to(out)),
                            'sha256': digest(p), 'size': p.stat().st_size, 'renderer': 'wgpu-vulkan-lavapipe'})
         if probes:
-            r.cmd("exec exec(compile(open(%r).read(), 'legacy-probes', 'exec'), globals())" % str(HERE / 'probes.py'), True)
+            # A fresh namespace: the Ren'Py store replaces list, dict and str with revertable types.
+            r.cmd("exec _legacy_probes = {}; exec(compile(open(%r).read(), 'legacy-probes', 'exec'), _legacy_probes)"
+                  % str(HERE / 'probes.py'), True)
             for name in ('text', 'surface'):
-                (out / name).mkdir(parents=True, exist_ok=True)
-                r.cmd('exec capture_%s(%r)' % (name, str(out)), True)
+                r.cmd("exec _legacy_probes['capture_%s'](%r)" % (name, str(out)), True)
         trace = [s for s in r.lines() if s.startswith(('say ', 'text ', 'label ', 'auto: choice ', 'advance-done '))]
         p = out / 'traces' / (game + '.txt')
         p.parent.mkdir(parents=True, exist_ok=True)

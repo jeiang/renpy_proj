@@ -201,11 +201,11 @@ def capture_text(out_dir):
         raise ValueError("LEGACY_TEXT_FONTS must be a JSON array of loader font names")
     fonts = ["DejaVuSans.ttf", "DejaVuSans-Bold.ttf"] + expected
     for name in ("fonts/OpenSans-Variable.ttf", "fonts/NotoNaskhArabic-Variable.ttf"):
-        if renpy.loadable(name):
+        if renpy.loader.loadable(name):
             fonts.append(name)
     font_records = {}
     for name in sorted(set(fonts)):
-        if not renpy.loadable(name):
+        if not renpy.loader.loadable(name):
             raise FileNotFoundError("Required capture font is missing: " + name)
         with renpy.loader.load(name) as stream:
             data = stream.read()
