@@ -54,3 +54,9 @@ termios $CORE termios.c
 unicodedata $CORE unicodedata.c
 zlib $CORE $INC zlibmodule.c $ZL/lib/libz.a
 SETUP
+if [ "$(uname -s)" = Darwin ]; then
+  # Nix libffi on arm64 macOS omits the legacy ffi_prep_closure that CPython's generic fallback calls.
+  # The Apple branch only uses the modern closure API, which this libffi provides.
+  sed -i 's|^_ctypes -DPy_BUILD_CORE_BUILTIN|& -DUSING_APPLE_OS_LIBFFI|' Modules/Setup.local
+  echo "_scproxy $CORE _scproxy.c -framework SystemConfiguration -framework CoreFoundation" >> Modules/Setup.local
+fi
