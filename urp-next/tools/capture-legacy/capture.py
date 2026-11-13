@@ -14,7 +14,7 @@ import time
 HERE = Path(__file__).resolve().parent
 PLANS = {'story': 'harness/plans/route.plan', 'text': 'harness/testgames/text/text.plan',
          'view': 'harness/testgames/view/view.plan', 'media': 'harness/testgames/media/media.plan',
-         'tl': 'harness/testgames/tl/tl.plan', 'py7': 'harness/plans/route.plan',
+         'tl': 'harness/testgames/tl/tl.plan', 'py7': 'harness/testgames/py7/py7.plan',
          'loop': 'harness/testgames/loop/screen.plan'}
 
 
