@@ -38,8 +38,12 @@ impl Resolution {
     }
 }
 
+/// The resolver could not answer. No verdict is valid then; the resolver's owner holds the cause.
+#[derive(Debug)]
+pub struct ResolveFailed;
+
 pub trait Resolver {
-    fn resolve(&mut self, module: &str, name: &str) -> Resolution;
+    fn resolve(&mut self, module: &str, name: &str) -> Result<Resolution, ResolveFailed>;
 }
 
 /// `pickle`'s `fix_imports=True` mapping (Python 2 names to Python 3 names).
@@ -439,19 +443,27 @@ pub fn analyze_persistent(path: &Path, namemap: Option<&NameMap>) -> Pending {
 
 /// Resolve the distinct globals of all files once (`resolver` is the live engine, single-threaded), then
 /// add `class-missing` verdicts.
-pub fn resolve_all(pending: Vec<Pending>, resolver: &mut dyn Resolver) -> Vec<FileReport> {
+pub fn resolve_all(
+    pending: Vec<Pending>,
+    resolver: &mut dyn Resolver,
+) -> Result<Vec<FileReport>, ResolveFailed> {
     let mut cache: HashMap<(String, String), Resolution> = HashMap::new();
     let mut out = Vec::with_capacity(pending.len());
     for p in pending {
         let mut r = p.report;
         for g in &p.globals {
-            let res = *cache.entry(g.clone()).or_insert_with(|| {
-                if g.0.split('.').next() == Some("store") {
-                    Resolution::Store
-                } else {
-                    resolver.resolve(&g.0, &g.1)
+            let res = match cache.get(g) {
+                Some(res) => *res,
+                None => {
+                    let res = if g.0.split('.').next() == Some("store") {
+                        Resolution::Store
+                    } else {
+                        resolver.resolve(&g.0, &g.1)?
+                    };
+                    cache.insert(g.clone(), res);
+                    res
                 }
-            });
+            };
             let key = format!("{} {}", g.0, g.1);
             match res {
                 Resolution::MissingModule | Resolution::MissingName => {
@@ -466,7 +478,7 @@ pub fn resolve_all(pending: Vec<Pending>, resolver: &mut dyn Resolver) -> Vec<Fi
         }
         out.push(r);
     }
-    out
+    Ok(out)
 }
 
 /// Analyze files on all cores (each save on a thread with a large stack), then resolve classes.
@@ -475,7 +487,7 @@ pub fn analyze_files(
     namemap: Option<&NameMap>,
     player_version: (i64, i64, i64),
     resolver: &mut dyn Resolver,
-) -> Vec<FileReport> {
+) -> Result<Vec<FileReport>, ResolveFailed> {
     let workers = std::thread::available_parallelism()
         .map_or(2, |n| n.get())
         .min(paths.len().max(1));

@@ -23,7 +23,7 @@ use pyo3::ffi;
 use pyo3::prelude::*;
 use pyo3::types::PyTuple;
 
-use detect::{Resolution, Resolver};
+use detect::{Resolution, ResolveFailed, Resolver};
 use stub::{Name, NameMap};
 
 type InitFn = unsafe extern "C" fn() -> *mut ffi::PyObject;
@@ -43,30 +43,27 @@ struct PyResolver<'py> {
 }
 
 impl Resolver for PyResolver<'_> {
-    fn resolve(&mut self, module: &str, name: &str) -> Resolution {
-        if self.error.is_some() {
-            return Resolution::Ok;
-        }
+    fn resolve(&mut self, module: &str, name: &str) -> Result<Resolution, ResolveFailed> {
         match self
             .f
             .call1((module, name))
             .and_then(|r| r.extract::<String>())
         {
             Ok(s) => match s.as_str() {
-                "ok" => Resolution::Ok,
-                "missing-module" => Resolution::MissingModule,
-                "missing-name" => Resolution::MissingName,
-                "foreign" => Resolution::Foreign,
+                "ok" => Ok(Resolution::Ok),
+                "missing-module" => Ok(Resolution::MissingModule),
+                "missing-name" => Ok(Resolution::MissingName),
+                "foreign" => Ok(Resolution::Foreign),
                 other => {
                     self.error = Some(PyValueError::new_err(format!(
                         "resolver returned {other:?}"
                     )));
-                    Resolution::Ok
+                    Err(ResolveFailed)
                 }
             },
             Err(e) => {
                 self.error = Some(e);
-                Resolution::Ok
+                Err(ResolveFailed)
             }
         }
     }
@@ -130,11 +127,11 @@ mod saves_py {
             Some(&nm),
             PLAYER_ENGINE,
             &mut res,
-        )
-        .map_err(|e| pyo3::exceptions::PyOSError::new_err(e.to_string()))?;
+        );
         if let Some(e) = res.error {
             return Err(e);
         }
+        let out = out.map_err(|e| pyo3::exceptions::PyOSError::new_err(e.to_string()))?;
         let v: Vec<_> = out.iter().map(import::Outcome::to_json).collect();
         Ok(serde_json::to_string(&v).expect("JSON serializes"))
     }
@@ -151,10 +148,12 @@ mod saves_py {
             f: resolver,
             error: None,
         };
-        let out = import::scan_dir(Path::new(dir), Some(&nm), PLAYER_ENGINE, &mut res);
-        if let Some(e) = res.error {
-            return Err(e);
-        }
+        let out = import::scan_dir(Path::new(dir), Some(&nm), PLAYER_ENGINE, &mut res)
+            .map_err(|ResolveFailed| {
+                res.error
+                    .take()
+                    .unwrap_or_else(|| PyValueError::new_err("the class resolver failed"))
+            })?;
         let v: Vec<_> = out.iter().map(detect::FileReport::to_json).collect();
         Ok(serde_json::to_string(&v).expect("JSON serializes"))
     }

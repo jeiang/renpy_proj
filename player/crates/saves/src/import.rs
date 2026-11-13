@@ -8,7 +8,7 @@ use std::time::SystemTime;
 
 use serde_json::{Value, json};
 
-use crate::detect::{FileReport, Resolver, analyze_files};
+use crate::detect::{FileReport, ResolveFailed, Resolver, analyze_files};
 use crate::stub::NameMap;
 
 /// Where stock Ren'Py keeps the saves of a game: `<save root>/<save_directory>` and `<gamedir>/saves`.
@@ -68,7 +68,8 @@ fn is_candidate(name: &str) -> bool {
 
 /// Copy every stock `*.save` and `persistent` from `sources` into `dest`. When a name exists in several
 /// sources, the newest file wins (as the loader picks the newest location). Existing files in `dest` are
-/// never replaced. Unloadable saves land as `<name>.blocked`.
+/// never replaced. Unloadable saves land as `<name>.blocked`. A resolver failure is an error and copies
+/// nothing: a file copied without a class check would never be checked again.
 pub fn import_stock(
     sources: &[PathBuf],
     dest: &Path,
@@ -109,7 +110,8 @@ pub fn import_stock(
     let todo: Vec<(String, PathBuf, SystemTime)> =
         best.into_iter().map(|(n, (p, t))| (n, p, t)).collect();
     let paths: Vec<PathBuf> = todo.iter().map(|(_, p, _)| p.clone()).collect();
-    let reports = analyze_files(&paths, namemap, player_version, resolver);
+    let reports = analyze_files(&paths, namemap, player_version, resolver)
+        .map_err(|ResolveFailed| std::io::Error::other("the class resolver failed"))?;
     fs::create_dir_all(dest)?;
     for ((name, src, mtime), report) in todo.into_iter().zip(reports) {
         // A persistent file that is unreadable is still copied under its name: the engine ignores it, as stock does.
@@ -152,9 +154,9 @@ pub fn scan_dir(
     namemap: Option<&NameMap>,
     player_version: (i64, i64, i64),
     resolver: &mut dyn Resolver,
-) -> Vec<FileReport> {
+) -> Result<Vec<FileReport>, ResolveFailed> {
     let Ok(rd) = fs::read_dir(dir) else {
-        return Vec::new();
+        return Ok(Vec::new());
     };
     let mut paths: Vec<PathBuf> = rd
         .flatten()
@@ -166,4 +168,44 @@ pub fn scan_dir(
         .collect();
     paths.sort();
     analyze_files(&paths, namemap, player_version, resolver)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::Write;
+
+    use super::*;
+    use crate::detect::Resolution;
+
+    struct Fails(u32);
+    impl Resolver for Fails {
+        fn resolve(&mut self, _: &str, _: &str) -> Result<Resolution, ResolveFailed> {
+            self.0 += 1;
+            Err(ResolveFailed)
+        }
+    }
+
+    /// A stock `persistent`: a zlib pickle that names one engine class.
+    fn write_persistent(dir: &Path) {
+        fs::create_dir_all(dir).unwrap();
+        let mut z = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::fast());
+        z.write_all(b"\x80\x02crenpy.persistent\nPersistent\n)\x81.").unwrap();
+        fs::write(dir.join("persistent"), z.finish().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn a_resolver_failure_copies_nothing() {
+        let root = std::env::temp_dir().join(format!("urp-saves-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let (src, dest) = (root.join("stock"), root.join("player"));
+        write_persistent(&src);
+        let mut resolver = Fails(0);
+
+        let result = import_stock(&[src], &dest, None, (8, 5, 3), &mut resolver);
+
+        assert!(resolver.0 > 0, "the fixture must reach the resolver");
+        assert!(result.is_err());
+        assert!(!dest.join("persistent").exists());
+        fs::remove_dir_all(&root).unwrap();
+    }
 }
