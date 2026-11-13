@@ -9,8 +9,8 @@ use saves::detect::{Resolution, Resolver, analyze_files};
 
 struct Skip;
 impl Resolver for Skip {
-    fn resolve(&mut self, _: &str, _: &str) -> Resolution {
-        Resolution::Foreign
+    fn resolve(&mut self, _: &str, _: &str) -> Result<Resolution, saves::detect::ResolveFailed> {
+        Ok(Resolution::Foreign)
     }
 }
 
@@ -33,7 +33,8 @@ fn main() {
         walk(Path::new(&r), &mut files);
     }
     let t0 = std::time::Instant::now();
-    let reports = analyze_files(&files, None, (8, 5, 3), &mut Skip);
+    let reports =
+        analyze_files(&files, None, (8, 5, 3), &mut Skip).expect("this resolver never fails");
     let mut by: BTreeMap<String, usize> = BTreeMap::new();
     let mut globals = BTreeSet::new();
     for r in &reports {

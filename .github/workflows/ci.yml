@@ -1,5 +1,5 @@
-# Continuous integration: format, licence notices, clippy (no warnings), tests and release builds on macOS arm64,
-# Linux (manylinux_2_28) and Windows x64, then the synthetic integration corpus through the harness on Linux.
+# Continuous integration: format, licence notices, fast unit tests and checked release builds on macOS arm64
+# and Linux (manylinux_2_28), then the synthetic integration corpus in three Linux shards.
 # The gate on real games stays manual (docs/LOCAL-FILES.md).
 name: ci
 
@@ -18,6 +18,26 @@ permissions:
   contents: read
 
 jobs:
+  unit:
+    name: Fast unit tests (no player build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: player
+          key: unit-dev
+      - run: python3 -m unittest discover -s harness/tests -t harness/tests
+      - run: python3.12 -m unittest discover -s player/engine/python/tests
+      - run: cargo test -p library
+        working-directory: player
+      - run: cargo test -p py2fix --no-default-features
+        working-directory: player
+
   fmt:
     name: rustfmt
     runs-on: ubuntu-24.04
@@ -48,12 +68,26 @@ jobs:
     uses: ./.github/workflows/build.yml
     with:
       checks: true
+      release-packages: false
 
   synth:
-    name: Synthetic corpus (Xvfb + lavapipe)
+    name: Synthetic corpus (${{ matrix.shard }}, Xvfb + lavapipe)
     needs: build
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: 1
+            build-games: aniso story media
+            games: SynthAniso,SynthStory,SynthMedia
+          - shard: 2
+            build-games: text view obf
+            games: SynthText,SynthView,SynthObf
+          - shard: 3
+            build-games: big py7 py7patch
+            games: SynthBig,Synth7,Synth7Patch
     env:
       HARNESS_DISPLAY: xvfb
       # The media generator only makes test files. Nothing links it and nothing ships it, so the runner's apt ffmpeg
@@ -61,6 +95,13 @@ jobs:
       SYNTH_ALLOW_GPL: '1'
     steps:
       - uses: actions/checkout@v7
+      - name: Restore stock baselines
+        id: baseline
+        uses: actions/cache/restore@v6
+        with:
+          path: harness/out/synth-baseline
+          # fetch.sh pins SDK 8.5.3 and 7.4.11; it is also hashed by testgames/**.
+          key: synth-baseline-v1-ubuntu24-sdk8.5.3-7.4.11-${{ matrix.shard }}-${{ hashFiles('harness/testgames/**', 'harness/gatelib/**', 'harness/rpy/**', 'harness/gate.py', 'harness/corpus.toml', 'harness/plans/**', '.github/workflows/ci.yml') }}
       - name: Install the display and Mesa packages
         run: |
           sudo apt-get update
@@ -82,20 +123,41 @@ jobs:
           path: ${{ runner.temp }}/package
       - name: Unpack the player
         run: tar -xzf "$RUNNER_TEMP/package/urp-linux-x86_64.tar.gz" -C "$RUNNER_TEMP/package"
-      # SynthUHD is not in CI: its stock lint, route and save/resume checks take about 75 minutes (harness/testgames/README.md).
-      # Run it by hand with `build.py uhd` and `run.py --games SynthUHD`. Keep the lists below in step with GAMES.
-      - name: Build the synthetic games
-        run: python3 harness/testgames/build.py aniso story media text view py7 py7patch py7ai py7trust obf big
-      - name: Run stock and player on every game
+      # SynthUHD is manual; py7ai and py7trust are not run by CI.
+      - name: Build this shard's synthetic games
+        env:
+          GAMES: ${{ matrix.build-games }}
         run: |
-          python3 harness/testgames/run.py --no-build \
-            --games SynthAniso,SynthStory,SynthMedia,SynthText,SynthView,SynthObf,SynthBig,Synth7,Synth7Patch \
+          read -r -a games <<< "$GAMES"
+          python3 harness/testgames/build.py "${games[@]}"
+      - name: Run stock on a baseline cache miss
+        if: steps.baseline.outputs.cache-hit != 'true'
+        env:
+          GAMES: ${{ matrix.games }}
+        run: |
+          python3 harness/testgames/run.py --no-build --stock-only \
+            --games "$GAMES" --out harness/out/synth-baseline \
+            --gate-args "--diff-mean 0.01 --diff-pct 1.0"
+      - name: Save successful stock baselines
+        if: steps.baseline.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: harness/out/synth-baseline
+          key: ${{ steps.baseline.outputs.cache-primary-key }}
+      - name: Run the player against cached stock
+        env:
+          GAMES: ${{ matrix.games }}
+        run: |
+          python3 harness/testgames/run.py --no-build --player-only \
+            --games "$GAMES" --baseline-root harness/out/synth-baseline \
             --player-bin "$RUNNER_TEMP/package/urp-linux-x86_64/urp" \
             --gate-args "--diff-mean 0.01 --diff-pct 1.0"
       - name: Keep the gate results of a failed run
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: synth-results
-          path: harness/out/synth
+          name: synth-results-${{ matrix.shard }}
+          path: |
+            harness/out/synth
+            harness/out/synth-baseline
           retention-days: 7

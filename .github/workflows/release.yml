@@ -69,7 +69,7 @@ jobs:
           cp artifacts/package-windows/urp-windows-x86_64.zip "dist/urp-$TAG-windows-x86_64.zip"
           cp artifacts/notices/RUST_DEPENDENCIES.md "dist/urp-$TAG-rust-dependency-licences.md"
           cp THIRD_PARTY.md "dist/urp-$TAG-THIRD_PARTY.md"
-          (cd dist && sha256sum * > SHA256SUMS && cat SHA256SUMS)
+          (cd dist && sha256sum ./* > SHA256SUMS && cat SHA256SUMS)
       - name: Create the draft release
         env:
           GH_TOKEN: ${{ github.token }}
