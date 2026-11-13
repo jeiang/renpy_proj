@@ -101,6 +101,11 @@
               clippy
               rustfmt
               rust-analyzer
+              # Editor language servers (Python, shell, TOML, Nix); Ren'Py .rpy has none in nixpkgs.
+              pyright
+              bash-language-server
+              taplo
+              nixd
               python3
               python312 # Ren'Py 8.4-8.5.3 pin CPython 3.12
               unrpa
@@ -118,6 +123,11 @@
               clippy
               rustfmt
               rust-analyzer
+              # Editor language servers (Python, shell, TOML, Nix).
+              pyright
+              bash-language-server
+              taplo
+              nixd
               pkg-config
               llvmPackages.libclang
               python312 # build-time Python: cythonize and layer packing
