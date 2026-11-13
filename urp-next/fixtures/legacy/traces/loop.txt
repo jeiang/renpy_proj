@@ -1,0 +1,14 @@
+label _errorhandling
+label _start
+label _start_store
+label _gl_test
+label _load_reload_game
+label _call__load_reload_game_1
+label _invoke_main_menu
+label _main_menu
+label _main_menu_screen
+label main_menu
+label start
+say 1
+text 1 0dd24c18
+label screen_loop

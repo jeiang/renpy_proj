@@ -1,0 +1,116 @@
+{
+ "alpha": [
+  "renpy.geometry",
+  "renpy.texture",
+  "renpy.alpha"
+ ],
+ "ftl": [
+  "renpy.ftl"
+ ],
+ "live2d_colors": [
+  "renpy.geometry",
+  "live2d.colors"
+ ],
+ "live2d_flip_texture": [
+  "renpy.geometry",
+  "renpy.texture",
+  "live2d.flip_texture"
+ ],
+ "live2d_inverted_mask": [
+  "renpy.geometry",
+  "live2d.inverted_mask"
+ ],
+ "live2d_mask": [
+  "renpy.geometry",
+  "live2d.mask"
+ ],
+ "matrixcolor": [
+  "renpy.geometry",
+  "renpy.texture",
+  "renpy.matrixcolor"
+ ],
+ "renpy_alpha_mask": [
+  "renpy.geometry",
+  "renpy.alpha_mask"
+ ],
+ "renpy_blur": [
+  "renpy.geometry",
+  "renpy.blur"
+ ],
+ "renpy_dissolve": [
+  "renpy.geometry",
+  "renpy.dissolve"
+ ],
+ "renpy_imagedissolve": [
+  "renpy.geometry",
+  "renpy.imagedissolve"
+ ],
+ "renpy_mask": [
+  "renpy.geometry",
+  "renpy.mask"
+ ],
+ "solid": [
+  "renpy.geometry",
+  "renpy.solid"
+ ],
+ "text_dissolve": [
+  "renpy.geometry",
+  "renpy.texture",
+  "textshader.dissolve"
+ ],
+ "text_flip": [
+  "renpy.geometry",
+  "renpy.texture",
+  "textshader.flip"
+ ],
+ "text_jitter": [
+  "renpy.geometry",
+  "renpy.texture",
+  "textshader.jitter"
+ ],
+ "text_linetexture": [
+  "renpy.geometry",
+  "renpy.texture",
+  "textshader.linetexture"
+ ],
+ "text_offset": [
+  "renpy.geometry",
+  "renpy.texture",
+  "textshader.offset"
+ ],
+ "text_slowalpha": [
+  "renpy.geometry",
+  "renpy.texture",
+  "textshader.slowalpha"
+ ],
+ "text_texture": [
+  "renpy.geometry",
+  "renpy.texture",
+  "textshader.texture"
+ ],
+ "text_typewriter": [
+  "renpy.geometry",
+  "renpy.texture",
+  "textshader.typewriter"
+ ],
+ "text_wave": [
+  "renpy.geometry",
+  "renpy.texture",
+  "textshader.wave"
+ ],
+ "text_zoom": [
+  "renpy.geometry",
+  "renpy.texture",
+  "textshader.zoom"
+ ],
+ "texture": [
+  "renpy.geometry",
+  "renpy.texture"
+ ],
+ "texture_matrixcolor_alpha": [
+  "renpy.geometry",
+  "renpy.texture",
+  "renpy.matrixcolor",
+  "renpy.alpha"
+ ]
+}

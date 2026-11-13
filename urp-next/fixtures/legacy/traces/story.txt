@@ -1,0 +1,99 @@
+label _errorhandling
+label _start
+label _start_store
+label _gl_test
+label _load_reload_game
+label _call__load_reload_game_1
+label _invoke_main_menu
+label _main_menu
+label _main_menu_screen
+label main_menu_screen
+label start
+text 0 -
+say 1
+text 1 471e4bb6
+say 2
+text 2 0c46274d
+say 3
+text 3 a43826bf
+say 4
+text 4 728ff947
+say 5
+text 5 3682f5c6
+say 6
+text 6 ec7883d0
+say 7
+text 7 fde1b795
+say 8
+text 8 c3b5355f
+say 9
+text 9 18e903dd
+say 10
+text 10 74e7062a
+say 11
+text 11 2f1a136c
+say 12
+text 12 52af22c7
+advance-done 12
+say 13
+text 13 fbd542a5
+say 14
+text 14 ffaa727a
+label first_choice
+say 15
+text 15 18b45f5c
+label tower_path
+say 16
+text 16 9dc22169
+say 17
+text 17 202ec0ad
+say 18
+text 18 5e3aa2c2
+say 19
+text 19 d143398c
+say 20
+text 20 d94946cc
+say 21
+text 21 4a7cda95
+label middle
+say 22
+text 22 b408802c
+say 23
+text 23 d69c8ca0
+label choose_plan
+say 24
+text 24 82ddc31e
+say 25
+text 25 a6ab88a4
+say 26
+text 26 a84f4f60
+say 27
+text 27 baa0f9c6
+say 28
+text 28 a77654b1
+say 29
+text 29 3764ad93
+say 30
+text 30 e8483140
+say 31
+text 31 7992c6d5
+say 32
+text 32 fda48bb3
+say 33
+text 33 1af0b3bc
+label finale
+say 34
+text 34 87096abf
+say 35
+text 35 8f1a0bf6
+say 36
+text 36 1643bdae
+say 37
+text 37 2dfde26f
+say 38
+text 38 ce9b119a
+say 39
+text 39 7ecf7117
+say 40
+text 40 97975289
+advance-done 40

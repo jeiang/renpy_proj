@@ -1,0 +1,338 @@
+[
+  {
+    "checkpoint": "01-menu",
+    "game": "story",
+    "path": "frames/story/01-menu.png",
+    "renderer": "wgpu-vulkan-lavapipe",
+    "sha256": "c06f547c9fe959ee0512da71ed9732135d8623554cd365d89c8e51af45c6d812",
+    "size": 26219
+  },
+  {
+    "checkpoint": "02-say-12",
+    "game": "story",
+    "path": "frames/story/02-say-12.png",
+    "renderer": "wgpu-vulkan-lavapipe",
+    "sha256": "a6cfec310763a2a24161a06275907612f11e129fc51330a2a8c5eeca0598306b",
+    "size": 18263
+  },
+  {
+    "checkpoint": "03-say-40",
+    "game": "story",
+    "path": "frames/story/03-say-40.png",
+    "renderer": "wgpu-vulkan-lavapipe",
+    "sha256": "d67eac8eee133306a3f8058bddba0668533b7757719f7a592db2e44a972fd287",
+    "size": 15642
+  },
+  {
+    "checkpoint": "01-menu",
+    "game": "text",
+    "path": "frames/text/01-menu.png",
+    "renderer": "wgpu-vulkan-lavapipe",
+    "sha256": "6a5105c739533101913fdbb10a4fec0b9369aa812084990824e0e0c6e3dcfdf7",
+    "size": 16797
+  },
+  {
+    "checkpoint": "02-kerning",
+    "game": "text",
+    "path": "frames/text/02-kerning.png",
+    "renderer": "wgpu-vulkan-lavapipe",
+    "sha256": "d1e7a9eafc0628ca869cbfb1c08e041c0f31485c71aaa2d06d97dfa51dbfe165",
+    "size": 162161
+  },
+  {
+    "checkpoint": "03-features",
+    "game": "text",
+    "path": "frames/text/03-features.png",
+    "renderer": "wgpu-vulkan-lavapipe",
+    "sha256": "cc57d08830c0f937f091dfcff6dc00cbb823feaaf025427bccc2ebcb86c91694",
+    "size": 111164
+  },
+  {
+    "checkpoint": "04-rtl",
+    "game": "text",
+    "path": "frames/text/04-rtl.png",
+    "renderer": "wgpu-vulkan-lavapipe",
+    "sha256": "3da3cd61aac7e2f27c94f1d7a3808b0d74be5f9147f232eb7b2466417ccb4cf2",
+    "size": 115928
+  },
+  {
+    "checkpoint": "05-rtl-wrap",
+    "game": "text",
+    "path": "frames/text/05-rtl-wrap.png",
+    "renderer": "wgpu-vulkan-lavapipe",
+    "sha256": "ee1c235cf53442a589292de9c6063326fe3269de706616250a70e14b19347998",
+    "size": 118235
+  },
+  {
+    "checkpoint": "06-outlines",
+    "game": "text",
+    "path": "frames/text/06-outlines.png",
+    "renderer": "wgpu-vulkan-lavapipe",
+    "sha256": "8ef98add72b5938f6a2d41b23b8eb8ef8634ffe2cc2d51b66481dd48d9b03511",
+    "size": 163565
+  },
+  {
+    "checkpoint": "07-sizes",
+    "game": "text",
+    "path": "frames/text/07-sizes.png",
+    "renderer": "wgpu-vulkan-lavapipe",
+    "sha256": "1d581d33db93a5304bfca669c070527a778edc3f89a906df841253bd72ab8737",
+    "size": 111764
+  },
+  {
+    "checkpoint": "08-variable",
+    "game": "text",
+    "path": "frames/text/08-variable.png",
+    "renderer": "wgpu-vulkan-lavapipe",
+    "sha256": "87b081c67a4ba03131e6b03ec23001e3957af4fbd2923c1a0273e457a2ef85c8",
+    "size": 123437
+  },
+  {
+    "checkpoint": "09-markup",
+    "game": "text",
+    "path": "frames/text/09-markup.png",
+    "renderer": "wgpu-vulkan-lavapipe",
+    "sha256": "574f1a811455f38fc42680095ee66f94131f0a919bd77baf6ea79ff215ab4220",
+    "size": 102219
+  },
+  {
+    "checkpoint": "10-layout",
+    "game": "text",
+    "path": "frames/text/10-layout.png",
+    "renderer": "wgpu-vulkan-lavapipe",
+    "sha256": "10ccdc8bc9175043764751c0de9cd9960e28336a8f77880e3d9fdd28bab2774f",
+    "size": 158899
+  },
+  {
+    "checkpoint": "11-subtitle",
+    "game": "text",
+    "path": "frames/text/11-subtitle.png",
+    "renderer": "wgpu-vulkan-lavapipe",
+    "sha256": "398133c4f0216470687cea11cd86f2dc9f98d8149beb76ff57778c341c07a3c3",
+    "size": 123020
+  },
+  {
+    "checkpoint": "01-menu",
+    "game": "view",
+    "path": "frames/view/01-menu.png",
+    "renderer": "wgpu-vulkan-lavapipe",
+    "sha256": "5e54b46f4faf19f0f6e8a64bb7004701ba8983d7b4aca591614ed91f4fc1a78f",
+    "size": 20962
+  },
+  {
+    "checkpoint": "02-say-8",
+    "game": "view",
+    "path": "frames/view/02-say-8.png",
+    "renderer": "wgpu-vulkan-lavapipe",
+    "sha256": "f6ea87ac7ac3102ad4ae92b735f92e165c2f10299877b0bbf5c19f8a0b30a30a",
+    "size": 15517
+  },
+  {
+    "checkpoint": "03-pattern",
+    "game": "view",
+    "path": "frames/view/03-pattern.png",
+    "renderer": "wgpu-vulkan-lavapipe",
+    "sha256": "f01d7c0aa9e31a0bb02da5d59a069dcc7a9c9574d7959b8c2f8979f8d0dddf7e",
+    "size": 13457
+  },
+  {
+    "checkpoint": "04-bars",
+    "game": "view",
+    "path": "frames/view/04-bars.png",
+    "renderer": "wgpu-vulkan-lavapipe",
+    "sha256": "ea143b3a9ce51ff6cd6de1e26e4527e2652c890adbcf1ed2a253cc72a021b5eb",
+    "size": 5324
+  },
+  {
+    "checkpoint": "05-frames",
+    "game": "view",
+    "path": "frames/view/05-frames.png",
+    "renderer": "wgpu-vulkan-lavapipe",
+    "sha256": "b66413b5202880fd03fd666837d86be670da7c4b47953f75d008479ab0e8c395",
+    "size": 63620
+  },
+  {
+    "checkpoint": "06-circle",
+    "game": "view",
+    "path": "frames/view/06-circle.png",
+    "renderer": "wgpu-vulkan-lavapipe",
+    "sha256": "0dbc0dfd4f82bba1043824e7a38e0eef03e579ff890ee7ce1489d1462d2e1fb5",
+    "size": 22782
+  },
+  {
+    "checkpoint": "07-sub",
+    "game": "view",
+    "path": "frames/view/07-sub.png",
+    "renderer": "wgpu-vulkan-lavapipe",
+    "sha256": "cfa27b2e91fe46e1781b16d5029ab1523e4d76185474776109f18085b290f74a",
+    "size": 8670
+  },
+  {
+    "checkpoint": "01-menu",
+    "game": "media",
+    "path": "frames/media/01-menu.png",
+    "renderer": "wgpu-vulkan-lavapipe",
+    "sha256": "b4c0ea6313c93be3c83f3ae612f142dc83622139c08e9f181ea2684e2719aedd",
+    "size": 9680
+  },
+  {
+    "checkpoint": "02-png",
+    "game": "media",
+    "path": "frames/media/02-png.png",
+    "renderer": "wgpu-vulkan-lavapipe",
+    "sha256": "198abbe4105f86cff5f7bcf64a8a70e980cbbfb0159505cb8ba1f17e40b433fb",
+    "size": 13869
+  },
+  {
+    "checkpoint": "03-jpg",
+    "game": "media",
+    "path": "frames/media/03-jpg.png",
+    "renderer": "wgpu-vulkan-lavapipe",
+    "sha256": "d0ee7cdbaa98960821022a2ec21de0bf0757f838258db339dd95fe089608bad8",
+    "size": 28487
+  },
+  {
+    "checkpoint": "04-webp",
+    "game": "media",
+    "path": "frames/media/04-webp.png",
+    "renderer": "wgpu-vulkan-lavapipe",
+    "sha256": "1a2a71977be6bff2ed5b1316df98f26a79fa61b56b07b6ae02a4a87ff24363a6",
+    "size": 26685
+  },
+  {
+    "checkpoint": "05-webp-lossless",
+    "game": "media",
+    "path": "frames/media/05-webp-lossless.png",
+    "renderer": "wgpu-vulkan-lavapipe",
+    "sha256": "5384f1850429173e97dc1b3b5b28849dc879dafd682b24d191af087f6a22a23a",
+    "size": 10379
+  },
+  {
+    "checkpoint": "06-avif",
+    "game": "media",
+    "path": "frames/media/06-avif.png",
+    "renderer": "wgpu-vulkan-lavapipe",
+    "sha256": "dfc764bec0a91284a36313920a7843dddda26be2b18da6cd43e09c55bbb46b03",
+    "size": 31372
+  },
+  {
+    "checkpoint": "11-gif",
+    "game": "media",
+    "path": "frames/media/11-gif.png",
+    "renderer": "wgpu-vulkan-lavapipe",
+    "sha256": "cf9fc8cba0eae2e29da4af672e555ee7eb951be61e6bc67ae24fa4bfec48158b",
+    "size": 8754
+  },
+  {
+    "checkpoint": "13-alpha-png",
+    "game": "media",
+    "path": "frames/media/13-alpha-png.png",
+    "renderer": "wgpu-vulkan-lavapipe",
+    "sha256": "e4f265f2e4da435988c07a16839ab0622c6815e78cce1e628b8d090a349192fe",
+    "size": 12854
+  },
+  {
+    "checkpoint": "14-alpha-webp",
+    "game": "media",
+    "path": "frames/media/14-alpha-webp.png",
+    "renderer": "wgpu-vulkan-lavapipe",
+    "sha256": "51c3be68e6f7a4fff4a40c9a6009f88303ac8e752581584acb953ac1b3a5ae3d",
+    "size": 12439
+  },
+  {
+    "checkpoint": "15-alpha-webp-lossless",
+    "game": "media",
+    "path": "frames/media/15-alpha-webp-lossless.png",
+    "renderer": "wgpu-vulkan-lavapipe",
+    "sha256": "6e9b7978b852ac956fd9f25d9ff036c07a0e706850ade9c802e4a4118d4b1ac0",
+    "size": 11444
+  },
+  {
+    "checkpoint": "16-alpha-gif",
+    "game": "media",
+    "path": "frames/media/16-alpha-gif.png",
+    "renderer": "wgpu-vulkan-lavapipe",
+    "sha256": "4ac43b576d392a00737a2a581708d87de03f0c40f24446743a586a322e3f6185",
+    "size": 12203
+  },
+  {
+    "checkpoint": "01-menu",
+    "game": "tl",
+    "path": "frames/tl/01-menu.png",
+    "renderer": "wgpu-vulkan-lavapipe",
+    "sha256": "d68ac3b104cbe200f122e786bec721e1a84d042d45eae37fd4e248211de3a227",
+    "size": 8345
+  },
+  {
+    "checkpoint": "02-start-en",
+    "game": "tl",
+    "path": "frames/tl/02-start-en.png",
+    "renderer": "wgpu-vulkan-lavapipe",
+    "sha256": "b6d610ee93a16fec51d227167ae21ee71ae056c68fd9d04b4e535e298b1967e9",
+    "size": 10666
+  },
+  {
+    "checkpoint": "03-fr",
+    "game": "tl",
+    "path": "frames/tl/03-fr.png",
+    "renderer": "wgpu-vulkan-lavapipe",
+    "sha256": "8906813006eaf44a3fb6cd1901960b15570e58364c9fb8e7d942cbc4617c02e8",
+    "size": 11821
+  },
+  {
+    "checkpoint": "04-en",
+    "game": "tl",
+    "path": "frames/tl/04-en.png",
+    "renderer": "wgpu-vulkan-lavapipe",
+    "sha256": "d6fa7cf9b7a4ba8946d7e84da45ce219bc5248e3cd88d847422e0043c5ec2e81",
+    "size": 8951
+  },
+  {
+    "checkpoint": "05-de",
+    "game": "tl",
+    "path": "frames/tl/05-de.png",
+    "renderer": "wgpu-vulkan-lavapipe",
+    "sha256": "6f0aff00aab72d2dea49e8ec3fa89be91a557067f51aeae5082e5c5cb2881df2",
+    "size": 10781
+  },
+  {
+    "checkpoint": "06-en-again",
+    "game": "tl",
+    "path": "frames/tl/06-en-again.png",
+    "renderer": "wgpu-vulkan-lavapipe",
+    "sha256": "d6fa7cf9b7a4ba8946d7e84da45ce219bc5248e3cd88d847422e0043c5ec2e81",
+    "size": 8951
+  },
+  {
+    "checkpoint": "screen-loop",
+    "game": "loop",
+    "path": "frames/loop/screen-loop.png",
+    "renderer": "wgpu-vulkan-lavapipe",
+    "sha256": "d1fabcea441dd9d57be8b5d21c456860f28f2ac46834c424f53b0418f1d7a2a4",
+    "size": 8940
+  },
+  {
+    "checkpoint": "01-menu",
+    "game": "py7",
+    "path": "frames/py7/01-menu.png",
+    "renderer": "wgpu-vulkan-lavapipe",
+    "sha256": "7df5667937a1ecc842e6f6ab2071eacf57ff8100a25170f2ce360700a10ebcac",
+    "size": 10949
+  },
+  {
+    "checkpoint": "02-say-12",
+    "game": "py7",
+    "path": "frames/py7/02-say-12.png",
+    "renderer": "wgpu-vulkan-lavapipe",
+    "sha256": "59ab5e234ab67db69f8fbb2d075d5dd4fb91b66489c7ce8ec957d57a0e34eefa",
+    "size": 11353
+  },
+  {
+    "checkpoint": "03-say-26",
+    "game": "py7",
+    "path": "frames/py7/03-say-26.png",
+    "renderer": "wgpu-vulkan-lavapipe",
+    "sha256": "bfeb178c3d4282c73f25276ecf418913a9d44be6bfc00e11f9799616456adac5",
+    "size": 10588
+  }
+]
