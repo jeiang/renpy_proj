@@ -48,14 +48,14 @@ jobs:
         with:
           path: player/build-out/engine
           key: manylinux-engine-${{ hashFiles('player/engine/**', 'player/packaging/compile_common.py', 'player/crates/pyhost/cpython/**', 'player/packaging/manylinux/build-inputs.sh', 'player/packaging/manylinux/build.sh') }}
+      # One cache per lockfile, not per commit: a 1.1 GB cache for every push filled the 10 GB limit of the
+      # repository and evicted the other caches. The dependencies are most of it; the workspace crates rebuild.
       - name: Cache cargo target
         uses: actions/cache@v6
         with:
           path: player/target
-          key: manylinux-target-${{ hashFiles('player/Cargo.lock') }}-${{ github.sha }}
-          restore-keys: |
-            manylinux-target-${{ hashFiles('player/Cargo.lock') }}-
-            manylinux-target-
+          key: manylinux-target-${{ hashFiles('player/Cargo.lock') }}
+          restore-keys: manylinux-target-
       - name: Build the package in the manylinux_2_28 container
         env:
           PLAYER_CHECKS: ${{ inputs.checks && '1' || '0' }}
