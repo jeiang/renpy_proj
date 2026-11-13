@@ -18,7 +18,9 @@ ffmpeg    7.1.1    733984395e0dbbe5c046abda2dc49a5544e7e0e1e2366bba849222ae9e3a0
 '
 # Build tools from PyPI (exact versions) and the Rust toolchain.
 PIP_TOOLS="Cython==3.2.5 meson==1.7.0 ninja==1.11.1.4 patchelf==0.17.2.4"
-RUST_TOOLCHAIN=stable   # rustup, installed into /cache/rustup
+# The version of the flake.lock nixpkgs, so every build uses one rustc. Not `stable`: rustc 1.100.0 fails the layout
+# checks in the bindings that bindgen 0.70 writes for ffmpeg-sys-next 7.1.3.
+RUST_TOOLCHAIN=1.98.1   # rustup, installed into /cache/rustup
 
 pin() { awk -v n="$1" -v f="$2" '$1==n{print $f}' <<<"$PINS"; }
 fetch() { # name -> extracted dir $WORK/<name>-<ver>
