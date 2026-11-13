@@ -19,6 +19,9 @@ ffmpeg    7.1.1    733984395e0dbbe5c046abda2dc49a5544e7e0e1e2366bba849222ae9e3a0
 # Build tools from PyPI (exact versions) and the Rust toolchain.
 PIP_TOOLS="Cython==3.2.5 meson==1.7.0 ninja==1.11.1.4 patchelf==0.17.2.4"
 RUST_TOOLCHAIN=stable   # rustup, installed into /cache/rustup
+# libclang for bindgen. Pinned: with clang 22 (in the AlmaLinux 8 repository since 2026-11-11) bindgen 0.70 writes
+# empty structs for ffmpeg-sys-next 7.1.3, and its layout checks fail. 21.1.8 is the libclang of the flake.lock nixpkgs.
+CLANG=21.1.8
 
 pin() { awk -v n="$1" -v f="$2" '$1==n{print $f}' <<<"$PINS"; }
 fetch() { # name -> extracted dir $WORK/<name>-<ver>
@@ -35,7 +38,7 @@ mark() { : > "$1/.built-$2"; }
 
 # ---- system packages and tools ----------------------------------------------------------------------------
 log "dnf packages"
-dnf install -y --enablerepo=powertools clang clang-devel clang-libs nasm libva-devel libdrm-devel pkgconfig perl-IPC-Cmd perl-Time-Piece systemd-devel alsa-lib-devel >/dev/null
+dnf install -y --enablerepo=powertools "clang-$CLANG" "clang-devel-$CLANG" "clang-libs-$CLANG" nasm libva-devel libdrm-devel pkgconfig perl-IPC-Cmd perl-Time-Piece systemd-devel alsa-lib-devel >/dev/null
 export PATH=/opt/python/cp312-cp312/bin:$PATH
 export PIP_CACHE_DIR=$CACHE/pip PIP_DISABLE_PIP_VERSION_CHECK=1
 log "pip tools: $PIP_TOOLS"
