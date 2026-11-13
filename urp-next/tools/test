@@ -4,5 +4,7 @@ cd "$(dirname "$0")/.."
 case "${1:-}" in
     t0) exec cargo test -p urp-core ;;
     rules) exec cargo test -p urp-core --test dependency-rules ;;
-    *) echo 'usage: urp-next/tools/test {t0|rules}' >&2; exit 2 ;;
+    t1) exec cargo test -p urp-pyhost ;;
+    t2) URP_TESTS_REQUIRE_TREE=1 exec "$URP_ENGINEPY" -m unittest discover -s ../player/engine/python/tests ;;
+    *) echo 'usage: urp-next/tools/test {t0|rules|t1|t2}' >&2; exit 2 ;;
 esac

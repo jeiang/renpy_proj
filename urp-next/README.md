@@ -32,8 +32,14 @@ Third-party dependency build scripts are not subject to this workspace rule.
 Dev and test builds use line tables, optimisation level 1 for workspace crates,
 and level 2 for dependencies. Release is reserved for packaged builds.
 
-Planned, not runnable commands: T1 binding tests with static CPython; T2 engine
-and compatibility tests in `urp-enginepy`; T3 media and GPU crate tests; T4
+`t1` and `t2` need the prebuilt native inputs, so run them in the `next` shell:
+`nix develop .#next -c urp-next/tools/test t1`. `t1` boots the static CPython with
+the engine modules through `urp-pyhost`. `t2` runs the engine Python tests of the
+old tree in `urp-enginepy`, with no cargo build; they move here with the code they
+test. Cargo never builds a native input: `urp-pyhost` reads `URP_CPYTHON` and
+`URP_ENGINE`, which the shell sets to Nix store paths.
+
+Planned, not runnable commands: T3 media and GPU crate tests; T4
 headless synthetic-game goldens; T5 stock differential; T6 real games and GPUs.
 No placeholder tier commands exist.
 
