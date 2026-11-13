@@ -116,14 +116,15 @@ The gate on real commercial games is a maintainer tool. It needs games that this
 |---|---|
 | `rustfmt` | `cargo fmt --all --check` |
 | `Licence notices are current` | Regenerates `player/packaging/licences/RUST_DEPENDENCIES.md` with `cargo about` and fails when it differs from the committed file. Run `player/packaging/licences/generate.sh` after a `Cargo.lock` change. |
-| `Build` (`build.yml`) | On macOS arm64, Linux (manylinux_2_28 container) and Windows x64: release build with the packaging script of the platform, `cargo clippy -- -D warnings` and `cargo test`. The Linux job uploads `package-linux` with the tarball (used by the synthetic corpus job) and the AppImage. |
-| `Synthetic corpus` | On Linux under Xvfb and Mesa lavapipe: the synthetic games through `harness/testgames/run.py`, stock engine first, then the Linux package of the `Build` job (recipe and thresholds: [harness/testgames/README.md](harness/testgames/README.md), "CI on Linux"). |
+| `Fast unit tests (no player build)` | Ubuntu: harness unit tests, pure engine Python tests (tree-dependent tests skip), `cargo test -p library` and `cargo test -p py2fix --no-default-features`, using the dev profile and a separate Rust cache. Runs independently of packaging. |
+| `Build` (`build.yml`) | On macOS arm64 and Linux (manylinux_2_28 container): release build, `cargo clippy -- -D warnings` and `cargo test`. Linux uploads the tarball used by the synthetic corpus; CI skips Windows and AppImage packaging. Tag releases retain both. |
+| `Synthetic corpus` (3 shards) | On Linux under Xvfb and Mesa lavapipe: nine games partitioned by game across three jobs. Each restores cached stock baselines (or runs stock and saves on a miss), then runs the Linux player with `--player-only --baseline-root`. Only exercised games are built; `py7ai`, `py7trust` and UHD stay out. Thresholds are unchanged ([harness/testgames/README.md](harness/testgames/README.md), "CI on Linux"). |
 
-On Windows, `cargo test` runs only for the crates that do not use Python (`encode`, `library`, `pyhost`, `stream`). The test binaries of the other crates cannot link there: `pyo3-ffi` imports Python as a DLL unless the static link lines of `pyhost` are present. Linux and macOS run all tests.
+The manylinux build and tarball packaging remain the Linux binary producer for synthetic tests; switching that producer to a dev-shell binary is not part of these quick wins. Release-only Windows tests still exclude crates whose Python test binaries cannot link there; Linux and macOS retain the full checked-build tests.
 
 ### Durations and caches
 
-Wall-clock times of the jobs, measured on the pull request runs of PR #53 and on the release dry run.
+Historical wall-clock times measured on the pull request runs of PR #53 and the release dry run, **before** engine/baseline reuse and synthetic sharding; new wall-clock savings require a CI run:
 
 | Job | Cold | Warm |
 |---|---|---|
@@ -134,8 +135,8 @@ Wall-clock times of the jobs, measured on the pull request runs of PR #53 and on
 | `Build`, Windows x64 | 24 min (release run) | 5 min |
 | `Synthetic corpus` | 18 min (SDK cache cold) | not measured |
 
-A release run is always cold, because a tag run can restore caches only from the default branch. The first run on `main` after the CI
-change saves the caches. Wait for that run to finish before you push a release tag.
+Tag runs can restore caches saved on the default branch. The first successful run on `main` after a cache-key change populates
+the new caches; let it finish before tagging to avoid rebuilding those inputs.
 
 Sizes of the caches that one pull request run saves (`gh cache list`):
 
@@ -150,8 +151,12 @@ Sizes of the caches that one pull request run saves (`gh cache list`):
 GitHub keeps 10 GB of caches for each repository and evicts the oldest first. Pull request caches are visible only to that pull
 request, so the cache of `main` is the one that every later run and every release restores.
 
-Fetched inputs (Ren'Py source, wheels, static CPython, FFmpeg, Ren'Py SDKs) are cached with `actions/cache`. The keys are the hashes of
-the fetch and build scripts, so a change to a pin rebuilds them. The real-game gate is not part of CI.
+Fetched inputs (Ren'Py source, wheels, static CPython, FFmpeg, Ren'Py SDKs) are cached with `actions/cache`. Every CPython inputs key includes
+`player/crates/pyhost/cpython/patches/*.patch`. Linux keys use the sourced `manylinux/build-inputs.sh` dependency recipe, not packaging logic.
+Linux and macOS cache `player/build-out/engine` separately, keyed on engine sources, `compile_common.py`, CPython recipes/patches and platform inputs;
+the engine's own content stamp still checks reuse. Stock baseline caches are exact-key, per shard, and hash the SDK pins, testgames, gatelib,
+injected scripts, gate, corpus, plans and CI configuration. The key is computed before fetching/building generated files; only successful stock
+runs are saved, before player comparisons. The real-game gate is not part of CI.
 
 `.github/workflows/garret.yml` runs on every push to `main`. It builds `nix build .#urp` and `.#urp-norar` for `x86_64-linux` and `aarch64-darwin`
 and pushes the closures to the garret cache (`cache.jeiang.dev`) with a GitHub OIDC token, so the cornn-flaek hosts that install the
