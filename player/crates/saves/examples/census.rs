@@ -33,8 +33,8 @@ fn main() {
         walk(Path::new(&r), &mut files);
     }
     let t0 = std::time::Instant::now();
-    let reports = analyze_files(&files, None, (8, 5, 3), &mut Skip)
-        .expect("this resolver never fails");
+    let reports =
+        analyze_files(&files, None, (8, 5, 3), &mut Skip).expect("this resolver never fails");
     let mut by: BTreeMap<String, usize> = BTreeMap::new();
     let mut globals = BTreeSet::new();
     for r in &reports {

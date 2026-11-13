@@ -189,7 +189,8 @@ mod tests {
     fn write_persistent(dir: &Path) {
         fs::create_dir_all(dir).unwrap();
         let mut z = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::fast());
-        z.write_all(b"\x80\x02crenpy.persistent\nPersistent\n)\x81.").unwrap();
+        z.write_all(b"\x80\x02crenpy.persistent\nPersistent\n)\x81.")
+            .unwrap();
         fs::write(dir.join("persistent"), z.finish().unwrap()).unwrap();
     }
 

@@ -148,12 +148,13 @@ mod saves_py {
             f: resolver,
             error: None,
         };
-        let out = import::scan_dir(Path::new(dir), Some(&nm), PLAYER_ENGINE, &mut res)
-            .map_err(|ResolveFailed| {
+        let out = import::scan_dir(Path::new(dir), Some(&nm), PLAYER_ENGINE, &mut res).map_err(
+            |ResolveFailed| {
                 res.error
                     .take()
                     .unwrap_or_else(|| PyValueError::new_err("the class resolver failed"))
-            })?;
+            },
+        )?;
         let v: Vec<_> = out.iter().map(detect::FileReport::to_json).collect();
         Ok(serde_json::to_string(&v).expect("JSON serializes"))
     }

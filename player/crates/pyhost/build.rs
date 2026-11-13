@@ -23,7 +23,13 @@ fn main() {
     } else {
         "cpython/build.sh"
     });
-    for f in ["build.sh", "build_linux.sh", "mkzip.py", "mkboot.py", "patches"] {
+    for f in [
+        "build.sh",
+        "build_linux.sh",
+        "mkzip.py",
+        "mkboot.py",
+        "patches",
+    ] {
         println!("cargo:rerun-if-changed=cpython/{f}");
     }
     println!("cargo:rerun-if-changed=src/boot.py");
