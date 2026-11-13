@@ -1,5 +1,11 @@
-use std::{ffi::CString, marker::PhantomData, mem::MaybeUninit, rc::Rc, sync::atomic::{AtomicBool, Ordering}};
 use pyo3_ffi as ffi;
+use std::{
+    ffi::CString,
+    marker::PhantomData,
+    mem::MaybeUninit,
+    rc::Rc,
+    sync::atomic::{AtomicBool, Ordering},
+};
 
 include!(concat!(env!("OUT_DIR"), "/native.rs"));
 
@@ -27,7 +33,8 @@ impl Interpreter {
             let mut config = config.assume_init();
             config.install_signal_handlers = 0;
             let home = CString::new(HOME).unwrap();
-            let mut status = ffi::PyConfig_SetBytesString(&mut config, &mut config.home, home.as_ptr());
+            let mut status =
+                ffi::PyConfig_SetBytesString(&mut config, &mut config.home, home.as_ptr());
             if ffi::PyStatus_Exception(status) == 0 {
                 status = ffi::Py_InitializeFromConfig(&config);
             }
@@ -35,13 +42,21 @@ impl Interpreter {
                 Some(if status.err_msg.is_null() {
                     "CPython initialization failed".to_owned()
                 } else {
-                    std::ffi::CStr::from_ptr(status.err_msg).to_string_lossy().into_owned()
+                    std::ffi::CStr::from_ptr(status.err_msg)
+                        .to_string_lossy()
+                        .into_owned()
                 })
-            } else { None };
+            } else {
+                None
+            };
             ffi::PyConfig_Clear(&mut config);
-            if let Some(error) = error { return Err(error); }
+            if let Some(error) = error {
+                return Err(error);
+            }
         }
-        let interpreter = Self { _thread: PhantomData };
+        let interpreter = Self {
+            _thread: PhantomData,
+        };
         interpreter.run(PATHS)?;
         interpreter.run(include_str!("../../../../nix/next/bootstrap.py"))?;
         Ok(interpreter)
@@ -52,19 +67,27 @@ impl Interpreter {
         let source = CString::new(source).map_err(|_| "Python source contains a NUL byte")?;
         if unsafe { ffi::PyRun_SimpleString(source.as_ptr()) } != 0 {
             Err("Python execution failed (see traceback)".into())
-        } else { Ok(()) }
+        } else {
+            Ok(())
+        }
     }
 
     pub fn finalize(self) -> Result<(), String> {
         let status = unsafe { ffi::Py_FinalizeEx() };
         std::mem::forget(self);
-        if status == 0 { Ok(()) } else { Err("CPython finalization failed".into()) }
+        if status == 0 {
+            Ok(())
+        } else {
+            Err("CPython finalization failed".into())
+        }
     }
 }
 
 impl Drop for Interpreter {
     fn drop(&mut self) {
-        unsafe { ffi::Py_FinalizeEx(); }
+        unsafe {
+            ffi::Py_FinalizeEx();
+        }
     }
 }
 
@@ -73,7 +96,9 @@ mod tests {
     #[test]
     fn boots_renpy() {
         let interpreter = super::Interpreter::initialize().unwrap();
-        interpreter.run("import renpy; assert renpy.version_tuple[:3] == (8, 5, 3)").unwrap();
+        interpreter
+            .run("import renpy; assert renpy.version_tuple[:3] == (8, 5, 3)")
+            .unwrap();
         interpreter.finalize().unwrap();
     }
 }
