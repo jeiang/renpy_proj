@@ -1,0 +1,142 @@
+{
+  "renpy.geometry": {
+    "variables": "\n        uniform mat4 u_transform;\n        attribute vec4 a_position;\n    ",
+    "vertex_0": "\n        gl_Position = a_position;\n    ",
+    "vertex_100": "\n        gl_Position = u_transform * gl_Position;\n    ",
+    "_file": "renpy/common/_shaders.rpym"
+  },
+  "renpy.texture": {
+    "variables": "\n        uniform float u_lod_bias;\n        uniform sampler2D tex0;\n        attribute vec2 a_tex_coord;\n        varying vec2 v_tex_coord;\n    ",
+    "vertex_200": "\n        v_tex_coord = a_tex_coord;\n    ",
+    "fragment_200": "\n        gl_FragColor = texture2D(tex0, v_tex_coord.xy, u_lod_bias);\n    ",
+    "_file": "renpy/common/_shaders.rpym"
+  },
+  "renpy.blur": {
+    "variables": "\n        uniform sampler2D tex0;\n        attribute vec2 a_tex_coord;\n        varying vec2 v_tex_coord;\n        uniform float u_renpy_blur_log2;\n    ",
+    "vertex_200": "\n        v_tex_coord = a_tex_coord;\n    ",
+    "fragment_200": "\n        gl_FragColor = vec4(0.);\n        float renpy_blur_norm = 0.;\n\n        for (float i = -5.; i < 1.; i += 1.) {\n            float renpy_blur_weight = exp(-0.5 * pow(u_renpy_blur_log2 - i, 2.));\n            renpy_blur_norm += renpy_blur_weight;\n        }\n\n        gl_FragColor += renpy_blur_norm * texture2D(tex0, v_tex_coord.xy, 0.);\n\n        for (float i = 1.; i < 14.; i += 1.) {\n\n            if (i >= u_renpy_blur_log2 + 5.) {\n                break;\n            }\n\n            float renpy_blur_weight = exp(-0.5 * pow(u_renpy_blur_log2 - i, 2.));\n            gl_FragColor += renpy_blur_weight * texture2D(tex0, v_tex_coord.xy, i);\n            renpy_blur_norm += renpy_blur_weight;\n        }\n\n        if (renpy_blur_norm > 0.0) {\n            gl_FragColor /= renpy_blur_norm;\n        } else {\n            gl_FragColor = texture2D(tex0, v_tex_coord.xy, 0.0);\n        }\n   ",
+    "_file": "renpy/common/_shaders.rpym"
+  },
+  "renpy.solid": {
+    "variables": "\n        uniform vec4 u_renpy_solid_color;\n    ",
+    "fragment_200": "\n        gl_FragColor = u_renpy_solid_color;\n    ",
+    "_file": "renpy/common/_shaders.rpym"
+  },
+  "renpy.dissolve": {
+    "variables": "\n        uniform float u_lod_bias;\n        uniform sampler2D tex0;\n        uniform sampler2D tex1;\n        uniform float u_renpy_dissolve;\n        attribute vec2 a_tex_coord;\n        varying vec2 v_tex_coord;\n    ",
+    "vertex_200": "\n        v_tex_coord = a_tex_coord;\n    ",
+    "fragment_200": "\n        vec4 color0 = texture2D(tex0, v_tex_coord.st, u_lod_bias);\n        vec4 color1 = texture2D(tex1, v_tex_coord.st, u_lod_bias);\n\n        gl_FragColor = mix(color0, color1, u_renpy_dissolve);\n    ",
+    "_file": "renpy/common/_shaders.rpym"
+  },
+  "renpy.imagedissolve": {
+    "variables": "\n        uniform float u_lod_bias;\n        uniform sampler2D tex0;\n        uniform sampler2D tex1;\n        uniform sampler2D tex2;\n        uniform float u_renpy_dissolve_offset;\n        uniform float u_renpy_dissolve_multiplier;\n        attribute vec2 a_tex_coord;\n        varying vec2 v_tex_coord;\n    ",
+    "vertex_200": "\n        v_tex_coord = a_tex_coord;\n    ",
+    "fragment_200": "\n        vec4 color0 = texture2D(tex0, v_tex_coord.st, u_lod_bias);\n        vec4 color1 = texture2D(tex1, v_tex_coord.st, u_lod_bias);\n        vec4 color2 = texture2D(tex2, v_tex_coord.st, u_lod_bias);\n\n        float a = clamp((color0.a + u_renpy_dissolve_offset) * u_renpy_dissolve_multiplier, 0.0, 1.0);\n        gl_FragColor = mix(color1, color2, a);\n    ",
+    "_file": "renpy/common/_shaders.rpym"
+  },
+  "renpy.matrixcolor": {
+    "variables": "\n        uniform mat4 u_renpy_matrixcolor;\n    ",
+    "fragment_400": "\n        gl_FragColor = u_renpy_matrixcolor * gl_FragColor;\n    ",
+    "_file": "renpy/common/_shaders.rpym"
+  },
+  "renpy.alpha": {
+    "variables": "\n        uniform float u_renpy_alpha;\n        uniform float u_renpy_over;\n    ",
+    "fragment_500": "\n        gl_FragColor = gl_FragColor * vec4(u_renpy_alpha, u_renpy_alpha, u_renpy_alpha, u_renpy_alpha * u_renpy_over);\n    ",
+    "_file": "renpy/common/_shaders.rpym"
+  },
+  "renpy.ftl": {
+    "variables": "\n        attribute vec4 a_position;\n        attribute vec2 a_tex_coord;\n        varying vec2 v_tex_coord;\n        uniform sampler2D tex0;\n    ",
+    "vertex_100": "\n        v_tex_coord = a_tex_coord;\n        gl_Position = a_position;\n    ",
+    "fragment_100": "\n        gl_FragColor = texture2D(tex0, v_tex_coord.xy, -1.0);\n    ",
+    "_file": "renpy/common/_shaders.rpym"
+  },
+  "renpy.alpha_mask": {
+    "variables": "\n        uniform sampler2D tex0;\n        uniform sampler2D tex1;\n        attribute vec2 a_tex_coord;\n        varying vec2 v_tex_coord;\n    ",
+    "vertex_200": "\n        v_tex_coord = a_tex_coord;\n    ",
+    "fragment_500": "\n        vec4 src  = texture2D(tex0, v_tex_coord.xy);\n        vec4 mask = texture2D(tex1, v_tex_coord.xy);\n\n        gl_FragColor = vec4(src.r * mask.r, src.g * mask.r, src.b * mask.r, mask.r);\n    ",
+    "_file": "renpy/common/_shaders.rpym"
+  },
+  "renpy.mask": {
+    "variables": "\n        uniform float u_lod_bias;\n        uniform sampler2D tex0;\n        uniform sampler2D tex1;\n        uniform float u_renpy_mask_multiplier;\n        uniform float u_renpy_mask_offset;\n        attribute vec2 a_tex_coord;\n        varying vec2 v_tex_coord;\n    ",
+    "vertex_200": "\n        v_tex_coord = a_tex_coord;\n    ",
+    "fragment_200": "\n        vec4 src = texture2D(tex0, v_tex_coord.st, u_lod_bias);\n        vec4 mask = texture2D(tex1, v_tex_coord.st, u_lod_bias);\n\n        gl_FragColor = src * (mask.a * u_renpy_mask_multiplier + u_renpy_mask_offset);\n    ",
+    "_file": "renpy/common/_shaders.rpym"
+  },
+  "textshader.typewriter": {
+    "variables": "\n    uniform float u_text_slow_time;\n    attribute float a_text_min_time;\n    varying float v_text_min_time;\n    ",
+    "vertex_200": "\n    v_text_min_time = a_text_min_time;\n    ",
+    "fragment_350": "\n    float l__done = v_text_min_time <= u_text_slow_time ? 1.0 : 0.0;\n    gl_FragColor = gl_FragColor * l__done;\n    ",
+    "_file": "renpy/common/00textshader_ren.py"
+  },
+  "textshader.dissolve": {
+    "variables": "\n    uniform float u__duration;\n    uniform float u_text_slow_duration;\n    uniform float u_text_slow_time;\n    attribute float a_text_time;\n    varying float v_text_time;\n    ",
+    "vertex_200": "\n    v_text_time = a_text_time;\n    ",
+    "fragment_350": "\n    float l__duration = u__duration * u_text_slow_duration;\n    float l__done;\n    if (l__duration > 0.0) {\n        l__done = clamp((u_text_slow_time - v_text_time) / l__duration, 0.0, 1.0);\n    } else {\n        l__done = v_text_time <= u_text_slow_time ? 1.0 : 0.0;\n    }\n    gl_FragColor = gl_FragColor * l__done;\n    ",
+    "_file": "renpy/common/00textshader_ren.py"
+  },
+  "textshader.slowalpha": {
+    "variables": "\n    uniform float u__alpha\n    ",
+    "fragment_325": "\nvec4 l__color = gl_FragColor;\n",
+    "fragment_375": "\n    gl_FragColor = mix(gl_FragColor, l__color, u__alpha);\n    ",
+    "_file": "renpy/common/00textshader_ren.py"
+  },
+  "textshader.flip": {
+    "variables": "\n    uniform float u__duration;\n    uniform float u_text_slow_duration;\n    uniform float u_text_slow_time;\n    attribute vec2 a_text_center;\n    attribute float a_text_min_time;\n    ",
+    "vertex_20": "\n    float l__duration = u__duration * u_text_slow_duration;\n    float l__done;\n\n    if (l__duration > 0.0) {\n        l__done = clamp((u_text_slow_time - a_text_min_time) / l__duration, 0.0, 1.0);\n    } else {\n        l__done = a_text_min_time <= u_text_slow_time ? 1.0 : 0.0;\n    }\n\n    gl_Position.x = mix(a_text_center.x - (gl_Position.x - a_text_center.x), gl_Position.x, l__done);\n    ",
+    "_file": "renpy/common/00textshader_ren.py"
+  },
+  "textshader.zoom": {
+    "variables": "\n    uniform float u__zoom;\n    uniform float u__duration;\n    uniform float u_text_slow_duration;\n    uniform float u_text_slow_time;\n    attribute vec2 a_text_center;\n    attribute float a_text_min_time;\n    ",
+    "vertex_25": "\n    float l__duration = u__duration * u_text_slow_duration;\n\n    if (l__duration > 0.0) {\n        float l__done = clamp((u_text_slow_time - a_text_min_time) / l__duration, 0.0, 1.0);\n        gl_Position.xy = mix(a_text_center + (gl_Position.xy - a_text_center) * u__zoom, gl_Position.xy, l__done);\n    }\n    ",
+    "_file": "renpy/common/00textshader_ren.py"
+  },
+  "textshader.jitter": {
+    "variables": "\n    uniform vec2 u__jitter;\n    uniform vec4 u_random;\n    uniform float u_text_to_drawable;\n    ",
+    "vertex_30": "\n    vec2 l__jitter = u__jitter * u_text_to_drawable;\n    gl_Position.xy += l__jitter * u_random.xy - l__jitter / 2.0;\n    ",
+    "_file": "renpy/common/00textshader_ren.py"
+  },
+  "textshader.offset": {
+    "variables": "\n    uniform vec2 u__offset;\n    uniform float u_text_to_drawable;\n    ",
+    "vertex_35": "\n    gl_Position.xy += u__offset * u_text_to_drawable;\n    ",
+    "_file": "renpy/common/00textshader_ren.py"
+  },
+  "textshader.wave": {
+    "variables": "\n    uniform float u__amplitude;\n    uniform float u__frequency\n    uniform float u__wavelength;\n\n    uniform float u_time;\n    uniform float u_text_to_drawable;\n    attribute float a_text_index;\n    ",
+    "vertex_40": "\n    gl_Position.y += cos(2.0 * 3.14159265359 * (a_text_index / u__wavelength + u_time * u__frequency)) * u__amplitude * u_text_to_drawable;\n    ",
+    "_file": "renpy/common/00textshader_ren.py"
+  },
+  "textshader.texture": {
+    "variables": "\n    uniform sampler2D u__texture;\n    uniform vec2 u__texture_res;\n\n    uniform float u_text_to_virtual;\n    uniform float u_text_main;\n    varying vec2 v__coord;\n    ",
+    "vertex_10": "\n    v__coord = u_text_to_virtual * gl_Position.xy / u__texture_res;\n    ",
+    "fragment_300": "\n    if (u_text_main == 1.0) {\n        gl_FragColor = texture2D(u__texture, v__coord) * gl_FragColor;\n    }\n    ",
+    "_file": "renpy/common/00textshader_ren.py"
+  },
+  "textshader.linetexture": {
+    "variables": "\n    uniform sampler2D u__texture;\n    uniform vec2 u__scale;\n    uniform vec2 u__texture_res;\n\n    uniform float u_text_to_virtual;\n    uniform float u_text_main;\n\n    attribute vec2 a_text_center;\n    varying vec2 v__coord;\n    ",
+    "vertex_10": "\n\n    v__coord = vec2( gl_Position.x, (gl_Position.y - a_text_center.y)) / u__scale * u_text_to_virtual / u__texture_res;\n    v__coord.y += 0.5;\n    ",
+    "fragment_300": "\n    if (u_text_main == 1.0) {\n        gl_FragColor = texture2D(u__texture, v__coord) * gl_FragColor;\n    }\n    ",
+    "_file": "renpy/common/00textshader_ren.py"
+  },
+  "live2d.mask": {
+    "variables": "\n        uniform sampler2D tex0;\n        uniform sampler2D tex1;\n        uniform vec2 u_model_size;\n        uniform float u_live2d_ppu;\n        uniform vec2 u_live2d_offset;\n        attribute vec4 a_position;\n        attribute vec2 a_tex_coord;\n        varying vec2 v_tex_coord;\n        varying vec2 v_mask_coord;\n    ",
+    "vertex_200": "\n        v_tex_coord = a_tex_coord;\n        v_mask_coord = (a_position.xy * u_live2d_ppu + u_live2d_offset) / u_model_size;\n        v_mask_coord.y = 1.0 - v_mask_coord.y;\n    ",
+    "fragment_200": "\n        vec4 color = texture2D(tex0, v_tex_coord);\n        vec4 mask = texture2D(tex1, v_mask_coord);\n        gl_FragColor = color * mask.a;\n    ",
+    "_file": "renpy/gl2/live2d.py"
+  },
+  "live2d.inverted_mask": {
+    "variables": "\n        uniform sampler2D tex0;\n        uniform sampler2D tex1;\n        uniform vec2 u_model_size;\n        uniform float u_live2d_ppu;\n        uniform vec2 u_live2d_offset;\n        attribute vec4 a_position;\n        attribute vec2 a_tex_coord;\n        varying vec2 v_tex_coord;\n        varying vec2 v_mask_coord;\n    ",
+    "vertex_200": "\n        v_tex_coord = a_tex_coord;\n        v_mask_coord = (a_position.xy * u_live2d_ppu + u_live2d_offset) / u_model_size;\n        v_mask_coord.y = 1.0 - v_mask_coord.y;\n    ",
+    "fragment_200": "\n        vec4 color = texture2D(tex0, v_tex_coord);\n        vec4 mask = texture2D(tex1, v_mask_coord);\n        gl_FragColor = color * (1.0 - mask.a);\n    ",
+    "_file": "renpy/gl2/live2d.py"
+  },
+  "live2d.colors": {
+    "variables": "\n        uniform vec4 u_multiply;\n        uniform vec4 u_screen;\n    ",
+    "fragment_250": "\n        gl_FragColor.rgb = gl_FragColor.rgb * u_multiply.rgb;\n        gl_FragColor.rgb = (gl_FragColor.rgb + u_screen.rgb * gl_FragColor.a) - (gl_FragColor.rgb * u_screen.rgb);\n    ",
+    "_file": "renpy/gl2/live2d.py"
+  },
+  "live2d.flip_texture": {
+    "variables": "\n        varying vec2 v_tex_coord;\n    ",
+    "vertex_250": "\n        v_tex_coord.y = 1.0 - v_tex_coord.y;\n    ",
+    "_file": "renpy/gl2/live2d.py"
+  }
+}

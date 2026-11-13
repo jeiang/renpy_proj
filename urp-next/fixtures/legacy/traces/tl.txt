@@ -1,0 +1,44 @@
+label _errorhandling
+label _start
+label _start_store
+label _gl_test
+label _load_reload_game
+label _call__load_reload_game_1
+label _invoke_main_menu
+label _main_menu
+label _main_menu_screen
+label main_menu_screen
+label start
+say 1
+text 1 cc9c0de7
+say 2
+text 2 144b3ada
+say 3
+text 3 dc34a58c
+say 4
+text 4 b88eddf9
+advance-done 4
+label to_fr
+label french_part
+say 5
+text 5 fbbc66a2
+say 6
+text 6 fbbc66a2
+label to_en
+label english_part
+say 7
+text 7 e26375ad
+say 8
+text 8 e26375ad
+label to_de
+label german_part
+say 9
+text 9 cbf5eee5
+say 10
+text 10 cbf5eee5
+label to_en
+label english_part
+say 11
+text 11 e26375ad
+say 12
+text 12 e26375ad

@@ -1,0 +1,42 @@
+#version 450
+layout(std140, set = 0, binding = 0) uniform RenpyUniforms {
+    vec2 u_live2d_offset;
+    float u_live2d_ppu;
+    vec2 u_model_size;
+    mat4 u_transform;
+    float renpy_flip_y;
+    vec2 renpy_target_size;
+};
+layout(set = 1, binding = 0) uniform texture2D tex0_t;
+layout(set = 1, binding = 1) uniform sampler tex0_s;
+layout(set = 1, binding = 2) uniform texture2D tex1_t;
+layout(set = 1, binding = 3) uniform sampler tex1_s;
+layout(location = 0) in vec4 a_position;
+layout(location = 1) in vec2 a_tex_coord;
+layout(location = 0) out vec2 v_mask_coord;
+layout(location = 1) out vec2 v_tex_coord;
+
+
+
+
+
+
+
+
+
+
+void renpy_main ( ) { 
+
+gl_Position = a_position ; 
+
+gl_Position = u_transform * gl_Position ; 
+
+v_tex_coord = a_tex_coord ; 
+v_mask_coord = ( a_position . xy * u_live2d_ppu + u_live2d_offset ) / u_model_size ; 
+v_mask_coord . y = 1.0 - v_mask_coord . y ; 
+} 
+void main() {
+    renpy_main();
+    gl_Position.z = (gl_Position.z + gl_Position.w) * 0.5;
+    gl_Position.y = gl_Position.y * renpy_flip_y;
+}

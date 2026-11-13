@@ -1,0 +1,1627 @@
+{
+  "schema_version": 1,
+  "capture": "legacy built-in shader extraction and current player translation",
+  "program_count": 50,
+  "combination_count": 25,
+  "part_count": 25,
+  "provenance": {
+    "extractor": {
+      "path": "research/renderer/extract_shaders.py",
+      "sha256": "3c733e6e582acfbd07bcd6af9e3ce9c652a87dc3b0f8018d9eda29e9b674e131"
+    },
+    "translator": {
+      "path": "player/crates/gfx/src/translate.rs",
+      "sha256": "9952872092109d771a56daaf008c206418764f8e90d207f089a78a749a54f584"
+    },
+    "wrapper": {
+      "file": "translate-wrapper.rs",
+      "sha256": "8b5c699cd45274ad7a0a273e7760526e349a6d63753fbab93ecdf67121147517"
+    },
+    "rustc": "rustc 1.98.1 (48a229cea 2026-09-01) (built from a source tarball)",
+    "renpy_sources": {
+      "renpy/common/_shaders.rpym": {
+        "file": "sources/renpy/common/_shaders.rpym",
+        "sha256": "1d774a2a3aa65e72327278f938c2e060fd771076dd63428d5d1c2731c4cd76c9"
+      },
+      "renpy/common/00textshader_ren.py": {
+        "file": "sources/renpy/common/00textshader_ren.py",
+        "sha256": "9fa7773b9e0cf5ba29be8f80529ab2ee3369287406cdf1baa71e7eba6536b741"
+      },
+      "renpy/gl2/live2d.py": {
+        "file": "sources/renpy/gl2/live2d.py",
+        "sha256": "97f8692efebe23d0bc697754fb5ba01ea5aef46c2878794641aaeac437d01826"
+      }
+    },
+    "renpy_license": {
+      "file": "RENPY-LICENSE.txt",
+      "source": "LICENSE.txt",
+      "sha256": "b5d4610dfb530c53d5ce681e913f313903948616eb7b4ff8e8ddd19337852c1e",
+      "license": "MIT"
+    },
+    "parts": {
+      "file": "parts.json",
+      "sha256": "4900d1c0b1c2f42390e9a1a395bf086aab1f2896fa3636b4a2514dfe7154886d",
+      "representation": "original extractor kwargs, unexpanded; _file identifies source"
+    }
+  },
+  "programs": [
+    {
+      "id": "alpha.120",
+      "combination": "alpha",
+      "language": "GLSL120",
+      "parts": [
+        "renpy.geometry",
+        "renpy.texture",
+        "renpy.alpha"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/alpha.120.vert",
+            "sha256": "273f50c0bc445a7a2b481b9f70911d8d513ccb1081a51ca50b92a7e8e82c9534"
+          },
+          "translated": {
+            "file": "translated/alpha.120.vert",
+            "sha256": "10550b9a80e81df96ec009660e4bead4dca5ae6989fd751dc3bd9c3098515935"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/alpha.120.frag",
+            "sha256": "4726a2b156e1dd626a1920fdf90fa30db85999e119b3db7d5229a09220bb22eb"
+          },
+          "translated": {
+            "file": "translated/alpha.120.frag",
+            "sha256": "4f1e3132f00e9b7e7893c0fc9e6c3bbe0a5fb46ec10b04ebe502ee499ee6950c"
+          }
+        }
+      }
+    },
+    {
+      "id": "alpha.100",
+      "combination": "alpha",
+      "language": "ESSL100",
+      "parts": [
+        "renpy.geometry",
+        "renpy.texture",
+        "renpy.alpha"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/alpha.100.vert",
+            "sha256": "4d3f43155ab41395c162bbf3553a8de720f4a71151d043b304027d2f3c46ef4a"
+          },
+          "translated": {
+            "file": "translated/alpha.100.vert",
+            "sha256": "10550b9a80e81df96ec009660e4bead4dca5ae6989fd751dc3bd9c3098515935"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/alpha.100.frag",
+            "sha256": "3fb351b1bfff9428a4de5a29fe117ea5c666d52550b3dd5a7ab36913f89bec4b"
+          },
+          "translated": {
+            "file": "translated/alpha.100.frag",
+            "sha256": "0b257e979c79ee9e8336a101619cabdaa3f980c614ed4c242e85073cead4798f"
+          }
+        }
+      }
+    },
+    {
+      "id": "ftl.120",
+      "combination": "ftl",
+      "language": "GLSL120",
+      "parts": [
+        "renpy.ftl"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/ftl.120.vert",
+            "sha256": "b88311496af9a9438ec6f1cb760d2971038593cf647444999c7e3472a21f6cdd"
+          },
+          "translated": {
+            "file": "translated/ftl.120.vert",
+            "sha256": "f709c68db537164ddfc2edfaef509662e0d5326b308be39dcb7c1aa0202ffc9d"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/ftl.120.frag",
+            "sha256": "83b7eb47b680766bbd63386bd8c8783038c1fb14b7d7149ead8c9ad205c8ceb1"
+          },
+          "translated": {
+            "file": "translated/ftl.120.frag",
+            "sha256": "1fcc2aa49d4c023fa15db068d53fc6cf55486b365719325917d7b445e181a436"
+          }
+        }
+      }
+    },
+    {
+      "id": "ftl.100",
+      "combination": "ftl",
+      "language": "ESSL100",
+      "parts": [
+        "renpy.ftl"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/ftl.100.vert",
+            "sha256": "ca9db6ed820fed3a7a03a4905b1acd8c13e61b1cb0fe24bcc2d9b03c82f9a514"
+          },
+          "translated": {
+            "file": "translated/ftl.100.vert",
+            "sha256": "f709c68db537164ddfc2edfaef509662e0d5326b308be39dcb7c1aa0202ffc9d"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/ftl.100.frag",
+            "sha256": "97d5c49499858b14f2b0d6413c66e572aeee258998df2a2518e322c2b51696f2"
+          },
+          "translated": {
+            "file": "translated/ftl.100.frag",
+            "sha256": "76799b76adc2d27c2b549811ce35d1e3c590fb5f99f11236d3bf706c90b8faf8"
+          }
+        }
+      }
+    },
+    {
+      "id": "live2d_colors.120",
+      "combination": "live2d_colors",
+      "language": "GLSL120",
+      "parts": [
+        "renpy.geometry",
+        "live2d.colors"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/live2d_colors.120.vert",
+            "sha256": "e45e219331ae526cebea84c520c089445bd47b47ba6a792b6981bf8b7a33a0b5"
+          },
+          "translated": {
+            "file": "translated/live2d_colors.120.vert",
+            "sha256": "5fced9d460e9aaf9cd140ac48ce06cdc10177be60d5abfbafb697f9335413821"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/live2d_colors.120.frag",
+            "sha256": "b1e32952043ba7548e2caed5ad45421baeed9b3e05f4deab308319508fdf5079"
+          },
+          "translated": {
+            "file": "translated/live2d_colors.120.frag",
+            "sha256": "08371ff63a98269a01c187d523c9e8dd00eea8168ee18b4c9093278538fa3446"
+          }
+        }
+      }
+    },
+    {
+      "id": "live2d_colors.100",
+      "combination": "live2d_colors",
+      "language": "ESSL100",
+      "parts": [
+        "renpy.geometry",
+        "live2d.colors"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/live2d_colors.100.vert",
+            "sha256": "6bbac48ec3b1c5e3ef9aee4c71104e4f68ab64e2288e78a93f7e4f2b7d5338bd"
+          },
+          "translated": {
+            "file": "translated/live2d_colors.100.vert",
+            "sha256": "5fced9d460e9aaf9cd140ac48ce06cdc10177be60d5abfbafb697f9335413821"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/live2d_colors.100.frag",
+            "sha256": "533e10fbf5ea8e5ab96fc559e970db6cf3ae00fbbc521da2dfdee069f42a6f01"
+          },
+          "translated": {
+            "file": "translated/live2d_colors.100.frag",
+            "sha256": "5a278bc6504547826458e328216c4cf02e1b69cd93868d728bd905d8eafb5747"
+          }
+        }
+      }
+    },
+    {
+      "id": "live2d_flip_texture.120",
+      "combination": "live2d_flip_texture",
+      "language": "GLSL120",
+      "parts": [
+        "renpy.geometry",
+        "renpy.texture",
+        "live2d.flip_texture"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/live2d_flip_texture.120.vert",
+            "sha256": "c2353f3299a5b34f97c10651d847cc817c2f9b88bbf051a862db030b41c37895"
+          },
+          "translated": {
+            "file": "translated/live2d_flip_texture.120.vert",
+            "sha256": "7a3ef616d4ec9cca22c094b1d658d26fffe0d5237d9de1a44b2416bb8dee8f10"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/live2d_flip_texture.120.frag",
+            "sha256": "e056ffa45d9d6071c6ebea886cc9377cbe5ce1b48a02e581d29006e177a7402c"
+          },
+          "translated": {
+            "file": "translated/live2d_flip_texture.120.frag",
+            "sha256": "d971d9ea0aa0146e8856df1cff474733c874ee5e8502c2ced8e04e3a0f047938"
+          }
+        }
+      }
+    },
+    {
+      "id": "live2d_flip_texture.100",
+      "combination": "live2d_flip_texture",
+      "language": "ESSL100",
+      "parts": [
+        "renpy.geometry",
+        "renpy.texture",
+        "live2d.flip_texture"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/live2d_flip_texture.100.vert",
+            "sha256": "9ac19144942f9833396ef0a2f2a20b0b196704d1d8a7b6687a216a4907c95f18"
+          },
+          "translated": {
+            "file": "translated/live2d_flip_texture.100.vert",
+            "sha256": "7a3ef616d4ec9cca22c094b1d658d26fffe0d5237d9de1a44b2416bb8dee8f10"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/live2d_flip_texture.100.frag",
+            "sha256": "60d26e86d802fe330aad626ac1ca78e8d1fd029e014c82d5bc401b3622e10e55"
+          },
+          "translated": {
+            "file": "translated/live2d_flip_texture.100.frag",
+            "sha256": "a0bc79dcac2f1fd06fd43006ca8fd021669f86dcfa256b29974461c90d863968"
+          }
+        }
+      }
+    },
+    {
+      "id": "live2d_inverted_mask.120",
+      "combination": "live2d_inverted_mask",
+      "language": "GLSL120",
+      "parts": [
+        "renpy.geometry",
+        "live2d.inverted_mask"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/live2d_inverted_mask.120.vert",
+            "sha256": "c5dcace968fa01baafc0cb2875f105273bb6a72b717d92e3eb4538c36383c769"
+          },
+          "translated": {
+            "file": "translated/live2d_inverted_mask.120.vert",
+            "sha256": "b6fd114691dda0930c1f3b395f8e089cf7c94bc2a2395144b453e655ea887942"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/live2d_inverted_mask.120.frag",
+            "sha256": "f251c2ec641bbc0630462a5769e243e789d5da9f328b4827e591aa4af7dcaedc"
+          },
+          "translated": {
+            "file": "translated/live2d_inverted_mask.120.frag",
+            "sha256": "5c221598978abac93caf655aa858f27e9658df3792d258990c70a23b09d7edfb"
+          }
+        }
+      }
+    },
+    {
+      "id": "live2d_inverted_mask.100",
+      "combination": "live2d_inverted_mask",
+      "language": "ESSL100",
+      "parts": [
+        "renpy.geometry",
+        "live2d.inverted_mask"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/live2d_inverted_mask.100.vert",
+            "sha256": "a83d15d8d88b47b9b0f62d0632612079817ba5f1310472fb944c18874f0c0c3d"
+          },
+          "translated": {
+            "file": "translated/live2d_inverted_mask.100.vert",
+            "sha256": "b6fd114691dda0930c1f3b395f8e089cf7c94bc2a2395144b453e655ea887942"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/live2d_inverted_mask.100.frag",
+            "sha256": "fed5250a6ccf488e2c55e07fd7ce22fb3e6cdb3581aac4c986c1e43cf81a927c"
+          },
+          "translated": {
+            "file": "translated/live2d_inverted_mask.100.frag",
+            "sha256": "1a57c7b0ef8b08db52ad98aedd2c67a71f2fd7aad6779081977908267f5f709d"
+          }
+        }
+      }
+    },
+    {
+      "id": "live2d_mask.120",
+      "combination": "live2d_mask",
+      "language": "GLSL120",
+      "parts": [
+        "renpy.geometry",
+        "live2d.mask"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/live2d_mask.120.vert",
+            "sha256": "c5dcace968fa01baafc0cb2875f105273bb6a72b717d92e3eb4538c36383c769"
+          },
+          "translated": {
+            "file": "translated/live2d_mask.120.vert",
+            "sha256": "b6fd114691dda0930c1f3b395f8e089cf7c94bc2a2395144b453e655ea887942"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/live2d_mask.120.frag",
+            "sha256": "7e5034c9e962ad78ce291872343325753c17953b1186835f47bf0b289b194337"
+          },
+          "translated": {
+            "file": "translated/live2d_mask.120.frag",
+            "sha256": "944786359109db33be4172bf7d2ce4ffab0fd7827d8582896c70b4d57c454909"
+          }
+        }
+      }
+    },
+    {
+      "id": "live2d_mask.100",
+      "combination": "live2d_mask",
+      "language": "ESSL100",
+      "parts": [
+        "renpy.geometry",
+        "live2d.mask"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/live2d_mask.100.vert",
+            "sha256": "a83d15d8d88b47b9b0f62d0632612079817ba5f1310472fb944c18874f0c0c3d"
+          },
+          "translated": {
+            "file": "translated/live2d_mask.100.vert",
+            "sha256": "b6fd114691dda0930c1f3b395f8e089cf7c94bc2a2395144b453e655ea887942"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/live2d_mask.100.frag",
+            "sha256": "95ce81e6b0be80bf5cde12be079b1109359c7151c873c0464df78cfa89de2e2e"
+          },
+          "translated": {
+            "file": "translated/live2d_mask.100.frag",
+            "sha256": "60301513c1b229ad692579a57697dbd5f1c30d23fc918c8fdb6f5318e206fd3a"
+          }
+        }
+      }
+    },
+    {
+      "id": "matrixcolor.120",
+      "combination": "matrixcolor",
+      "language": "GLSL120",
+      "parts": [
+        "renpy.geometry",
+        "renpy.texture",
+        "renpy.matrixcolor"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/matrixcolor.120.vert",
+            "sha256": "273f50c0bc445a7a2b481b9f70911d8d513ccb1081a51ca50b92a7e8e82c9534"
+          },
+          "translated": {
+            "file": "translated/matrixcolor.120.vert",
+            "sha256": "cede634322a439e4e0549512892035a7808e358124ea627ed550429aab9461ce"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/matrixcolor.120.frag",
+            "sha256": "b35d30c78b846bdf8247b9e0f6112e640abe52a72640ff8c0605f75e5eeea447"
+          },
+          "translated": {
+            "file": "translated/matrixcolor.120.frag",
+            "sha256": "d20837ef7b88d02f542a798490025f5f977533ab9e4916810abc173ae06f9d72"
+          }
+        }
+      }
+    },
+    {
+      "id": "matrixcolor.100",
+      "combination": "matrixcolor",
+      "language": "ESSL100",
+      "parts": [
+        "renpy.geometry",
+        "renpy.texture",
+        "renpy.matrixcolor"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/matrixcolor.100.vert",
+            "sha256": "4d3f43155ab41395c162bbf3553a8de720f4a71151d043b304027d2f3c46ef4a"
+          },
+          "translated": {
+            "file": "translated/matrixcolor.100.vert",
+            "sha256": "cede634322a439e4e0549512892035a7808e358124ea627ed550429aab9461ce"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/matrixcolor.100.frag",
+            "sha256": "474f804feaa85edc93e3ba2f1f0d3e92c901e8a6c10f22adc037cc2782713bda"
+          },
+          "translated": {
+            "file": "translated/matrixcolor.100.frag",
+            "sha256": "b9f7dd0afa2a848c799c42c143d9ebd0017a9b5ed720298073ce0f74f7e604b9"
+          }
+        }
+      }
+    },
+    {
+      "id": "renpy_alpha_mask.120",
+      "combination": "renpy_alpha_mask",
+      "language": "GLSL120",
+      "parts": [
+        "renpy.geometry",
+        "renpy.alpha_mask"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/renpy_alpha_mask.120.vert",
+            "sha256": "273f50c0bc445a7a2b481b9f70911d8d513ccb1081a51ca50b92a7e8e82c9534"
+          },
+          "translated": {
+            "file": "translated/renpy_alpha_mask.120.vert",
+            "sha256": "315cc9a3a4c97fb4cecbf66f7a1a067732c252eda6d2d69aa073209ff8b7aa2d"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/renpy_alpha_mask.120.frag",
+            "sha256": "5914866b834807c50641c75c1281b8afbabdaecc388362b995639efd0dffb5d3"
+          },
+          "translated": {
+            "file": "translated/renpy_alpha_mask.120.frag",
+            "sha256": "e67b6252f9ca60017b54ec78555090f7945da9ce46f2fcb3b8d93cf2b6575c48"
+          }
+        }
+      }
+    },
+    {
+      "id": "renpy_alpha_mask.100",
+      "combination": "renpy_alpha_mask",
+      "language": "ESSL100",
+      "parts": [
+        "renpy.geometry",
+        "renpy.alpha_mask"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/renpy_alpha_mask.100.vert",
+            "sha256": "4d3f43155ab41395c162bbf3553a8de720f4a71151d043b304027d2f3c46ef4a"
+          },
+          "translated": {
+            "file": "translated/renpy_alpha_mask.100.vert",
+            "sha256": "315cc9a3a4c97fb4cecbf66f7a1a067732c252eda6d2d69aa073209ff8b7aa2d"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/renpy_alpha_mask.100.frag",
+            "sha256": "d97fe48ff872992fe9d8d39e38db587b433fabe493e6e52f78ccd73fa1b49063"
+          },
+          "translated": {
+            "file": "translated/renpy_alpha_mask.100.frag",
+            "sha256": "1d653ff1df39e17b00c79424853da63a4617195e8faf81b04a3b751375396fb6"
+          }
+        }
+      }
+    },
+    {
+      "id": "renpy_blur.120",
+      "combination": "renpy_blur",
+      "language": "GLSL120",
+      "parts": [
+        "renpy.geometry",
+        "renpy.blur"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/renpy_blur.120.vert",
+            "sha256": "273f50c0bc445a7a2b481b9f70911d8d513ccb1081a51ca50b92a7e8e82c9534"
+          },
+          "translated": {
+            "file": "translated/renpy_blur.120.vert",
+            "sha256": "26a8685897fb665b99e9d47f0919d2b61e9b61a1596fada9f146d7999aff37da"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/renpy_blur.120.frag",
+            "sha256": "f44e275db2b64169c1bc3bd7cd4fd2b483bf8e39710d8838659bc984327a4fb7"
+          },
+          "translated": {
+            "file": "translated/renpy_blur.120.frag",
+            "sha256": "ac180d22663e1d531663489ddba1b61925e11c2eafe3b174eb2afc50216ac79a"
+          }
+        }
+      }
+    },
+    {
+      "id": "renpy_blur.100",
+      "combination": "renpy_blur",
+      "language": "ESSL100",
+      "parts": [
+        "renpy.geometry",
+        "renpy.blur"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/renpy_blur.100.vert",
+            "sha256": "4d3f43155ab41395c162bbf3553a8de720f4a71151d043b304027d2f3c46ef4a"
+          },
+          "translated": {
+            "file": "translated/renpy_blur.100.vert",
+            "sha256": "26a8685897fb665b99e9d47f0919d2b61e9b61a1596fada9f146d7999aff37da"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/renpy_blur.100.frag",
+            "sha256": "cefb3bee3f221625460b3b7c07a7427108ef4fff0f0fda1dca773daa53b633a8"
+          },
+          "translated": {
+            "file": "translated/renpy_blur.100.frag",
+            "sha256": "f14c4e7efb07424375eb039e77e3a93aefe0a79fb4c04676107c7138bd73de9f"
+          }
+        }
+      }
+    },
+    {
+      "id": "renpy_dissolve.120",
+      "combination": "renpy_dissolve",
+      "language": "GLSL120",
+      "parts": [
+        "renpy.geometry",
+        "renpy.dissolve"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/renpy_dissolve.120.vert",
+            "sha256": "273f50c0bc445a7a2b481b9f70911d8d513ccb1081a51ca50b92a7e8e82c9534"
+          },
+          "translated": {
+            "file": "translated/renpy_dissolve.120.vert",
+            "sha256": "69119ee9d6b4672ec73fedd7632bd0d410c739860834dd1723175c442c3d90d1"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/renpy_dissolve.120.frag",
+            "sha256": "fbfc7a37e3dcfbacd7a31abbbb90985926f04047730e51d2c9606c8652b1b94a"
+          },
+          "translated": {
+            "file": "translated/renpy_dissolve.120.frag",
+            "sha256": "2b3eca871b209b41ddb2a213840c29def06a65718bc4dba8beadf03185912fc0"
+          }
+        }
+      }
+    },
+    {
+      "id": "renpy_dissolve.100",
+      "combination": "renpy_dissolve",
+      "language": "ESSL100",
+      "parts": [
+        "renpy.geometry",
+        "renpy.dissolve"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/renpy_dissolve.100.vert",
+            "sha256": "4d3f43155ab41395c162bbf3553a8de720f4a71151d043b304027d2f3c46ef4a"
+          },
+          "translated": {
+            "file": "translated/renpy_dissolve.100.vert",
+            "sha256": "69119ee9d6b4672ec73fedd7632bd0d410c739860834dd1723175c442c3d90d1"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/renpy_dissolve.100.frag",
+            "sha256": "f3312fa1a6f3e8ff9fb38adb7ace448a5b4fe31269e64eadfb0218a88295966c"
+          },
+          "translated": {
+            "file": "translated/renpy_dissolve.100.frag",
+            "sha256": "27a199a13b00783f4523a31120c631d4e93f087f3104215b84b6b7089349e026"
+          }
+        }
+      }
+    },
+    {
+      "id": "renpy_imagedissolve.120",
+      "combination": "renpy_imagedissolve",
+      "language": "GLSL120",
+      "parts": [
+        "renpy.geometry",
+        "renpy.imagedissolve"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/renpy_imagedissolve.120.vert",
+            "sha256": "273f50c0bc445a7a2b481b9f70911d8d513ccb1081a51ca50b92a7e8e82c9534"
+          },
+          "translated": {
+            "file": "translated/renpy_imagedissolve.120.vert",
+            "sha256": "cbf200678b05af6e40d715c0677dba749c636aaeb42a5e9c37529f9795b3ec16"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/renpy_imagedissolve.120.frag",
+            "sha256": "6cdafde07160d4d7cb7be0cc506f80a78718621823ee1c8f55dec79e213ab9fc"
+          },
+          "translated": {
+            "file": "translated/renpy_imagedissolve.120.frag",
+            "sha256": "2e3f9dbfcfbe48fba494e575c55a3440274fd0eea874ad25057461052ca7fd73"
+          }
+        }
+      }
+    },
+    {
+      "id": "renpy_imagedissolve.100",
+      "combination": "renpy_imagedissolve",
+      "language": "ESSL100",
+      "parts": [
+        "renpy.geometry",
+        "renpy.imagedissolve"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/renpy_imagedissolve.100.vert",
+            "sha256": "4d3f43155ab41395c162bbf3553a8de720f4a71151d043b304027d2f3c46ef4a"
+          },
+          "translated": {
+            "file": "translated/renpy_imagedissolve.100.vert",
+            "sha256": "cbf200678b05af6e40d715c0677dba749c636aaeb42a5e9c37529f9795b3ec16"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/renpy_imagedissolve.100.frag",
+            "sha256": "163383a43d1d40fc3d6c27e1e76d52df119565487233b21313ca749d6dd78978"
+          },
+          "translated": {
+            "file": "translated/renpy_imagedissolve.100.frag",
+            "sha256": "63f726179fb42ecf37ae634a7d4d0d494cc18e08c2ffa4a1dc4276b184b61d9a"
+          }
+        }
+      }
+    },
+    {
+      "id": "renpy_mask.120",
+      "combination": "renpy_mask",
+      "language": "GLSL120",
+      "parts": [
+        "renpy.geometry",
+        "renpy.mask"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/renpy_mask.120.vert",
+            "sha256": "273f50c0bc445a7a2b481b9f70911d8d513ccb1081a51ca50b92a7e8e82c9534"
+          },
+          "translated": {
+            "file": "translated/renpy_mask.120.vert",
+            "sha256": "53798f59c847ce139b8e29f76698016072aa5ce5a2085203450e4c0f38579155"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/renpy_mask.120.frag",
+            "sha256": "0be059665c9803584116c1cf0bf93d08396d0a3e3813e13e8fdacd8f87eac320"
+          },
+          "translated": {
+            "file": "translated/renpy_mask.120.frag",
+            "sha256": "07f040f2d44e37fbe85490b4fc7cdc0840553d3aaeb71ec52ce9dccee93b29d0"
+          }
+        }
+      }
+    },
+    {
+      "id": "renpy_mask.100",
+      "combination": "renpy_mask",
+      "language": "ESSL100",
+      "parts": [
+        "renpy.geometry",
+        "renpy.mask"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/renpy_mask.100.vert",
+            "sha256": "4d3f43155ab41395c162bbf3553a8de720f4a71151d043b304027d2f3c46ef4a"
+          },
+          "translated": {
+            "file": "translated/renpy_mask.100.vert",
+            "sha256": "53798f59c847ce139b8e29f76698016072aa5ce5a2085203450e4c0f38579155"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/renpy_mask.100.frag",
+            "sha256": "42e36a5ff2159c408f165f742643e00340dcd1d927b0af2eb0e10d7074f17683"
+          },
+          "translated": {
+            "file": "translated/renpy_mask.100.frag",
+            "sha256": "56d509d48e09ed15f6bd227b9ff678d92ca36463505cc88287dec2112908d56c"
+          }
+        }
+      }
+    },
+    {
+      "id": "solid.120",
+      "combination": "solid",
+      "language": "GLSL120",
+      "parts": [
+        "renpy.geometry",
+        "renpy.solid"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/solid.120.vert",
+            "sha256": "e45e219331ae526cebea84c520c089445bd47b47ba6a792b6981bf8b7a33a0b5"
+          },
+          "translated": {
+            "file": "translated/solid.120.vert",
+            "sha256": "f248c181676d2bf2234089f44d4aeb4673c9d427d9b28ca13bd1ade4ed1037a7"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/solid.120.frag",
+            "sha256": "ae07492efc875cd55c72d1ad5ede56beb38a22277952622559a9660db5cb9088"
+          },
+          "translated": {
+            "file": "translated/solid.120.frag",
+            "sha256": "4434b7c28243e0c3da5988ee177cb59b65d2f76e43ff9ed9774035df3beec3da"
+          }
+        }
+      }
+    },
+    {
+      "id": "solid.100",
+      "combination": "solid",
+      "language": "ESSL100",
+      "parts": [
+        "renpy.geometry",
+        "renpy.solid"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/solid.100.vert",
+            "sha256": "6bbac48ec3b1c5e3ef9aee4c71104e4f68ab64e2288e78a93f7e4f2b7d5338bd"
+          },
+          "translated": {
+            "file": "translated/solid.100.vert",
+            "sha256": "f248c181676d2bf2234089f44d4aeb4673c9d427d9b28ca13bd1ade4ed1037a7"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/solid.100.frag",
+            "sha256": "e9ee03278123eee94cfb14dfff35b62adf2a3740c199e7a85ca4ccd6a75d5508"
+          },
+          "translated": {
+            "file": "translated/solid.100.frag",
+            "sha256": "88db64dfb06d9802c1c0b98f10165504948d85cc61322281e5d03c555bc3005d"
+          }
+        }
+      }
+    },
+    {
+      "id": "text_dissolve.120",
+      "combination": "text_dissolve",
+      "language": "GLSL120",
+      "parts": [
+        "renpy.geometry",
+        "renpy.texture",
+        "textshader.dissolve"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/text_dissolve.120.vert",
+            "sha256": "41826fef1c835c732bc60af4c5a7aac2a80a52a30647f4bba6dad5da38881ed7"
+          },
+          "translated": {
+            "file": "translated/text_dissolve.120.vert",
+            "sha256": "1586563e4081911dd676e1f1208120a930a1ef8e47a9d0c05c3088538a46b4fd"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/text_dissolve.120.frag",
+            "sha256": "dcfe451ecd9910f37083a9d800bcec7c057c08b983a2186a4d7115044143d37b"
+          },
+          "translated": {
+            "file": "translated/text_dissolve.120.frag",
+            "sha256": "dee20991036837567a75636830163361879c103ee3579b03ed7b08e1bf748d92"
+          }
+        }
+      }
+    },
+    {
+      "id": "text_dissolve.100",
+      "combination": "text_dissolve",
+      "language": "ESSL100",
+      "parts": [
+        "renpy.geometry",
+        "renpy.texture",
+        "textshader.dissolve"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/text_dissolve.100.vert",
+            "sha256": "d866123fb7a85461b2ea43cb4dbe6e161b8ace52fe4246eb04a84bb10650737f"
+          },
+          "translated": {
+            "file": "translated/text_dissolve.100.vert",
+            "sha256": "1586563e4081911dd676e1f1208120a930a1ef8e47a9d0c05c3088538a46b4fd"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/text_dissolve.100.frag",
+            "sha256": "f5b18acec92723f90bf946f527795382ca0baad4ece827d8d02ec06b11516053"
+          },
+          "translated": {
+            "file": "translated/text_dissolve.100.frag",
+            "sha256": "0f6f0c57da93c4937c7629db561f72ef5c34e324752ffb131ccb71adafb90486"
+          }
+        }
+      }
+    },
+    {
+      "id": "text_flip.120",
+      "combination": "text_flip",
+      "language": "GLSL120",
+      "parts": [
+        "renpy.geometry",
+        "renpy.texture",
+        "textshader.flip"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/text_flip.120.vert",
+            "sha256": "a036df4227a40b93413c6330835bcaf68e42a257c7b1c49295a11426925aa66f"
+          },
+          "translated": {
+            "file": "translated/text_flip.120.vert",
+            "sha256": "12cc2d8c0a20a80c9a8890c20b9176097bdff6051706bd0ce036cb3dec43a3bc"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/text_flip.120.frag",
+            "sha256": "e056ffa45d9d6071c6ebea886cc9377cbe5ce1b48a02e581d29006e177a7402c"
+          },
+          "translated": {
+            "file": "translated/text_flip.120.frag",
+            "sha256": "827f65c1261bc45b876e12339b5c13d8ab3dc6a31ff9ddb876b80643f19a35f2"
+          }
+        }
+      }
+    },
+    {
+      "id": "text_flip.100",
+      "combination": "text_flip",
+      "language": "ESSL100",
+      "parts": [
+        "renpy.geometry",
+        "renpy.texture",
+        "textshader.flip"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/text_flip.100.vert",
+            "sha256": "8058e88e954b4eff7da4ef1c00d3c4ac7f0fbde52fbafa7ada47a6a5e1c3ccdb"
+          },
+          "translated": {
+            "file": "translated/text_flip.100.vert",
+            "sha256": "12cc2d8c0a20a80c9a8890c20b9176097bdff6051706bd0ce036cb3dec43a3bc"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/text_flip.100.frag",
+            "sha256": "60d26e86d802fe330aad626ac1ca78e8d1fd029e014c82d5bc401b3622e10e55"
+          },
+          "translated": {
+            "file": "translated/text_flip.100.frag",
+            "sha256": "0284bdfe226ec02b6118d9928272d98f36350cde3890e579380e331a96ad6ab4"
+          }
+        }
+      }
+    },
+    {
+      "id": "text_jitter.120",
+      "combination": "text_jitter",
+      "language": "GLSL120",
+      "parts": [
+        "renpy.geometry",
+        "renpy.texture",
+        "textshader.jitter"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/text_jitter.120.vert",
+            "sha256": "2ddca898db9e548de97b1c78999d424dfc86280d675081ed1081ea65280ef62e"
+          },
+          "translated": {
+            "file": "translated/text_jitter.120.vert",
+            "sha256": "16314d4f416a990964ece0fb24a532194bd2dbfadaee32feb8d01f878aa6f903"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/text_jitter.120.frag",
+            "sha256": "e056ffa45d9d6071c6ebea886cc9377cbe5ce1b48a02e581d29006e177a7402c"
+          },
+          "translated": {
+            "file": "translated/text_jitter.120.frag",
+            "sha256": "ec4ff2898239a64db523ca2436df6ea22d9539520774b1a98e99299a19ca5ffd"
+          }
+        }
+      }
+    },
+    {
+      "id": "text_jitter.100",
+      "combination": "text_jitter",
+      "language": "ESSL100",
+      "parts": [
+        "renpy.geometry",
+        "renpy.texture",
+        "textshader.jitter"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/text_jitter.100.vert",
+            "sha256": "594dc017722dbe23bb58b1e40b8b954cbadf2c6b95bfc484f2eb78d96596862b"
+          },
+          "translated": {
+            "file": "translated/text_jitter.100.vert",
+            "sha256": "16314d4f416a990964ece0fb24a532194bd2dbfadaee32feb8d01f878aa6f903"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/text_jitter.100.frag",
+            "sha256": "60d26e86d802fe330aad626ac1ca78e8d1fd029e014c82d5bc401b3622e10e55"
+          },
+          "translated": {
+            "file": "translated/text_jitter.100.frag",
+            "sha256": "56362854dc4b5bac8a0e7194e99e67da0a4f4457c91b177924632c267fdb0d4c"
+          }
+        }
+      }
+    },
+    {
+      "id": "text_linetexture.120",
+      "combination": "text_linetexture",
+      "language": "GLSL120",
+      "parts": [
+        "renpy.geometry",
+        "renpy.texture",
+        "textshader.linetexture"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/text_linetexture.120.vert",
+            "sha256": "d2c04e3e9c1a5aa4c87742820b2c36af41e0069bc19a492a65ee96875429ba5c"
+          },
+          "translated": {
+            "file": "translated/text_linetexture.120.vert",
+            "sha256": "603894afdc079dfe19ab65e7b79364429c62506d32c473c7aa0f7a29163beea4"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/text_linetexture.120.frag",
+            "sha256": "ec326f3d1546ce363705396bc97e13539df8eca28442330d55217e4c33e8f874"
+          },
+          "translated": {
+            "file": "translated/text_linetexture.120.frag",
+            "sha256": "4883e7f3fd74b01bcabafe133b4aa2253d17321dc03b15b2bac7d234dcd25ae6"
+          }
+        }
+      }
+    },
+    {
+      "id": "text_linetexture.100",
+      "combination": "text_linetexture",
+      "language": "ESSL100",
+      "parts": [
+        "renpy.geometry",
+        "renpy.texture",
+        "textshader.linetexture"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/text_linetexture.100.vert",
+            "sha256": "8a54b128c19e313e5edc6535390475944c24cfe4432d72829ed49760eeaced24"
+          },
+          "translated": {
+            "file": "translated/text_linetexture.100.vert",
+            "sha256": "603894afdc079dfe19ab65e7b79364429c62506d32c473c7aa0f7a29163beea4"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/text_linetexture.100.frag",
+            "sha256": "fb383dcee5a9371f5c4bbc959c8a2048b2f2207569776b50d93ede2117abd3a8"
+          },
+          "translated": {
+            "file": "translated/text_linetexture.100.frag",
+            "sha256": "5583ce4c62fa789a8321a4dd799f2b76099167d91920423f2137fe3f033edd66"
+          }
+        }
+      }
+    },
+    {
+      "id": "text_offset.120",
+      "combination": "text_offset",
+      "language": "GLSL120",
+      "parts": [
+        "renpy.geometry",
+        "renpy.texture",
+        "textshader.offset"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/text_offset.120.vert",
+            "sha256": "27a4ed8db27209d45584a0a86faa264f5c8a8c94b07de6ec2dbc50364d925a37"
+          },
+          "translated": {
+            "file": "translated/text_offset.120.vert",
+            "sha256": "0f2b3a29068cf7b4193e070f006b147d9ff6a9ce14b96e3f3e113b1cd251bcdd"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/text_offset.120.frag",
+            "sha256": "e056ffa45d9d6071c6ebea886cc9377cbe5ce1b48a02e581d29006e177a7402c"
+          },
+          "translated": {
+            "file": "translated/text_offset.120.frag",
+            "sha256": "e438e3a5fb7e468f01fe0a1330acd91ef6ae56d65b4b5f0560f1bd3cbff37d59"
+          }
+        }
+      }
+    },
+    {
+      "id": "text_offset.100",
+      "combination": "text_offset",
+      "language": "ESSL100",
+      "parts": [
+        "renpy.geometry",
+        "renpy.texture",
+        "textshader.offset"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/text_offset.100.vert",
+            "sha256": "b1717ed3768db2b6e957043a895eb4c3ff98c555f88d16453dbe925270f47255"
+          },
+          "translated": {
+            "file": "translated/text_offset.100.vert",
+            "sha256": "0f2b3a29068cf7b4193e070f006b147d9ff6a9ce14b96e3f3e113b1cd251bcdd"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/text_offset.100.frag",
+            "sha256": "60d26e86d802fe330aad626ac1ca78e8d1fd029e014c82d5bc401b3622e10e55"
+          },
+          "translated": {
+            "file": "translated/text_offset.100.frag",
+            "sha256": "b4f3c02ad3c88cc67ebb0a56b6844c6d829081232e6f980c8203dc48b4b4e396"
+          }
+        }
+      }
+    },
+    {
+      "id": "text_slowalpha.120",
+      "combination": "text_slowalpha",
+      "language": "GLSL120",
+      "parts": [
+        "renpy.geometry",
+        "renpy.texture",
+        "textshader.slowalpha"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/text_slowalpha.120.vert",
+            "sha256": "273f50c0bc445a7a2b481b9f70911d8d513ccb1081a51ca50b92a7e8e82c9534"
+          },
+          "translated": {
+            "file": "translated/text_slowalpha.120.vert",
+            "sha256": "bcf60742039bae9fd86df3a2d775bcef9f6ea19ad0ab931827066d311633bfff"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/text_slowalpha.120.frag",
+            "sha256": "8656e9d6e0aa703009f480040ecec4d750e52a9b94130497a5689cfffa442da4"
+          },
+          "translated": {
+            "file": "translated/text_slowalpha.120.frag",
+            "sha256": "329fea9bab25e3e386ee6f260e7d84c1f52324aae708babee2d784d035ae42bf"
+          }
+        }
+      }
+    },
+    {
+      "id": "text_slowalpha.100",
+      "combination": "text_slowalpha",
+      "language": "ESSL100",
+      "parts": [
+        "renpy.geometry",
+        "renpy.texture",
+        "textshader.slowalpha"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/text_slowalpha.100.vert",
+            "sha256": "4d3f43155ab41395c162bbf3553a8de720f4a71151d043b304027d2f3c46ef4a"
+          },
+          "translated": {
+            "file": "translated/text_slowalpha.100.vert",
+            "sha256": "bcf60742039bae9fd86df3a2d775bcef9f6ea19ad0ab931827066d311633bfff"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/text_slowalpha.100.frag",
+            "sha256": "2a3ff96ea54a3c46ba9f7e51cee22f4ccb73bc9f2dbd07bd2a7663ab09970716"
+          },
+          "translated": {
+            "file": "translated/text_slowalpha.100.frag",
+            "sha256": "7a322f35618b9605de15da41a5a474ab0e3185d75db234e12d71e897358dabe1"
+          }
+        }
+      }
+    },
+    {
+      "id": "text_texture.120",
+      "combination": "text_texture",
+      "language": "GLSL120",
+      "parts": [
+        "renpy.geometry",
+        "renpy.texture",
+        "textshader.texture"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/text_texture.120.vert",
+            "sha256": "b76af8c5768a3e84f88759006de55200f526e2d782f6f60951f7864212b08fc4"
+          },
+          "translated": {
+            "file": "translated/text_texture.120.vert",
+            "sha256": "8a2b39c7895c4d34dc662288358c5b370935de37a5b4c5fe3a3889f4ef93a6e5"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/text_texture.120.frag",
+            "sha256": "fc9cc1498f1cc73bf4c954fbe86f244c4b21bf59f77dde8d773fcacc80fbf353"
+          },
+          "translated": {
+            "file": "translated/text_texture.120.frag",
+            "sha256": "c9b24b68016f29cb9fe57b2af5a19c5a5a4d62a4c5c49b00670f6ad08b4f9ab2"
+          }
+        }
+      }
+    },
+    {
+      "id": "text_texture.100",
+      "combination": "text_texture",
+      "language": "ESSL100",
+      "parts": [
+        "renpy.geometry",
+        "renpy.texture",
+        "textshader.texture"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/text_texture.100.vert",
+            "sha256": "84dd85152b8c4e819ad75d0655db355a740d87623caa556d9f979e1e30887cea"
+          },
+          "translated": {
+            "file": "translated/text_texture.100.vert",
+            "sha256": "8a2b39c7895c4d34dc662288358c5b370935de37a5b4c5fe3a3889f4ef93a6e5"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/text_texture.100.frag",
+            "sha256": "b718f3bc80ffaff6c7b11d7ce442c34bd591851fef98e84e9730b1ba0847596a"
+          },
+          "translated": {
+            "file": "translated/text_texture.100.frag",
+            "sha256": "f752f570500aeeafb7fef5e4e1ac8f8c21b6a84be153b83d65dc217b65a93a45"
+          }
+        }
+      }
+    },
+    {
+      "id": "text_typewriter.120",
+      "combination": "text_typewriter",
+      "language": "GLSL120",
+      "parts": [
+        "renpy.geometry",
+        "renpy.texture",
+        "textshader.typewriter"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/text_typewriter.120.vert",
+            "sha256": "cdcdad5d863421cacb8c7fe8d11cd9c9f4ac7daa49bfce8c2c8b579ed819c0d1"
+          },
+          "translated": {
+            "file": "translated/text_typewriter.120.vert",
+            "sha256": "73c20a4e587e7534d825112ee578e9a25a24c16cd0d2b3f7ebc03ad04ee250bd"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/text_typewriter.120.frag",
+            "sha256": "2254f540d4eff849644b29954f6e59b4f2d75ab15ff146516219c7655599b086"
+          },
+          "translated": {
+            "file": "translated/text_typewriter.120.frag",
+            "sha256": "5026955590c65976e40731b333cdc3f77c5ec2dddeb5fb74af8317f1cf2f3428"
+          }
+        }
+      }
+    },
+    {
+      "id": "text_typewriter.100",
+      "combination": "text_typewriter",
+      "language": "ESSL100",
+      "parts": [
+        "renpy.geometry",
+        "renpy.texture",
+        "textshader.typewriter"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/text_typewriter.100.vert",
+            "sha256": "090b5702b43a42d09908b26c463e43110266d124f2fde0f9e900ccc5c1811e31"
+          },
+          "translated": {
+            "file": "translated/text_typewriter.100.vert",
+            "sha256": "73c20a4e587e7534d825112ee578e9a25a24c16cd0d2b3f7ebc03ad04ee250bd"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/text_typewriter.100.frag",
+            "sha256": "6399dc9d37953f830172ece4adf7bf685ba62918ad3f95f76e1c21227160eb97"
+          },
+          "translated": {
+            "file": "translated/text_typewriter.100.frag",
+            "sha256": "5507041633549aabaca6be60241cda50b084c57c71d377fb1048e8325fc5f8b4"
+          }
+        }
+      }
+    },
+    {
+      "id": "text_wave.120",
+      "combination": "text_wave",
+      "language": "GLSL120",
+      "parts": [
+        "renpy.geometry",
+        "renpy.texture",
+        "textshader.wave"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/text_wave.120.vert",
+            "sha256": "83f8beeb2e6be18412af263dae42aad0d9e4ab752539d58316bafdf68944b5cc"
+          },
+          "translated": {
+            "file": "translated/text_wave.120.vert",
+            "sha256": "52cefbd542fbd6bdc0fc2709e302751a4389bfbf01b2cb11d00525b0834630b1"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/text_wave.120.frag",
+            "sha256": "e056ffa45d9d6071c6ebea886cc9377cbe5ce1b48a02e581d29006e177a7402c"
+          },
+          "translated": {
+            "file": "translated/text_wave.120.frag",
+            "sha256": "13f7e272a76c1e1b383e41edc2a681c3bfb93511dd18c431df78544a67ed6eb9"
+          }
+        }
+      }
+    },
+    {
+      "id": "text_wave.100",
+      "combination": "text_wave",
+      "language": "ESSL100",
+      "parts": [
+        "renpy.geometry",
+        "renpy.texture",
+        "textshader.wave"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/text_wave.100.vert",
+            "sha256": "93ab651505e7183fc4f3bbd89a20d4983a6e8d5ddc6fdfc3f4c5601239e17055"
+          },
+          "translated": {
+            "file": "translated/text_wave.100.vert",
+            "sha256": "52cefbd542fbd6bdc0fc2709e302751a4389bfbf01b2cb11d00525b0834630b1"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/text_wave.100.frag",
+            "sha256": "60d26e86d802fe330aad626ac1ca78e8d1fd029e014c82d5bc401b3622e10e55"
+          },
+          "translated": {
+            "file": "translated/text_wave.100.frag",
+            "sha256": "d1e14d8347512c72a16376fb4a77bdff91be4e4ab48eb9700a4c87f128d72163"
+          }
+        }
+      }
+    },
+    {
+      "id": "text_zoom.120",
+      "combination": "text_zoom",
+      "language": "GLSL120",
+      "parts": [
+        "renpy.geometry",
+        "renpy.texture",
+        "textshader.zoom"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/text_zoom.120.vert",
+            "sha256": "b42576e71824b751533f0748356fb7af9e63b79b963e8d6ef5d4553a5d3f1027"
+          },
+          "translated": {
+            "file": "translated/text_zoom.120.vert",
+            "sha256": "d012062e0c8d60ca7d67ee0f94e095af58d272522f7a60c3a783f2a4c6901847"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/text_zoom.120.frag",
+            "sha256": "e056ffa45d9d6071c6ebea886cc9377cbe5ce1b48a02e581d29006e177a7402c"
+          },
+          "translated": {
+            "file": "translated/text_zoom.120.frag",
+            "sha256": "391d6a29de8ce274d8953ee2385bf7343376f5acb1f72b34584c532e5ae43605"
+          }
+        }
+      }
+    },
+    {
+      "id": "text_zoom.100",
+      "combination": "text_zoom",
+      "language": "ESSL100",
+      "parts": [
+        "renpy.geometry",
+        "renpy.texture",
+        "textshader.zoom"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/text_zoom.100.vert",
+            "sha256": "c212fb81f67029c5eeb779f9e1620363335c64d3989f69f60253e5cd7f61b644"
+          },
+          "translated": {
+            "file": "translated/text_zoom.100.vert",
+            "sha256": "d012062e0c8d60ca7d67ee0f94e095af58d272522f7a60c3a783f2a4c6901847"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/text_zoom.100.frag",
+            "sha256": "60d26e86d802fe330aad626ac1ca78e8d1fd029e014c82d5bc401b3622e10e55"
+          },
+          "translated": {
+            "file": "translated/text_zoom.100.frag",
+            "sha256": "2443961499ac5efe5a378e64847c795d7d60a8688d7392f028a54d1e28f8d9dd"
+          }
+        }
+      }
+    },
+    {
+      "id": "texture.120",
+      "combination": "texture",
+      "language": "GLSL120",
+      "parts": [
+        "renpy.geometry",
+        "renpy.texture"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/texture.120.vert",
+            "sha256": "273f50c0bc445a7a2b481b9f70911d8d513ccb1081a51ca50b92a7e8e82c9534"
+          },
+          "translated": {
+            "file": "translated/texture.120.vert",
+            "sha256": "cbe2b10ce8879053dab99b4e652daf878a2e6d3336ea11eff4a54ab818c03bb7"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/texture.120.frag",
+            "sha256": "e056ffa45d9d6071c6ebea886cc9377cbe5ce1b48a02e581d29006e177a7402c"
+          },
+          "translated": {
+            "file": "translated/texture.120.frag",
+            "sha256": "d971d9ea0aa0146e8856df1cff474733c874ee5e8502c2ced8e04e3a0f047938"
+          }
+        }
+      }
+    },
+    {
+      "id": "texture.100",
+      "combination": "texture",
+      "language": "ESSL100",
+      "parts": [
+        "renpy.geometry",
+        "renpy.texture"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/texture.100.vert",
+            "sha256": "4d3f43155ab41395c162bbf3553a8de720f4a71151d043b304027d2f3c46ef4a"
+          },
+          "translated": {
+            "file": "translated/texture.100.vert",
+            "sha256": "cbe2b10ce8879053dab99b4e652daf878a2e6d3336ea11eff4a54ab818c03bb7"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/texture.100.frag",
+            "sha256": "60d26e86d802fe330aad626ac1ca78e8d1fd029e014c82d5bc401b3622e10e55"
+          },
+          "translated": {
+            "file": "translated/texture.100.frag",
+            "sha256": "a0bc79dcac2f1fd06fd43006ca8fd021669f86dcfa256b29974461c90d863968"
+          }
+        }
+      }
+    },
+    {
+      "id": "texture_matrixcolor_alpha.120",
+      "combination": "texture_matrixcolor_alpha",
+      "language": "GLSL120",
+      "parts": [
+        "renpy.geometry",
+        "renpy.texture",
+        "renpy.matrixcolor",
+        "renpy.alpha"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/texture_matrixcolor_alpha.120.vert",
+            "sha256": "273f50c0bc445a7a2b481b9f70911d8d513ccb1081a51ca50b92a7e8e82c9534"
+          },
+          "translated": {
+            "file": "translated/texture_matrixcolor_alpha.120.vert",
+            "sha256": "a9811a32253ad815a6aa0495dd38e00e3dacf031d73bf6303c33718c5ec944bd"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/texture_matrixcolor_alpha.120.frag",
+            "sha256": "5051f777068a86edb2d91c39e928fcfd3e4744141bf5948c338988351feb267f"
+          },
+          "translated": {
+            "file": "translated/texture_matrixcolor_alpha.120.frag",
+            "sha256": "2c13a9e076666015c251f0fbbca3ed1e766b96a54337cdfea5660d996b441517"
+          }
+        }
+      }
+    },
+    {
+      "id": "texture_matrixcolor_alpha.100",
+      "combination": "texture_matrixcolor_alpha",
+      "language": "ESSL100",
+      "parts": [
+        "renpy.geometry",
+        "renpy.texture",
+        "renpy.matrixcolor",
+        "renpy.alpha"
+      ],
+      "stages": {
+        "vertex": {
+          "original": {
+            "file": "original/texture_matrixcolor_alpha.100.vert",
+            "sha256": "4d3f43155ab41395c162bbf3553a8de720f4a71151d043b304027d2f3c46ef4a"
+          },
+          "translated": {
+            "file": "translated/texture_matrixcolor_alpha.100.vert",
+            "sha256": "a9811a32253ad815a6aa0495dd38e00e3dacf031d73bf6303c33718c5ec944bd"
+          }
+        },
+        "fragment": {
+          "original": {
+            "file": "original/texture_matrixcolor_alpha.100.frag",
+            "sha256": "e710189c7e7096c87d22bcedba4c5c47da07ff7c38a3e7f8b8cdb8146b0f0e09"
+          },
+          "translated": {
+            "file": "translated/texture_matrixcolor_alpha.100.frag",
+            "sha256": "044565e360af3b800afdf450e42823efaeaaeff7fd3cb57d908c6634785ab0b0"
+          }
+        }
+      }
+    }
+  ]
+}

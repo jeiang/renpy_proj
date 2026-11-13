@@ -21,6 +21,8 @@ def main():
     a = ap.parse_args()
     measurement = compare(a.first, a.second)
     shutil.copytree(a.first, a.out, dirs_exist_ok=False)
+    # Whole SDK files stay out of git; shaders/manifest.json keeps their hashes, parts.json keeps the parts.
+    shutil.rmtree(a.out / 'shaders/sources', ignore_errors=True)
     dump(a.out / 'determinism.json', measurement)
     # Preserve complete per-glyph records without spending the repository budget on repeated JSON keys.
     text = a.out / 'text/manifest.json'
@@ -29,11 +31,11 @@ def main():
         text.unlink()
     provenance = json.loads((a.out / 'provenance.json').read_text())
     sets = {}
-    command = ('urp-next/tools/capture-legacy/environment.sh urp-next/tools/capture-legacy/regenerate.sh '
-               '"$OLD_REPO" "$OUTPUT" "$SCRATCH"')
+    command = ('cd "$OLD_REPO" && "$URP_NEXT/tools/capture-legacy/environment.sh" '
+               '"$URP_NEXT/tools/capture-legacy/regenerate-all.sh" . "$WORK" "$WORK/package"')
     descriptions = {
         'frames': 'Headless in-engine frame PNGs at the existing harness route checkpoints. Movies and animated GIF checkpoints are excluded. The deliberate screen-loop plan is held with auto off before its nonterminating advance command.',
-        'shaders': 'All 25 built-in part combinations in desktop GLSL120 and ESSL100: 50 programs, 100 translated stages, original stage strings, source parts and MIT attribution. These are the existing extractor battery, not every possible runtime combination.',
+        'shaders': 'All 25 built-in part combinations in desktop GLSL120 and ESSL100: 50 programs, 100 translated stages, original stage strings, source parts (parts.json) and MIT attribution. Whole Ren\'Py source files are hashed in manifest.json but not committed. These are the existing extractor battery, not every possible runtime combination.',
         'text': 'Native FT/HB glyph metrics and isolated glyph raster hashes, engine layout coordinates and break flags for synthetic text cases. manifest.json.gz is ordinary UTF-8 JSON compressed with a fixed gzip timestamp.',
         'surface': 'Raw RGBA8 outputs of fixed small pygame Surface operations, plus pixel format and dirty-rectangle metadata.',
         'traces': 'Ordered harness say/text-hash/label/choice/advance progress, with command acknowledgements and polling-only state excluded.'}
@@ -47,7 +49,7 @@ def main():
         sets[name] = {'comparison': 'exact' if exact else 'tolerance', 'max_channel_difference_rgba': bound,
                       'regenerate': command, 'observed_files': len(rows)}
         (directory / 'README.md').write_text('# Legacy ' + name + '\n\n' + description + '\n\n'
-            + 'Regenerate from the old repository root (fresh output and scratch directories):\n\n```sh\n' + command + '\n```\n\n'
+            + 'Regenerate (fresh WORK; `$URP_NEXT` is this tree, `$OLD_REPO` the old checkout with the release build, SDKs and built synthetic games):\n\n```sh\n' + command + '\n```\n\n'
             + 'Source: `' + provenance['source_commit'] + '`. Host: `' + provenance['host'] + '`, '
             + provenance['architecture'] + '. Renderer: ' + provenance['renderer'] + '.\n'
             + 'Two separate process captures: ' + ('byte-identical.' if exact else 'not byte-identical; see ../determinism.json for every differing checkpoint and measured RGBA bounds.') + '\n')
