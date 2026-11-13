@@ -9,9 +9,9 @@ Nothing in the repository was changed, built or run. Sources: six evidence brief
 | Route | Rust host that owns its frames. Ren'Py 7 in scope. macOS arm64 and Linux x86_64 through Nix only. Ren'Py pinned at 8.5.3. pyo3 on static CPython 3.12.8 stays. |
 | Redo mode | Greenfield, in a new top-level tree beside `player/`. Pure logic may be lifted if it arrives with tests. Host, boot, lifecycle, bindings, window model, build and the manager boundary are written new. |
 | Old tree | Reference and fixture generator. Deleted after the new loader passes the real-game gate on the 23-game corpus on the Mac and artemis (N4). |
-| Thin Python | Scheduled Rust ports behind the same Python API, after the restructure, not gated on a profile: loader and image cache policy, then audio manager, then text layout. A frame profile runs first as information only. |
+| Thin Python | Scheduled Rust ports behind the same Python API, after the restructure, not gated on a profile. Order, chosen after the frame profile (`spike-sp1-frame-profile.md`): 1. image decode off the frame path and image cache policy (the only visible stall: 15 to 37 ms per new 1080p image); 2. text layout, with the glyph path kept in Rust so that no Python object is made per glyph (up to 0.48 core in the text-heavy case); 3. loader file lookup; 4. audio manager (under 1 millicore, done for the thin-Python goal only). The names in `spike-sp3-internals.md` must stay real. |
 | Product split | The loader `urp` knows nothing about the library: it takes a game path and a launch record and emits typed status events. A separate manager system in the same repository (library, CLI, mods, import, RAR, GUI) builds the record and invokes the loader. Streaming and GUI are optional binaries. |
-| Mods, import, RAR | Kept, in the manager. Mods reach the game through a manager-built merged directory if a 1 day spike proves it on both platforms; fallback is the runtime file layer. |
+| Mods, import, RAR | Kept, in the manager. Mods reach the game through a manager-built merged directory (APFS clones, btrfs/XFS reflinks), by the rules in `spike-mods-merged-dir.md`. Where cloning is not possible, the manager copies small files and symlinks the large ones (archives, video, 16 MiB or more). The new tree has no runtime file layer. |
 | Cut | Background warm-up, patch 0016, AI upgrade pass and deep-run campaign tooling, `sw` renderer. |
 | Parked | Port patches, patches 0012 and 0018. |
 | Speed goal | Video is the only hard bar. Startup and scene change: not slower than stock. |
@@ -22,6 +22,8 @@ Nothing in the repository was changed, built or run. Sources: six evidence brief
 | During implementation | Remove comments that only restate the code. Remove tests that would not catch a real bug, and fix the ones that fail without one. |
 
 Milestones: N0 build artefacts, skeleton, dependency checks, test tiers. N1 headless Ren'Py 8 synthetic game matches goldens. N2 windowed play on macOS and Linux with audio and hardware video. N3 Ren'Py 7. N4 real-game gate. N5 manager (library, CLI, mods, import, RAR, then GUI). N6 streaming. N7 the Rust ports.
+
+Status (2026-11-13): the pre-redo fixes, the CI quick wins, the fixture capture (`urp-next/fixtures/legacy`, byte-identical run to run under lavapipe) and N0 are done. Spikes done: SP1, SP3, merged mod directory, S2 (the test interpreter runs the 79 engine tests with no cargo build), S4. Open before N1: SP4 (display-list replay in a Rust-only test), the 4K cold scene change of SP2, and two `urp-core` corrections (the loader owns the cache epoch; the launch record carries no harness script). `urp-engine` still calls the old `player/engine/build.py`; it gets its own recipe before `player/` is deleted.
 
 Superseded text in this report set:
 - Section 3: mods, archive import and RAR are kept (manager), not deferred or cut.
