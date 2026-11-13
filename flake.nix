@@ -71,6 +71,12 @@
           urp-norar = onMac (mkUrp false) urpNorarAppName "io.github.jeiang.renpy-player.norar";
           default = urp;
         };
+      nextPackages = system: import ./nix/next {
+        pkgs = nixpkgs.legacyPackages.${system};
+        ffmpegLgpl = ffmpegLgpl nixpkgs.legacyPackages.${system};
+        renpySrc = renpy-src;
+        renpyRev = renpy-src.rev;
+      };
     in
     {
       packages = forAllSystems (system:
@@ -78,7 +84,8 @@
         {
           ffmpeg-lgpl = ffmpegLgpl pkgs;
           ffmpeg-synth = ffmpegSynth pkgs;
-        } // nixpkgs.lib.optionalAttrs (builtins.elem system playerSystems) (playerPackages system));
+        } // nixpkgs.lib.optionalAttrs (builtins.elem system playerSystems)
+          ((playerPackages system) // (nextPackages system)));
 
       checks = nixpkgs.lib.genAttrs playerSystems (system:
         let
@@ -93,6 +100,16 @@
       devShells = forAllSystems (system:
         let pkgs = nixpkgs.legacyPackages.${system}; in
         {
+          next = let native = nextPackages system; in pkgs.mkShell {
+            packages = with pkgs; [ cargo rustc clippy rustfmt pkg-config ];
+            URP_CPYTHON = "${native.urp-cpython}";
+            URP_FFMPEG = "${native.urp-ffmpeg}";
+            URP_ENGINE = "${native.urp-engine}";
+            URP_ENGINEPY = "${native.urp-enginepy}/bin/urp-enginepy";
+            URP_HOST_TREE = "${native.urp-engine}/common-rpyc/host";
+            PYO3_CONFIG_FILE = "${native.urp-cpython}/pyo3-config.txt";
+            PKG_CONFIG_PATH = "${native.urp-ffmpeg}/lib/pkgconfig";
+          };
           # Research shell: analysis tools. Its ffmpeg is the GPL CLI build; never link against it.
           default = pkgs.mkShell {
             packages = with pkgs; [

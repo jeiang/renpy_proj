@@ -1,0 +1,75 @@
+label _errorhandling
+label _start
+label _start_store
+label _gl_test
+label _load_reload_game
+label _call__load_reload_game_1
+label _invoke_main_menu
+label _main_menu
+label _main_menu_screen
+label main_menu_screen
+label start
+say 1
+text 1 4af8b4e3
+say 2
+text 2 18a20a70
+say 3
+text 3 174534c6
+say 4
+text 4 8b834b77
+auto: choice All cases
+say 5
+text 5 65ee1524
+label case_math
+say 6
+text 6 0391853e
+say 7
+text 7 86145cef
+say 8
+text 8 650ba963
+label case_state
+say 9
+text 9 3a85c4f2
+say 10
+text 10 afdd159f
+say 11
+text 11 c758af60
+label case_containers
+say 12
+text 12 515654d5
+advance-done 12
+say 13
+text 13 79f0a075
+say 14
+text 14 9f221e7b
+say 15
+text 15 862c3827
+label case_classes
+say 16
+text 16 263bec3e
+say 17
+text 17 808ac49d
+say 18
+text 18 c407c561
+label case_exec
+say 19
+text 19 f7b1e2ba
+label case_syntax_values
+say 20
+text 20 66725a1a
+say 21
+text 21 7c87a79a
+say 22
+text 22 bd5ad24e
+label case_ordering_init
+say 23
+text 23 0a806f57
+label case_ordering
+say 24
+text 24 f173f0b0
+label case_legacy
+say 25
+text 25 de865927
+say 26
+text 26 456b9dc8
+advance-done 26
