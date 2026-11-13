@@ -1,4 +1,5 @@
-//! Builds the static CPython 3.12 (crates/pyhost/cpython/build.sh) when `build-out/cpython/stamp` is missing.
+//! Builds the static CPython 3.12 (crates/pyhost/cpython/build.sh) when `build-out/cpython/stamp` is missing
+//! or the script inputs changed since the last run made here.
 //! `crates/pyhost/pyo3-config.txt` is committed, with `shared=false` and no link lines: pyo3-ffi's build
 //! script reads it before this script can run, and pyo3-ffi must compile before libpython exists. This
 //! script emits the link lines instead (libpython3.12.a, libffi, bzip2, lzma, expat, zlib, OpenSSL,
@@ -22,7 +23,13 @@ fn main() {
     } else {
         "cpython/build.sh"
     });
-    for f in ["build.sh", "mkzip.py", "mkboot.py"] {
+    for f in [
+        "build.sh",
+        "build_linux.sh",
+        "mkzip.py",
+        "mkboot.py",
+        "patches",
+    ] {
         println!("cargo:rerun-if-changed=cpython/{f}");
     }
     println!("cargo:rerun-if-changed=src/boot.py");
@@ -32,7 +39,13 @@ fn main() {
         out.join("pyo3-config.txt").display()
     );
 
-    if !out.join("stamp").exists() {
+    // The script is idempotent and rebuilds only what its own recipe check finds stale, so it runs again
+    // whenever its inputs differ from the ones of the last run made here. A folder made by another builder
+    // (Nix, the manylinux container, a CI cache) has no `stamp.inputs` and is taken as it is.
+    let inputs = recipe_inputs(&manifest.join("cpython"), &script);
+    let inputs_file = out.join("stamp.inputs");
+    let stale = std::fs::read_to_string(&inputs_file).is_ok_and(|old| old != inputs);
+    if stale || !out.join("stamp").exists() {
         let status = Command::new("sh")
             .arg(&script)
             .arg(&player)
@@ -41,6 +54,7 @@ fn main() {
         if !status.success() {
             panic!("cpython/build.sh failed ({status}); see player/upstream/cpython-build/*.log");
         }
+        std::fs::write(&inputs_file, &inputs).expect("cannot write build-out/cpython/stamp.inputs");
     }
     println!(
         "cargo:rustc-link-search=native={}",
@@ -117,4 +131,28 @@ fn windows(manifest: &std::path::Path, player: &std::path::Path, out: &std::path
         println!("cargo:rustc-link-lib={lib}");
     }
     println!("cargo:rustc-env=PYHOST_OUT={}", out.display());
+}
+
+/// The bytes that decide what the CPython script builds: the script, the patches and the two helpers.
+fn recipe_inputs(cpython: &std::path::Path, script: &std::path::Path) -> String {
+    use std::hash::{Hash, Hasher};
+    let mut files = vec![
+        script.to_path_buf(),
+        cpython.join("mkzip.py"),
+        cpython.join("mkboot.py"),
+    ];
+    let mut patches: Vec<_> = std::fs::read_dir(cpython.join("patches"))
+        .expect("cpython/patches")
+        .map(|e| e.expect("cpython/patches entry").path())
+        .collect();
+    patches.sort();
+    files.extend(patches);
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    for f in files {
+        f.file_name().hash(&mut h);
+        std::fs::read(&f)
+            .unwrap_or_else(|e| panic!("{}: {e}", f.display()))
+            .hash(&mut h);
+    }
+    format!("{:016x}", h.finish())
 }

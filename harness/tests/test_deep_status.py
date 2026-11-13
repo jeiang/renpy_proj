@@ -65,6 +65,17 @@ class DeepStatusTest(unittest.TestCase):
         res = self.check("say 1", "deep-done stuck", game={"deep_seeds": "1", "deep_minutes": 1, "driver": "x"})
         self.assertEqual(res["status"], "fail")
 
+    def test_early_end_by_the_driver_is_not_a_silent_pass(self):
+        for reason in ("loop", "game-quit"):
+            res = self.check("say 1", "deep-done " + reason)
+            self.assertEqual(res["status"], "warn", reason)
+            res = self.check("say 1", "deep-done " + reason, game={"deep_seeds": "1", "deep_minutes": 1, "driver": "x"})
+            self.assertEqual(res["status"], "fail", reason)
+
+    def test_unknown_end_reason_fails(self):
+        res = self.check("say 1", "deep-done new-reason")
+        self.assertEqual(res["status"], "fail")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -147,12 +147,19 @@ def files_under(root: Path):
     return sorted(p for p in root.rglob("*") if p.is_file() and "__pycache__" not in p.parts)
 
 
+def shipped_python():
+    """engine/python without tests/. The tests are not in the engine layer, so they are not a build input:
+    BUILD_FINGERPRINT names every user's per-game cache folder, and a test edit must not move it."""
+    root = ENGINE / "python"
+    return [p for p in files_under(root) if p.relative_to(root).parts[0] != "tests"]
+
+
 def digest_inputs(extra_files):
-    """BUILD_FINGERPRINT: Ren'Py tag, patches and python/ (contract). Returns (fingerprint, stamp)."""
+    """BUILD_FINGERPRINT: Ren'Py tag, patches and the shipped python/ (contract). Returns (fingerprint, stamp)."""
     h = hashlib.sha256()
     h.update(TAG.encode())
-    for root in (ENGINE / "patches", ENGINE / "python"):
-        for p in files_under(root):
+    for root, files in ((ENGINE / "patches", files_under(ENGINE / "patches")), (ENGINE / "python", shipped_python())):
+        for p in files:
             h.update(str(p.relative_to(root)).encode() + b"\0" + p.read_bytes() + b"\0")
     fingerprint = h.hexdigest()[:16]
     s = hashlib.sha256(fingerprint.encode())
@@ -191,8 +198,8 @@ def prepare_tree(tree: Path):
         run([git_tool("patch") if IS_WIN else "patch", "-p1", "--no-backup-if-mismatch", "--fuzz=0", "-i", str(patch)], cwd=tree)
 
     # Overlay: engine/python (same relative paths as the Ren'Py tree, plus _player), then engine/extra.
-    for root in (ENGINE / "python", ENGINE / "extra"):
-        for p in files_under(root):
+    for root, files in ((ENGINE / "python", shipped_python()), (ENGINE / "extra", files_under(ENGINE / "extra"))):
+        for p in files:
             dest = tree / p.relative_to(root)
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(p, dest)
@@ -516,7 +523,7 @@ def main():
         py_include = str(cand) if cand.is_dir() else sysconfig.get_paths()["include"]
     log("python headers:", py_include)
 
-    inputs = [p for root in (ENGINE / "patches", ENGINE / "python", ENGINE / "extra") for p in files_under(root)]
+    inputs = files_under(ENGINE / "patches") + shipped_python() + files_under(ENGINE / "extra")
     inputs += [ENGINE / "build.py", ENGINE / "fetch.sh", ENGINE / "wheels.txt", PACKAGING / "compile_common.py"]
     fingerprint, stamp = digest_inputs(inputs)
     stamp += py_include

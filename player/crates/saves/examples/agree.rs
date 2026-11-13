@@ -13,8 +13,8 @@ use serde_json::Value;
 
 struct NoClasses;
 impl Resolver for NoClasses {
-    fn resolve(&mut self, _: &str, _: &str) -> Resolution {
-        Resolution::Foreign
+    fn resolve(&mut self, _: &str, _: &str) -> Result<Resolution, saves::detect::ResolveFailed> {
+        Ok(Resolution::Foreign)
     }
 }
 
@@ -46,7 +46,8 @@ fn main() {
         .map(|f| sd.join(f))
         .collect();
     let t0 = std::time::Instant::now();
-    let reports = analyze_files(&paths, Some(&names), (8, 5, 3), &mut NoClasses);
+    let reports = analyze_files(&paths, Some(&names), (8, 5, 3), &mut NoClasses)
+        .expect("this resolver never fails");
     let el = t0.elapsed();
     let (mut agree, mut bad) = (0, 0);
     let mut pairs: BTreeMap<(String, String), usize> = BTreeMap::new();
