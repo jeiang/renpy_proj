@@ -68,6 +68,7 @@ jobs:
     uses: ./.github/workflows/build.yml
     with:
       checks: true
+      release-packages: false
 
   synth:
     name: Synthetic corpus (${{ matrix.shard }}, Xvfb + lavapipe)
@@ -126,7 +127,9 @@ jobs:
       - name: Build this shard's synthetic games
         env:
           GAMES: ${{ matrix.build-games }}
-        run: python3 harness/testgames/build.py $GAMES
+        run: |
+          read -r -a games <<< "$GAMES"
+          python3 harness/testgames/build.py "${games[@]}"
       - name: Run stock on a baseline cache miss
         if: steps.baseline.outputs.cache-hit != 'true'
         env:

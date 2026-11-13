@@ -1,6 +1,6 @@
-# Reusable workflow: builds the three binary packages. Called by ci.yml (with checks) and release.yml (without).
+# Reusable workflow: builds checked CI packages or all three release packages.
 # Packages come from the repository's own scripts: player/packaging/{manylinux/build.sh,macos.sh,windows.ps1}.
-# Output: workflow artifacts package-linux (tarball + AppImage), package-macos, package-windows.
+# CI keeps the Linux tarball for synthetic tests; Windows and AppImage are release-only.
 name: build
 
 on:
@@ -10,6 +10,10 @@ on:
         description: Also run cargo clippy (no warnings allowed) and cargo test on each platform.
         type: boolean
         default: false
+      release-packages:
+        description: Include Windows and AppImage packaging (release.yml keeps the default).
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -58,6 +62,7 @@ jobs:
         run: player/packaging/manylinux/build.sh
       # The AppImage is what a release publishes. The tarball stays a CI artifact (ci.yml's synthetic corpus unpacks it).
       - name: Build the AppImage
+        if: inputs.release-packages
         run: player/packaging/appimage.sh
       - uses: actions/upload-artifact@v7
         with:
@@ -126,6 +131,7 @@ jobs:
 
   windows:
     name: Windows x64
+    if: inputs.release-packages
     runs-on: windows-2022
     timeout-minutes: 120
     steps:
