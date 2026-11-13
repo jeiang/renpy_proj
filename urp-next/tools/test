@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+cd "$(dirname "$0")/.."
+case "${1:-}" in
+    t0) exec cargo test -p urp-core ;;
+    rules) exec cargo test -p urp-core --test dependency-rules ;;
+    *) echo 'usage: urp-next/tools/test {t0|rules}' >&2; exit 2 ;;
+esac
