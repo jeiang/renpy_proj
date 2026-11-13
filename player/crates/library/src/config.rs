@@ -93,8 +93,8 @@ impl Library {
         std::fs::rename(&tmp, &p).with_context(|| format!("cannot write {}", p.display()))
     }
 
-    /// Adds folders (as absolute paths, once each), then rescans every folder. Folders that no longer
-    /// exist are an error for the new ones and are skipped with a log line for the stored ones.
+    /// Adds folders (as absolute paths, once each), then rescans every folder. A folder that does not
+    /// exist is an error for the new ones; a stored one is kept (see `rescan`).
     pub fn add_folders(&mut self, new: &[PathBuf]) -> Result<()> {
         for f in new {
             let f = f
@@ -131,14 +131,12 @@ impl Library {
         }
     }
 
+    /// A folder that is not there now (an unmounted disk, a network share) stays in the library: only
+    /// `remove_folder` drops one. Its games are absent until a later rescan finds it again.
     pub fn rescan(&mut self) {
-        self.folders.retain(|f| {
-            let ok = f.is_dir();
-            if !ok {
-                log::warn!("library folder is gone: {}", f.display());
-            }
-            ok
-        });
+        for f in self.folders.iter().filter(|f| !f.is_dir()) {
+            log::warn!("library folder is not there now: {}", f.display());
+        }
         let mut games = scan_folders(&self.folders);
         games.retain(|g| !self.hidden.contains(&g.path));
         self.games = games;
@@ -369,6 +367,24 @@ mod tests {
         lib.remove_game(&b).unwrap();
         assert!(lib.games.is_empty());
         assert_eq!(lib.hidden.len(), 2);
+    }
+
+    #[test]
+    fn a_folder_that_is_away_during_a_rescan_comes_back() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path().canonicalize().unwrap().join("disk");
+        game(&root, "Alpha");
+        let away = root.with_file_name("unmounted");
+        let mut lib = Library::default();
+        lib.add_folders(std::slice::from_ref(&root)).unwrap();
+
+        std::fs::rename(&root, &away).unwrap();
+        lib.rescan();
+        assert!(lib.games.is_empty());
+
+        std::fs::rename(&away, &root).unwrap();
+        lib.rescan();
+        assert_eq!(lib.games.len(), 1);
     }
 
     #[test]
