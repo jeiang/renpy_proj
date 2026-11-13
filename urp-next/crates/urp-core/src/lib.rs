@@ -258,15 +258,12 @@ fn detect_version(base: &Path, py2: bool) -> Result<(Option<String>, DetectionSo
 pub struct LaunchRecord {
     pub schema_version: u32,
     pub data_root: PathBuf,
-    pub cache_epoch: String,
     pub mode: RunMode,
     pub viewport: [u32; 2],
     #[serde(default)]
     pub renpy_major: Option<RenpyMajor>,
     #[serde(default)]
     pub args: Vec<String>,
-    #[serde(default)]
-    pub harness_script: Option<PathBuf>,
 }
 
 /// Validated once before composing the host. No setters or deserialisation bypass.
@@ -277,26 +274,22 @@ pub struct LaunchSpec {
     mode: RunMode,
     viewport: [u32; 2],
     args: Vec<String>,
-    harness_script: Option<PathBuf>,
 }
 
 impl LaunchSpec {
-    pub fn from_files(game_path: &Path, record_path: &Path) -> Result<Self> {
+    /// `cache_epoch` names the compile cache generation. The loader owns it: only the loader knows
+    /// which engine build it carries.
+    pub fn from_files(game_path: &Path, record_path: &Path, cache_epoch: &str) -> Result<Self> {
         let record_path = record_path.canonicalize()?;
         let mut record: LaunchRecord = serde_json::from_slice(&fs::read(&record_path)?)?;
         let parent = record_path.parent().ok_or("launch record has no parent")?;
         if record.data_root.is_relative() {
             record.data_root = parent.join(&record.data_root);
         }
-        if let Some(script) = &mut record.harness_script
-            && script.is_relative()
-        {
-            *script = parent.join(&script);
-        }
-        Self::new(game_path, record)
+        Self::new(game_path, record, cache_epoch)
     }
 
-    pub fn new(game_path: &Path, record: LaunchRecord) -> Result<Self> {
+    pub fn new(game_path: &Path, record: LaunchRecord, cache_epoch: &str) -> Result<Self> {
         if record.schema_version != 1 {
             return Err("unsupported launch record schema_version (expected 1)".into());
         }
@@ -311,27 +304,13 @@ impl LaunchSpec {
             game.renpy_major = Some(major);
             game.detection_source = DetectionSource::LaunchRecord;
         }
-        let dirs = DataLayout::new(&record.data_root, game.id(), &record.cache_epoch)?;
-        let harness_script = record
-            .harness_script
-            .map(|path| -> Result<PathBuf> {
-                let path = path.canonicalize()?;
-                if !path.is_file() || !path.extension().is_some_and(|e| e == "rpy" || e == "rpym") {
-                    return Err("harness_script must be an .rpy or .rpym file".into());
-                }
-                if path.to_str().is_none() {
-                    return Err("harness_script must be valid UTF-8".into());
-                }
-                Ok(path)
-            })
-            .transpose()?;
+        let dirs = DataLayout::new(&record.data_root, game.id(), cache_epoch)?;
         Ok(Self {
             game,
             dirs,
             mode: record.mode,
             viewport: record.viewport,
             args: record.args,
-            harness_script,
         })
     }
 
@@ -349,9 +328,6 @@ impl LaunchSpec {
     }
     pub fn args(&self) -> &[String] {
         &self.args
-    }
-    pub fn harness_script(&self) -> Option<&Path> {
-        self.harness_script.as_deref()
     }
 }
 

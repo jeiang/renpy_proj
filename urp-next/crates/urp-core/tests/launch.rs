@@ -35,12 +35,10 @@ fn record(root: &Path) -> LaunchRecord {
     LaunchRecord {
         schema_version: 1,
         data_root: root.join("data"),
-        cache_epoch: "renpy853-py312-v1".into(),
         mode: RunMode::Headless,
         viewport: [1280, 720],
         renpy_major: None,
         args: vec![],
-        harness_script: None,
     }
 }
 
@@ -122,16 +120,15 @@ fn detects_app_python2_and_compiled_engine_markers() {
 fn launch_record_is_resolved_once_without_creating_data() {
     let tree = Tree::new();
     let game = tree.dir("Title/game");
-    tree.file("records/driver.rpy", "label start:\n    return\n");
     let mut input = record(&tree.0);
     input.data_root = "fresh".into();
-    input.harness_script = Some("driver.rpy".into());
     input.renpy_major = Some(RenpyMajor::Seven);
     tree.file(
         "records/launch.json",
         &serde_json::to_string(&input).unwrap(),
     );
-    let spec = LaunchSpec::from_files(&game, &tree.0.join("records/launch.json")).unwrap();
+    let spec =
+        LaunchSpec::from_files(&game, &tree.0.join("records/launch.json"), "epoch-1").unwrap();
     assert_eq!(spec.mode(), RunMode::Headless);
     assert_eq!(spec.viewport(), [1280, 720]);
     assert_eq!(spec.game().renpy_major(), Some(RenpyMajor::Seven));
@@ -144,22 +141,13 @@ fn launch_record_is_resolved_once_without_creating_data() {
         tree.0.canonicalize().unwrap().join("records/fresh")
     );
     assert!(!spec.dirs().root().exists());
-    assert_eq!(
-        spec.harness_script(),
-        Some(
-            tree.0
-                .join("records/driver.rpy")
-                .canonicalize()
-                .unwrap()
-                .as_path()
-        )
-    );
+    assert!(spec.dirs().cache().ends_with("cache/epoch-1"));
     let mut bad = record(&tree.0);
     bad.viewport[0] = 0;
-    assert!(LaunchSpec::new(&game, bad).is_err());
+    assert!(LaunchSpec::new(&game, bad, "epoch-1").is_err());
     let mut bad = record(&tree.0);
     bad.schema_version = 2;
-    assert!(LaunchSpec::new(&game, bad).is_err());
+    assert!(LaunchSpec::new(&game, bad, "epoch-1").is_err());
     assert!(
         serde_json::from_str::<LaunchRecord>("{\"schema_version\":1,\"unexpected\":true}").is_err()
     );

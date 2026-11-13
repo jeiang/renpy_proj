@@ -53,17 +53,16 @@ spec before the host starts. A record looks like:
 {
   "schema_version": 1,
   "data_root": "../urp-next-data",
-  "cache_epoch": "renpy853-py312-v1",
   "mode": "headless",
   "viewport": [1280, 720],
   "args": [],
-  "harness_script": null,
   "renpy_major": null
 }
 ```
 
-Relative data and harness paths are relative to the record file. `LaunchSpec::new`
-also accepts an already-parsed record, with an absolute data root. The optional
+A relative data root is relative to the record file. `LaunchSpec::new`
+also accepts an already-parsed record, with an absolute data root. The record
+carries no automation script: N1 defines the automation interface. The optional
 `renpy_major` override is `"7"` or `"8"`, for stripped distributions. Otherwise
 `GameProfile` reads the shipped engine version, selects the Python 2 branch in
 dual-version distributions using runtime markers, or records an unknown major.
@@ -87,9 +86,10 @@ Fresh data layout, with no migration from the old keys, saves, or mods:
   reports/
 ```
 
-Core only derives paths. The host creates directories when needed. The manager
-supplies the narrow engine cache epoch and any merged game directory; the loader
-knows nothing about mod or library storage.
+Core only derives paths. The host creates directories when needed. The loader
+supplies the cache epoch, because only the loader knows which engine build it
+carries. The manager supplies any merged game directory; the loader knows
+nothing about mod or library storage.
 
 `StatusEvent::write_line` serialises and flushes one JSON object per line to a
 dedicated writable pipe. Logs must not use that pipe. Event tags are
