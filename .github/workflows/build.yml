@@ -38,7 +38,12 @@ jobs:
             ~/.cache/renpy-manylinux/dl
             player/upstream
             player/build-out/cpython
-          key: manylinux-inputs-${{ hashFiles('player/packaging/manylinux/container-build.sh', 'player/packaging/manylinux/build.sh', 'player/crates/pyhost/cpython/build_linux.sh', 'player/crates/pyhost/cpython/mk*.py', 'player/engine/fetch.sh', 'player/engine/wheels.txt') }}
+          key: manylinux-inputs-${{ hashFiles('player/packaging/manylinux/build-inputs.sh', 'player/packaging/manylinux/build.sh', 'player/crates/pyhost/cpython/build_linux.sh', 'player/crates/pyhost/cpython/mk*.py', 'player/crates/pyhost/cpython/patches/*.patch', 'player/engine/fetch.sh', 'player/engine/wheels.txt') }}
+      - name: Cache the engine build
+        uses: actions/cache@v6
+        with:
+          path: player/build-out/engine
+          key: manylinux-engine-${{ hashFiles('player/engine/**', 'player/packaging/compile_common.py', 'player/crates/pyhost/cpython/**', 'player/packaging/manylinux/build-inputs.sh', 'player/packaging/manylinux/build.sh') }}
       - name: Cache cargo target
         uses: actions/cache@v6
         with:
@@ -87,7 +92,12 @@ jobs:
           path: |
             player/upstream
             player/build-out/cpython
-          key: macos-inputs-${{ hashFiles('flake.lock', 'player/crates/pyhost/cpython/build.sh', 'player/crates/pyhost/cpython/mk*.py', 'player/engine/fetch.sh', 'player/engine/wheels.txt') }}
+          key: macos-inputs-${{ hashFiles('flake.lock', 'player/crates/pyhost/cpython/build.sh', 'player/crates/pyhost/cpython/mk*.py', 'player/crates/pyhost/cpython/patches/*.patch', 'player/engine/fetch.sh', 'player/engine/wheels.txt') }}
+      - name: Cache the engine build
+        uses: actions/cache@v6
+        with:
+          path: player/build-out/engine
+          key: macos-engine-${{ hashFiles('flake.lock', 'player/engine/**', 'player/packaging/compile_common.py', 'player/crates/pyhost/cpython/**') }}
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: player
@@ -132,7 +142,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: C:\vcpkg\installed
-          key: windows-vcpkg-${{ hashFiles('player/crates/pyhost/cpython/build_windows.py') }}
+          key: windows-vcpkg-${{ hashFiles('player/crates/pyhost/cpython/build_windows.py', 'player/crates/pyhost/cpython/patches/*.patch') }}
       - name: Restore fetched inputs and the CPython build
         id: inputs
         uses: actions/cache/restore@v6
@@ -140,7 +150,7 @@ jobs:
           path: |
             player/upstream
             player/build-out/cpython
-          key: windows-inputs-${{ hashFiles('player/crates/pyhost/cpython/build_windows.py', 'player/crates/pyhost/cpython/mk*.py', 'player/engine/fetch.sh', 'player/engine/wheels.txt', 'player/packaging/fetch_ffmpeg_windows.ps1') }}
+          key: windows-inputs-${{ hashFiles('player/crates/pyhost/cpython/build_windows.py', 'player/crates/pyhost/cpython/mk*.py', 'player/crates/pyhost/cpython/patches/*.patch', 'player/engine/fetch.sh', 'player/engine/wheels.txt', 'player/packaging/fetch_ffmpeg_windows.ps1') }}
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: player
